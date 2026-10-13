@@ -1,0 +1,61 @@
+---
+title: Scene format
+---
+
+# The scene file
+
+A scene is the contract between EDGEbuilder's two halves and the input to REDbridge's `sector.build`. Format 1, pinned 2026-10-13. It lives at `source/scenes/<name>.scene.json` in a REDcode project, or in EDGEbuilder's data folder when there is no project.
+
+```json
+{
+  "format": 1,
+  "name": "My Alley",
+  "game": "2.31",
+  "groups": [
+    { "id": "grp_crates", "name": "Crates", "parent": null }
+  ],
+  "objects": [
+    {
+      "id": "crate_a",
+      "kind": "mesh",
+      "resource": "base/environment/decoration/containers/cargo/cargo_crate/cargo_crate_a.mesh",
+      "appearance": "default",
+      "transform": { "position": [-1200.0, 1500.0, 20.0], "rotation": [0, 0, 0.3826834, 0.9238795], "scale": [1, 1, 1] },
+      "streaming": { "primary": 60, "secondary": 48 },
+      "ref": "edgebuilder/my_alley/crate_a",
+      "bounds": { "min": [-0.58, -0.73, 0.0], "max": [0.58, 0.73, 1.24] },
+      "group": "grp_crates",
+      "props": {}
+    },
+    {
+      "id": "lamp",
+      "kind": "light",
+      "transform": { "position": [-1199.0, 1500.0, 23.0], "rotation": [0, 0, 0, 1], "scale": [1, 1, 1] },
+      "props": { "type": "spot", "color": [255, 200, 120], "intensity": 800, "radius": 12, "innerAngle": 30, "outerAngle": 60 }
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `format` | Always 1 for this page |
+| `name` | The scene's name. The bake lowercases it and keeps letters, digits and `_` for file names |
+| `game` | The game version the scene was made against, for information |
+| `groups` | The scene tree: id, name and parent id. Groups organise the editor; the bake flattens them into one sector |
+| `objects[].id` | Unique in the scene. Letters, digits, `_` and `-` |
+| `objects[].kind` | `mesh`, `entity` or `light`. More kinds come with phase B5 |
+| `objects[].resource` | The game path of the mesh or entity template. Forward or backward slashes. None for a light |
+| `objects[].appearance` | The appearance name, default `default` |
+| `objects[].transform` | `position` [x, y, z] in metres, world space; `rotation` a quaternion [x, y, z, w]; `scale` [x, y, z] |
+| `objects[].streaming` | `primary`: the distance in metres the node streams in at; `secondary`: its maximum streaming distance. Both optional: the bake derives them from the object's size |
+| `objects[].ref` | The node reference, unique in the scene. Generated as `edgebuilder/<scene>/<id>` when missing |
+| `objects[].bounds` | The resource's local bounding box, from the asset index, so the bake need not read the game. Read from the game when missing |
+| `objects[].group` | The group the object belongs to |
+| `objects[].props` | The kind's own fields. Lights: `type` (`point`, `spot`, `area`), `color` [r, g, b] 0 to 255, `intensity`, `radius`, `innerAngle`, `outerAngle`, `ev`, `temperature` |
+
+Positions are the game's world coordinates in metres: X east, Y north, Z up. A rotation of [0, 0, 0, 1] is no rotation.
+
+## What the bake makes of it
+
+REDbridge's `sector.build` turns the objects into one `worldStreamingSector` with a node per object (`worldMeshNode`, `worldEntityNode`, `worldStaticLightNode`), one `worldStreamingBlock` whose descriptor holds a streaming box around every node, and an ArchiveXL file that patches the block into the world. The files land in the REDcode project under `source/archive/edgebuilder/<name>/` and `source/resources/archive/pc/mod/<name>.xl`. Every node's reference goes into its node data, so the game can find it by name.

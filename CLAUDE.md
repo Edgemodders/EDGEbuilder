@@ -5,6 +5,7 @@ EDGEbuilder is a world builder for Cyberpunk 2077 that runs as a REDnode package
 ## Current status and next step
 
 - **B0 Decide (2026-10-13):** the design is written, the repo is in the house style, and `edgebuilder/` is a package that installs into REDnode and opens an empty window. Not yet tested in game.
+- **Done on the other side (2026-10-13):** REDbridge 0.6.0 has `mesh.info`/`mesh.infoMany` (the asset index) and `sector.build` (the bake; scene format 1 is pinned in docs/scene.md). REDdeck 0.20.0 installs REDnode packages. Both verified outside the game only.
 - **Next: B1 Browse and drop.** It needs REDnode additions first: constructing native objects and setting properties through `api`, Codeware's entity callbacks as events, and resource references as arguments. The design's "What EDGEbuilder needs from the other repos" table is the list to hand to the REDnode session. REDbridge's `archive.search` already covers the asset list. Stop after each phase for the owner's in-game test and record the results in a `docs/b<N>-results.md` page, as REDnode does.
 
 ## Clean room
@@ -18,7 +19,7 @@ The idea comes from World Builder by keanuWheeze (Nexus 20660), a CET mod whose 
 - **Never commit game files** or data extracted from them: archives, meshes, entities, DLLs, the asset index, scenes with the owner's paths. `.gitignore` covers the common cases. The one shipped archive, EDGEbuilder's empty entity, is authored as JSON in this repo and built by REDbridge; the built `.archive` is never committed.
 - **House style:** the README with the HUD banner, badges and a status callout; `docs/` rendered by Jekyll with the HUD layout and deployed by `.github/workflows/pages.yml` (Settings > Pages > Source must be GitHub Actions); `tools/brand/` generates the images (`.\tools\brand\render.ps1`, needs Chrome or Edge; `python -I tools/brand/badges.py docs/assets/brand/badges` for the badges alone). REDnode's CLAUDE.md is the canonical source of these idioms.
 - **Writing style:** plain, short sentences, tables for comparisons. The behaviours are Browse, Drop, Position, Arrange, Bake, Return; use those words. REDnode's terms: package, overlay app, Node mod, the host, the plugin, `api`.
-- **Package layout:** `edgebuilder/` is what deploys; `src/` is TypeScript built into it. `tools/deploy.ps1` mirrors `edgebuilder/` into `<game>\red4ext\plugins\REDnode\apps\edgebuilder` for development (REDnode deployed first, game closed). Players will install it with REDdeck once REDdeck knows the `rednode` kind.
+- **Package layout:** `edgebuilder/` is what deploys; `src/` is TypeScript built into it. `tools/deploy.ps1` mirrors `edgebuilder/` into `<game>\red4ext\plugins\REDnode\apps\edgebuilder` for development (REDnode deployed first, game closed). Players install it with REDdeck (0.20.0 and later know the `rednode` kind): add the zip or the `edgebuilder/` folder as a mod and deploy.
 - **Data:** scenes live in the REDcode project (`source/scenes/<name>.scene.json`) or, without one, in `pkg.dataDir`; the asset index and settings always in `pkg.dataDir`. Never write into the package folder: hot reload watches it.
 
 ## Docs site

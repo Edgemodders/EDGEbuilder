@@ -25,5 +25,7 @@ nav:
     url: /
   - title: Design
     url: /design.html
+  - title: Scene format
+    url: /scene.html
   - title: Dev setup
     url: /dev-setup.html

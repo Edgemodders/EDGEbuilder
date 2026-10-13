@@ -5,12 +5,13 @@ EDGEbuilder is a world builder for Cyberpunk 2077 that runs inside the game on R
 | Document | What it covers |
 |---|---|
 | [Design](design.md) | The behaviours (Browse, Drop, Position, Arrange, Bake, Return), the runtime and project halves, the pieces, the preview in the game, the editor, files, baking, what it needs from REDnode, REDbridge, REDcode and REDdeck, risks, roadmap |
+| [Scene format](scene.md) | The scene file, format 1: the contract between the runtime builder, the project builder and REDbridge's bake |
 | [Dev setup](dev-setup.md) | How to build the package and put it in the game for development |
 | Source | [github.com/Edgemodders/EDGEbuilder](https://github.com/Edgemodders/EDGEbuilder) |
 
 ## Roadmap status
 
-As of B0 (2026-10-13). Nothing places objects yet.
+As of B0 (2026-10-13). Nothing places objects yet. The scene format is pinned and REDbridge can already bake one.
 
 | Phase | Status |
 |---|---|
@@ -18,7 +19,7 @@ As of B0 (2026-10-13). Nothing places objects yet.
 | B1 Browse and drop | Waiting on three REDnode additions the design lists: constructing native objects and setting properties, Codeware's entity callbacks as events, resource references as arguments |
 | B2 Position | Not started |
 | B3 Arrange and save | Not started |
-| B4 Bake | Not started. Needs `sector.build` in REDbridge |
+| B4 Bake | REDbridge side done (0.6.0): `sector.build` bakes a scene into a sector, a block and an `.xl`, verified by the probe but not yet loaded in the game. REDdeck 0.20.0 installs REDnode packages. Left: the bake panel in EDGEbuilder, and the in-game test |
 | B5 Lights and more kinds | Not started |
 | B6 Comfort | Not started |
 | B7 Project builder | Not started |

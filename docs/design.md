@@ -170,7 +170,7 @@ Rotation is a quaternion in the file and Euler angles in the panel. Streaming ra
 
 ## Baking
 
-`sector.build` is a new REDbridge method: it takes a scene file and a target folder and writes, with WolvenKit's own writers, one `worldStreamingSector` with a node per object and a node-data entry carrying position, orientation, scale, bounds and streaming distances; one `worldStreamingBlock` whose descriptor holds the sector's streaming box; and an ArchiveXL `.xl` that registers the block. Into a REDcode project they go under `source/archive` as game files, so the project packs them without conversion.
+`sector.build` is a REDbridge method (0.6.0): it takes a scene file and a target folder and writes, with WolvenKit's own writers, one `worldStreamingSector` with a node per object and a node-data entry carrying position, orientation, scale, bounds and streaming distances; one `worldStreamingBlock` whose descriptor holds the sector's streaming box; and an ArchiveXL `.xl` that registers the block. Into a REDcode project they go under `source/archive` as game files, so the project packs them without conversion.
 
 Validation before the bake: every object has a resource that exists in the game, a unique reference, and finite streaming ranges; the scene is not empty; the target project exists. The bake is repeatable: the same scene bakes to the same files.
 
@@ -189,11 +189,11 @@ For REDnode, the design's assumptions that are not in the SDK today, in the orde
 | A REDbridge the host can hand out ([REDnode #4](https://github.com/Edgemodders/REDnode/issues/4)) | The asset index and the bake need the bridge | `kernel.bridge()` returning how to reach a running REDbridge, as `kernel.mcp()` does for the MCP server. Until then EDGEbuilder starts its own from a path setting |
 | Dependencies in the manifest ([REDnode #5](https://github.com/Edgemodders/REDnode/issues/5)) | EDGEbuilder needs Codeware at a minimum version | `"requires": { "codeware": ">=1.16" }`, shown in the Mod Manager. Until then EDGEbuilder checks at start and says what is missing |
 
-For REDbridge: `sector.build` as above ([REDbridge #1](https://github.com/Edgemodders/REDbridge/issues/1)), a read of a mesh file's bounds and appearances ([REDbridge #2](https://github.com/Edgemodders/REDbridge/issues/2)), and building EDGEbuilder's support archive from JSON, which is `project.pack` on a one-file project.
+For REDbridge: `sector.build` as above ([REDbridge #1](https://github.com/Edgemodders/REDbridge/issues/1), done in 0.6.0), a read of a mesh file's bounds and appearances ([REDbridge #2](https://github.com/Edgemodders/REDbridge/issues/2), done in 0.6.0 as `mesh.info`), and building EDGEbuilder's support archive from JSON, which is `project.pack` on a one-file project. The scene file is pinned on the [scene format](scene.md) page.
 
 For REDcode, later: the scene file as a project file, Bake from the command palette, validation ([REDcode #2](https://github.com/Edgemodders/REDcode/issues/2)).
 
-For REDdeck, in this session: the `rednode` kind, so a zip or folder with `rednode-app.json` deploys to `red4ext/plugins/REDnode/apps/<id>/`.
+For REDdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` deploys to `red4ext/plugins/REDnode/apps/<id>/`. Done in REDdeck 0.20.0.
 
 ## Risks
 
