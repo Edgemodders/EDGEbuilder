@@ -1,0 +1,19 @@
+# build output
+dist/
+out/
+node_modules/
+*.tsbuildinfo
+
+# never commit game files, mod archives, or anything extracted from the game
+*.archive
+*.archive.xl
+*.dll
+*.exe
+*.asi
+*.mesh
+*.ent
+
+# the asset index and scenes are the player's, not the repo's
+index/
+*.scene.json
+!docs/**/*.scene.json

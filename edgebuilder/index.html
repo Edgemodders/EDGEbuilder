@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EDGEbuilder</title>
+<script src="rednode://ui/rednode-ui.js"></script>
+<script type="importmap">{ "imports": { "rednode": "rednode://sdk/index.js" } }</script>
+<style>
+  html, body { margin: 0; width: 420px; height: 640px; background: transparent; }
+  rn-window { position: absolute; inset: 6px; }
+  .phase { font-family: monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  p { margin: 8px 0; }
+</style>
+</head>
+<body>
+  <rn-window title="EDGEbuilder" draggable>
+    <div class="phase">// B0 · design</div>
+    <p>A world builder for the EDGE platform: browse the game's assets, drop them into the world, position, arrange, bake.</p>
+    <p>Nothing places objects yet. The design is at <code>edgemodders.github.io/EDGEbuilder</code>.</p>
+    <rn-panel title="Status">
+      <p id="status">Waiting for the mod...</p>
+    </rn-panel>
+  </rn-window>
+  <script type="module">
+    import { channel } from "rednode";
+    const status = document.getElementById("status");
+    channel.on((m) => {
+      if (m.type === "hello") status.textContent = `Mod ready. ${m.connected ? (m.mainMenu ? "Game at the main menu." : "Game attached.") : "Not connected to the game."}`;
+    });
+    channel.post({ type: "hello" });
+  </script>
+</body>
+</html>
