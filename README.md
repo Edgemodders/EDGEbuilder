@@ -17,7 +17,7 @@ EDGEbuilder is the first mod built on the EDGE platform end to end: the editor i
 **[Read the design](https://edgemodders.github.io/EDGEbuilder/design.html)** &middot; [REDnode](https://github.com/Edgemodders/REDnode) &middot; [REDbridge](https://github.com/Edgemodders/REDbridge) &middot; [REDcode](https://github.com/Edgemodders/REDcode) &middot; [REDdeck](https://github.com/Edgemodders/REDdeck)
 
 > [!NOTE]
-> **Status: B0, design.** The [design](https://edgemodders.github.io/EDGEbuilder/design.html) is written and the package installs into REDnode and opens an empty window. Nothing places objects yet. The next phase, B1, needs three additions to REDnode's game API that the design lists.
+> **Status: B1 built, in-game test pending.** EDGEbuilder 0.1.0 reads an index of your game's meshes and entities through REDbridge, searches it, drops a picked asset in front of V through REDnode's world API, selects and deletes it, and brings the scene back after a save loads. Not yet run in the game: the [B1 test](https://edgemodders.github.io/EDGEbuilder/b1-test.html) says how. Install it with REDdeck from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases). The [design](https://edgemodders.github.io/EDGEbuilder/design.html) says where it goes.
 
 ## How it works
 
@@ -45,14 +45,14 @@ Two halves share the scene file: the **runtime builder** in the game, where what
 | Path | Contents |
 |---|---|
 | `edgebuilder/` | The REDnode package: `rednode-app.json`, the editor page and the Node mod |
-| `src/` | TypeScript for both halves of the package, built into `edgebuilder/` |
+| `src/` | TypeScript for both halves of the package, built into `edgebuilder/` by `npm run build`; `npm run smoke` tests the REDnode-free parts against a real REDbridge and game |
 | `docs/` | Documentation site: the design and the dev setup |
 | `tools/` | `deploy.ps1` copies the package into the game; `brand/` generates the banner, icon and badges |
 
 ## Roadmap
 
 - **B0 Decide.** The design, the repo, a package that installs and opens an empty window. Done.
-- **B1 Browse and drop.** The asset index from REDbridge; drop a mesh and an entity; select, delete.
+- **B1 Browse and drop.** The asset index from REDbridge; drop a mesh and an entity; select, delete. Built, in-game test pending.
 - **B2 Position.** The gizmo, G R S, numbers, drop to floor, the editor camera.
 - **B3 Arrange and save.** Groups, multi-select, duplicate, undo and redo, scene files.
 - **B4 Bake.** `sector.build` in REDbridge, the bake panel, the scene in the REDcode project, install through REDdeck.

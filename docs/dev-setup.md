@@ -11,7 +11,9 @@ EDGEbuilder is a REDnode package. To work on it you need REDnode deployed in the
 | Node 22 or later | As for REDnode |
 | Clone | `git clone https://github.com/Edgemodders/EDGEbuilder` beside the REDnode checkout |
 | Install | `npm install` in the repo root |
-| Build | `npm run build` bundles `src/` into `edgebuilder/` |
+| Build | `npm run build` type-checks and bundles `src/` into `edgebuilder/` (esbuild; `rednode` stays external). `npm run watch` rebuilds on save, which the REDnode host hot-reloads |
+| Test | `npm run smoke` runs the bridge client, the asset index and the scene store against a real REDbridge and game when they are on the machine (`EDGEBUILDER_BRIDGE` and `EDGEBUILDER_GAME` point at them; otherwise it finds REDdeck's copy and the Steam game folder, or skips) |
+| Package | `npm run package` writes `dist\edgebuilder-<version>.zip` for REDdeck |
 | Deploy for development | `.\tools\deploy.ps1 -GameDir '<game folder>'` mirrors `edgebuilder/` into `<game>\red4ext\plugins\REDnode\apps\edgebuilder`. Close the game first; REDnode's apps folder must exist |
 | Run from the repo instead | From the REDnode repo: `npm run overlay -- --apps-dir="<REDnode>\packages\overlay\apps;<this repo>\edgebuilder"` runs the host with EDGEbuilder beside REDnode's own apps. `npm run overlay:window` shows the window on the desktop without the game |
 | See it | In game, F10, the REDNODE launcher tab, Mod Manager, switch EDGEbuilder on |

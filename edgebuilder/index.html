@@ -6,28 +6,71 @@
 <script src="rednode://ui/rednode-ui.js"></script>
 <script type="importmap">{ "imports": { "rednode": "rednode://sdk/index.js" } }</script>
 <style>
-  html, body { margin: 0; width: 420px; height: 640px; background: transparent; }
+  html, body { margin: 0; width: 460px; height: 920px; background: transparent; }
   rn-window { position: absolute; inset: 6px; }
-  .phase { font-family: monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
-  p { margin: 8px 0; }
+  .strip { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .pill { font-family: var(--rn-mono, monospace); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border: 1px solid var(--rn-line, #333); color: var(--rn-dim, #999); }
+  .pill.ok { color: var(--rn-ok, #5dffa1); border-color: var(--rn-ok, #5dffa1); }
+  .pill.warn { color: var(--rn-danger, #ff5e5e); border-color: var(--rn-danger, #ff5e5e); }
+  .progress, .count, .path, .detail { font-family: var(--rn-mono, monospace); font-size: 11px; color: var(--rn-dim, #999); white-space: pre-wrap; word-break: break-all; }
+  .path { color: var(--rn-fg, #eee); }
+  rn-list { --rn-list-height: 380px; display: block; }
+  #appearances { --rn-list-height: 90px; margin-top: 6px; }
+  #objects { --rn-list-height: 300px; }
+  .row { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
+  .message { font-family: var(--rn-body, sans-serif); font-size: 13px; padding: 6px 0; min-height: 1.4em; color: var(--rn-dim, #999); }
+  .message.ok { color: var(--rn-ok, #5dffa1); } .message.warn, .message.error { color: var(--rn-danger, #ff5e5e); }
+  .phase { font-family: var(--rn-mono, monospace); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  pre { margin: 4px 0; font-family: var(--rn-mono, monospace); font-size: 12px; white-space: pre-wrap; word-break: break-all; }
 </style>
 </head>
 <body>
   <rn-window title="EDGEbuilder" draggable>
-    <div class="phase">// B0 · design</div>
-    <p>A world builder for the EDGE platform: browse the game's assets, drop them into the world, position, arrange, bake.</p>
-    <p>Nothing places objects yet. The design is at <code>edgemodders.github.io/EDGEbuilder</code>.</p>
-    <rn-panel title="Status">
-      <p id="status">Waiting for the mod...</p>
-    </rn-panel>
+    <div class="strip"><span id="world" class="pill">World: checking</span><span id="bridge" class="pill">REDbridge off</span><span id="index" class="pill">No index</span></div>
+    <div id="progress" class="progress"></div>
+    <rn-tabs>
+      <rn-tab label="Assets" active>
+        <rn-input id="search" placeholder="Search meshes and entities, e.g. crate"></rn-input>
+        <rn-tabs id="kinds"><rn-tab label="All" active></rn-tab><rn-tab label="Meshes"></rn-tab><rn-tab label="Entities"></rn-tab></rn-tabs>
+        <div id="count" class="count"></div>
+        <rn-list id="results"></rn-list>
+        <rn-panel title="Picked">
+          <div id="lookedPath" class="path">Pick an asset</div>
+          <div id="lookedSize" class="detail"></div>
+          <rn-list id="appearances" hidden></rn-list>
+          <div class="row"><rn-button id="drop" disabled sound="ui_menu_onpress">Drop in front of me</rn-button></div>
+        </rn-panel>
+      </rn-tab>
+      <rn-tab label="Scene">
+        <div id="sceneCount" class="count"></div>
+        <rn-list id="objects"></rn-list>
+        <rn-panel title="Selected">
+          <pre id="selected">Nothing selected</pre>
+          <div class="row">
+            <rn-button id="delete" variant="danger" disabled>Delete</rn-button>
+            <rn-button id="rebuild" variant="ghost" disabled>Rebuild previews</rn-button>
+            <rn-button id="clear" variant="ghost">Clear scene</rn-button>
+          </div>
+        </rn-panel>
+      </rn-tab>
+      <rn-tab label="Settings">
+        <rn-input id="bridgePath" label="REDbridge.exe" placeholder="Empty: the copy REDdeck fetched"></rn-input>
+        <rn-input id="gameDir" label="Game folder" placeholder="Empty: found from where REDnode runs"></rn-input>
+        <div class="row"><rn-button id="saveSettings">Save and restart REDbridge</rn-button></div>
+        <div class="row"><rn-button id="buildIndex" variant="ghost">Rebuild asset index</rn-button><rn-button id="restartBridge" variant="ghost">Restart REDbridge</rn-button></div>
+        <div id="bridgeDetail" class="detail"></div>
+        <div id="indexDetail" class="detail"></div>
+        <div id="settingsFile" class="detail"></div>
+      </rn-tab>
+      <rn-tab label="About">
+        <div class="phase">// B1 · browse and drop</div>
+        <p>A world builder for the EDGE platform: browse the game's assets, drop them into the world, position, arrange, bake.</p>
+        <p>This phase: search the game's meshes and entities, drop one in front of V, select it, delete it. Positioning comes in B2, groups and saved scenes in B3, the bake in B4.</p>
+        <p>Design and guide: <code>edgemodders.github.io/EDGEbuilder</code></p>
+      </rn-tab>
+    </rn-tabs>
+    <div id="message" class="message"></div>
   </rn-window>
-  <script type="module">
-    import { channel } from "rednode";
-    const status = document.getElementById("status");
-    channel.on((m) => {
-      if (m.type === "hello") status.textContent = `Mod ready. ${m.connected ? (m.mainMenu ? "Game at the main menu." : "Game attached.") : "Not connected to the game."}`;
-    });
-    channel.post({ type: "hello" });
-  </script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

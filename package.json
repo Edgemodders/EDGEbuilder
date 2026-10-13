@@ -1,11 +1,23 @@
 {
   "name": "edgebuilder",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "A world builder for Cyberpunk 2077 that runs inside the game on REDnode.",
   "license": "MIT",
   "repository": "github:Edgemodders/EDGEbuilder",
+  "type": "module",
   "scripts": {
-    "build": "node -e \"console.log('B0: nothing to build yet; edgebuilder/ is hand-written until B1')\""
+    "build": "tsc --noEmit -p . && node build.mjs",
+    "watch": "node build.mjs --watch",
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "package": "npm run build && powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
