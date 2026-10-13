@@ -10,7 +10,7 @@ EDGEbuilder is a world builder for Cyberpunk 2077: pick an asset from the game's
 
 ## Where the idea comes from
 
-World Builder by keanuWheeze, a Cyber Engine Tweaks mod, showed that a world editor can live inside the running game, and that its real product is not the preview but the exported streaming sector. EDGEbuilder is a from-scratch design of that idea for the EDGE platform. It uses none of World Builder's code, files, data lists or file formats, which its license reserves. What we took from studying it is understanding:
+World Builder by keanuWheeze, a Cyber Engine Tweaks mod, showed that a world editor can live inside the running game, and that its real product is not the preview but the exported streaming sector. EDGEbuilder is a from-scratch design of that idea for the EDGE platform. It uses none of World Builder's code, files, data lists or file formats, which its license reserves. What we took from studying it is understanding (the full findings are on the [study](study.md) page):
 
 | Lesson | What it means for EDGEbuilder |
 |---|---|
