@@ -20,9 +20,10 @@ let lastMessage = "";
 function render(s: Snapshot): void {
   state = s;
   // Status strip.
-  const worldText = { ready: "World ready", "no-save": "Load a save", "no-codeware": "Needs Codeware 1.14+", unknown: "World: checking" }[s.world];
+  const worldText = { ready: "World ready", "no-game": "No game", "no-save": "Load a save", "no-codeware": "Needs Codeware 1.14+", unknown: "World: checking" }[s.world];
   $("world").textContent = worldText;
-  $("world").className = `pill ${s.world === "ready" ? "ok" : s.world === "unknown" ? "" : "warn"}`;
+  $("world").className = `pill ${s.world === "ready" ? "ok" : s.world === "unknown" || s.world === "no-game" ? "" : "warn"}`;
+  $("world").title = s.world === "no-game" ? "REDnode is not linked to a running game. Browsing works; dropping needs the game with a save loaded." : "";
   const b = s.bridge;
   $("bridge").textContent = b.status === "ready" ? `REDbridge ${b.version}` : b.status === "starting" ? "REDbridge starting" : b.status === "missing" ? "No REDbridge" : b.status === "failed" ? "REDbridge failed" : "REDbridge off";
   $("bridge").className = `pill ${b.status === "ready" ? "ok" : b.status === "starting" ? "" : "warn"}`;
@@ -37,7 +38,7 @@ function render(s: Snapshot): void {
   const list = $("results");
   const keep = lookedAt;
   list.innerHTML = s.results
-    .map((r) => `<rn-item value="${esc(r.path)}"${r.path === keep ? " selected" : ""}>${esc(shortName(r.path))}<span slot="end">${r.kind}</span></rn-item>`)
+    .map((r) => `<rn-item value="${esc(r.path)}" title="${esc(r.path)}"${r.path === keep ? " selected" : ""}>${esc(shortName(r.path))}<span slot="end">${r.path.toLowerCase().startsWith("ep1\\") ? "PL " : ""}${r.kind}</span></rn-item>`)
     .join("");
   $("count").textContent = s.index.status === "ready" ? (s.query.text ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} of ${s.index.count.toLocaleString()}` : `Type to search ${s.index.count.toLocaleString()} assets`) : "";
   const looked = s.looked;

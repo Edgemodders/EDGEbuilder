@@ -131,10 +131,26 @@ async function buildIndex(): Promise<void> {
 
 // ---- the world --------------------------------------------------------------------------------
 
+/** Why the world cannot take a drop right now, in the player's words. */
+function worldBlocker(): string {
+  switch (state.world) {
+    case "no-game":
+      return "Not connected to the game. Start the game with REDnode, then load a save.";
+    case "no-save":
+      return "Load a save first.";
+    case "no-codeware":
+      return "The world API is not available: REDnode needs Codeware 1.14 or later in the game.";
+    default:
+      return "The world is not ready yet; try again in a moment.";
+  }
+}
+
 async function checkWorld(): Promise<void> {
   try {
-    if (await world.available()) state.world = "ready";
-    else state.world = (await game.state()).mainMenu ? "no-save" : "no-codeware";
+    const s = await game.state();
+    if (!s.connected) state.world = "no-game";
+    else if (await world.available()) state.world = "ready";
+    else state.world = s.mainMenu ? "no-save" : "no-codeware";
   } catch {
     state.world = "unknown";
   }
@@ -213,7 +229,7 @@ async function drop(assetPath: string, appearance?: string): Promise<void> {
   const kind = kindOf(assetPath);
   if (!kind) return say(`${assetPath} is not a mesh or an entity template.`, "warn");
   if (state.world !== "ready") await checkWorld();
-  if (state.world !== "ready") return say(state.world === "no-save" ? "Load a save first." : "The world API is not available: REDnode needs Codeware 1.14 or later.", "warn");
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
   try {
     const at = await inFrontOfPlayer();
     const o = scene.add(kind, assetPath, { position: at.position, rotation: yawToQuaternion(at.yaw), scale: [1, 1, 1] }, appearance);
@@ -253,7 +269,7 @@ async function remove(id: string): Promise<void> {
 
 async function rebuild(): Promise<void> {
   if (state.world !== "ready") await checkWorld();
-  if (state.world !== "ready") return say("Load a save first.", "warn");
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
   let n = 0;
   for (const o of scene.objects) {
     if (o.entityId || o.kind === "light") continue;
@@ -335,6 +351,18 @@ channel.on<PageMessage>((m) => {
 });
 
 // ---- lifecycle --------------------------------------------------------------------------------
+
+// The host links to the game, or loses it: the world may have become usable, or not.
+let linked: boolean | undefined;
+game.onState((s) => {
+  if (s.connected === linked) return;
+  linked = s.connected;
+  if (!s.connected) {
+    scene.forgetPreviews();
+    state.selected = undefined;
+  }
+  void checkWorld();
+});
 
 game.on("PlayerPuppet.OnGameAttached", () => {
   // A save loaded: every preview entity of the old session is gone.

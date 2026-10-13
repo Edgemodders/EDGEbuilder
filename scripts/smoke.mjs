@@ -64,6 +64,7 @@ if (!exe || !game) {
   await index.build(bridge, key, (text) => (last = text));
   assert.ok(index.entries.length > 1000, `only ${index.entries.length} assets`);
   assert.ok(index.entries.every((e) => e.kind === "mesh" || e.kind === "entity"));
+  assert.equal(new Set(index.entries.map((e) => e.path.toLowerCase())).size, index.entries.length, "one entry per path, though some files are in two archives");
   assert.ok(fs.existsSync(index.file));
   console.log(`index: ok (${index.entries.length} assets in ${((Date.now() - t) / 1000).toFixed(1)} s; last progress: ${last})`);
   const crates = index.search("cargo crate", "mesh", 20);

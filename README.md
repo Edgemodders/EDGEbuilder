@@ -17,7 +17,7 @@ EDGEbuilder is the first mod built on the EDGE platform end to end: the editor i
 **[Read the design](https://edgemodders.github.io/EDGEbuilder/design.html)** &middot; [REDnode](https://github.com/Edgemodders/REDnode) &middot; [REDbridge](https://github.com/Edgemodders/REDbridge) &middot; [REDcode](https://github.com/Edgemodders/REDcode) &middot; [REDdeck](https://github.com/Edgemodders/REDdeck)
 
 > [!NOTE]
-> **Status: B1 built, in-game test pending.** EDGEbuilder 0.1.0 reads an index of your game's meshes and entities through REDbridge, searches it, drops a picked asset in front of V through REDnode's world API, selects and deletes it, and brings the scene back after a save loads. Not yet run in the game: the [B1 test](https://edgemodders.github.io/EDGEbuilder/b1-test.html) says how. Install it with REDdeck from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases). The [design](https://edgemodders.github.io/EDGEbuilder/design.html) says where it goes.
+> **Status: B1 built, in-game test pending.** EDGEbuilder 0.1.1 reads an index of your game's meshes and entities through REDbridge, searches it, drops a picked asset in front of V through REDnode's world API, selects and deletes it, and brings the scene back after a save loads. Not yet run in the game: the [B1 test](https://edgemodders.github.io/EDGEbuilder/b1-test.html) says how. Install it with REDdeck from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases). The [design](https://edgemodders.github.io/EDGEbuilder/design.html) says where it goes.
 
 ## How it works
 

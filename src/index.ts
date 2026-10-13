@@ -37,7 +37,7 @@ export class AssetIndex {
     try {
       const data = JSON.parse(fs.readFileSync(this.file, "utf8")) as IndexFile;
       if (data.format !== 1 || !Array.isArray(data.entries)) return false;
-      this.entries = data.entries;
+      this.entries = unique(data.entries);
       this.info = data.info ?? {};
       return true;
     } catch {
@@ -72,7 +72,7 @@ export class AssetIndex {
       } while (offset < total);
     }
     entries.sort((a, b) => a.path.localeCompare(b.path));
-    this.entries = entries;
+    this.entries = unique(entries);
     this.save();
   }
 
@@ -116,6 +116,17 @@ export class AssetIndex {
     }
     return info;
   }
+}
+
+/** One entry per path: a file the game ships in two archives (a base archive and a patch) is one asset. */
+function unique(entries: AssetEntry[]): AssetEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((e) => {
+    const key = e.path.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function kindOf(file: string): AssetKind | undefined {

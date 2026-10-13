@@ -166,7 +166,7 @@ var AssetIndex = class {
     try {
       const data = JSON.parse(fs2.readFileSync(this.file, "utf8"));
       if (data.format !== 1 || !Array.isArray(data.entries)) return false;
-      this.entries = data.entries;
+      this.entries = unique(data.entries);
       this.info = data.info ?? {};
       return true;
     } catch {
@@ -199,7 +199,7 @@ var AssetIndex = class {
       } while (offset < total);
     }
     entries.sort((a, b) => a.path.localeCompare(b.path));
-    this.entries = entries;
+    this.entries = unique(entries);
     this.save();
   }
   /** Substring search over paths, file-name matches first. */
@@ -241,6 +241,15 @@ var AssetIndex = class {
     return info;
   }
 };
+function unique(entries) {
+  const seen = /* @__PURE__ */ new Set();
+  return entries.filter((e) => {
+    const key = e.path.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 function kindOf(file) {
   const lower = file.toLowerCase();
   if (lower.endsWith(".mesh")) return "mesh";
@@ -415,10 +424,24 @@ async function buildIndex() {
     say(`The asset index failed: ${err.message}`, "error");
   }
 }
+function worldBlocker() {
+  switch (state.world) {
+    case "no-game":
+      return "Not connected to the game. Start the game with REDnode, then load a save.";
+    case "no-save":
+      return "Load a save first.";
+    case "no-codeware":
+      return "The world API is not available: REDnode needs Codeware 1.14 or later in the game.";
+    default:
+      return "The world is not ready yet; try again in a moment.";
+  }
+}
 async function checkWorld() {
   try {
-    if (await world.available()) state.world = "ready";
-    else state.world = (await game.state()).mainMenu ? "no-save" : "no-codeware";
+    const s = await game.state();
+    if (!s.connected) state.world = "no-game";
+    else if (await world.available()) state.world = "ready";
+    else state.world = s.mainMenu ? "no-save" : "no-codeware";
   } catch {
     state.world = "unknown";
   }
@@ -481,7 +504,7 @@ async function drop(assetPath, appearance) {
   const kind = kindOf(assetPath);
   if (!kind) return say(`${assetPath} is not a mesh or an entity template.`, "warn");
   if (state.world !== "ready") await checkWorld();
-  if (state.world !== "ready") return say(state.world === "no-save" ? "Load a save first." : "The world API is not available: REDnode needs Codeware 1.14 or later.", "warn");
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
   try {
     const at = await inFrontOfPlayer();
     const o = scene.add(kind, assetPath, { position: at.position, rotation: yawToQuaternion(at.yaw), scale: [1, 1, 1] }, appearance);
@@ -517,7 +540,7 @@ async function remove(id) {
 }
 async function rebuild() {
   if (state.world !== "ready") await checkWorld();
-  if (state.world !== "ready") return say("Load a save first.", "warn");
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
   let n = 0;
   for (const o of scene.objects) {
     if (o.entityId || o.kind === "light") continue;
@@ -593,6 +616,16 @@ channel.on((m) => {
         break;
     }
   })().catch((err) => say(`${m.type}: ${err.message}`, "error"));
+});
+var linked;
+game.onState((s) => {
+  if (s.connected === linked) return;
+  linked = s.connected;
+  if (!s.connected) {
+    scene.forgetPreviews();
+    state.selected = void 0;
+  }
+  void checkWorld();
 });
 game.on("PlayerPuppet.OnGameAttached", () => {
   scene.forgetPreviews();

@@ -12,13 +12,14 @@
   .pill { font-family: var(--rn-mono, monospace); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border: 1px solid var(--rn-line, #333); color: var(--rn-dim, #999); }
   .pill.ok { color: var(--rn-ok, #5dffa1); border-color: var(--rn-ok, #5dffa1); }
   .pill.warn { color: var(--rn-danger, #ff5e5e); border-color: var(--rn-danger, #ff5e5e); }
+  .progress:empty { display: none; }
   .progress, .count, .path, .detail { font-family: var(--rn-mono, monospace); font-size: 11px; color: var(--rn-dim, #999); white-space: pre-wrap; word-break: break-all; }
   .path { color: var(--rn-fg, #eee); }
-  rn-list { --rn-list-height: 380px; display: block; }
-  #appearances { --rn-list-height: 90px; margin-top: 6px; }
+  rn-list { --rn-list-height: 300px; display: block; }
+  #appearances { --rn-list-height: 76px; margin-top: 6px; }
   #objects { --rn-list-height: 300px; }
   .row { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
-  .message { font-family: var(--rn-body, sans-serif); font-size: 13px; padding: 6px 0; min-height: 1.4em; color: var(--rn-dim, #999); }
+  .message { font-family: var(--rn-body, sans-serif); font-size: 13px; padding: 2px 0 6px; min-height: 1.4em; color: var(--rn-dim, #999); }
   .message.ok { color: var(--rn-ok, #5dffa1); } .message.warn, .message.error { color: var(--rn-danger, #ff5e5e); }
   .phase { font-family: var(--rn-mono, monospace); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
   pre { margin: 4px 0; font-family: var(--rn-mono, monospace); font-size: 12px; white-space: pre-wrap; word-break: break-all; }
@@ -28,6 +29,7 @@
   <rn-window title="EDGEbuilder" draggable>
     <div class="strip"><span id="world" class="pill">World: checking</span><span id="bridge" class="pill">REDbridge off</span><span id="index" class="pill">No index</span></div>
     <div id="progress" class="progress"></div>
+    <div id="message" class="message"></div>
     <rn-tabs>
       <rn-tab label="Assets" active>
         <rn-input id="search" placeholder="Search meshes and entities, e.g. crate"></rn-input>
@@ -69,7 +71,6 @@
         <p>Design and guide: <code>edgemodders.github.io/EDGEbuilder</code></p>
       </rn-tab>
     </rn-tabs>
-    <div id="message" class="message"></div>
   </rn-window>
   <script type="module" src="app.js"></script>
 </body>

@@ -1,7 +1,7 @@
 {
   "id": "edgebuilder",
   "name": "EDGEbuilder",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "Edgemodders",
   "description": "A world builder: browse the game's assets, drop them into the live world, position, arrange, bake. B1: browse and drop.",
   "entry": "index.html",

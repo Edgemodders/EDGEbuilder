@@ -45,7 +45,8 @@ export interface Snapshot {
   /** The mod has started. */
   ready: boolean;
   /** REDnode's world support: Codeware installed and a game loaded. */
-  world: "ready" | "no-save" | "no-codeware" | "unknown";
+  /** no-game: the REDnode host is not linked to a running game (window mode, or the game closed). */
+  world: "ready" | "no-game" | "no-save" | "no-codeware" | "unknown";
   bridge: { status: "off" | "starting" | "ready" | "missing" | "failed"; path?: string; version?: string; detail?: string };
   index: { status: "none" | "building" | "ready" | "failed"; count: number; progress?: string; file?: string };
   results: AssetEntry[];
