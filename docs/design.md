@@ -182,14 +182,16 @@ For REDnode, the design's assumptions that are not in the SDK today, in the orde
 
 | Need | Why | Shape that would work |
 |---|---|---|
-| Construct native objects and set properties | A mesh component is `entMeshComponent` with `mesh`, `meshAppearance` and `visualScale` set before it is attached | `api.$new("entMeshComponent", { mesh: "...", visualScale: {...} })` and `ref.$set(prop, value)` |
-| Game callbacks as events | Components attach during Codeware's `Entity/Initialize` callback; the mod must hear it for the entity it spawned | `game.on("Entity/Initialize", handler)` with the entity in the event, or a plugin-side spawn that attaches a given component and resolves when attached |
-| Resource references as arguments | The mesh component's `mesh` is a resource reference, which the bridge refuses today | Accept a path string where a `ResRef`, `raRef` or `rRef` is expected |
+| Construct native objects and set properties ([REDnode #1](https://github.com/Edgemodders/REDnode/issues/1)) | A mesh component is `entMeshComponent` with `mesh`, `meshAppearance` and `visualScale` set before it is attached | `api.$new("entMeshComponent", { mesh: "...", visualScale: {...} })` and `ref.$set(prop, value)` |
+| Game callbacks as events ([REDnode #2](https://github.com/Edgemodders/REDnode/issues/2)) | Components attach during Codeware's `Entity/Initialize` callback; the mod must hear it for the entity it spawned | `game.on("Entity/Initialize", handler)` with the entity in the event, or a plugin-side spawn that attaches a given component and resolves when attached |
+| Resource references as arguments ([REDnode #3](https://github.com/Edgemodders/REDnode/issues/3)) | The mesh component's `mesh` is a resource reference, which the bridge refuses today | Accept a path string where a `ResRef`, `raRef` or `rRef` is expected |
 | Known per-frame budget | Dragging sets one transform per frame; the gizmo projects a few points per frame | A measured number for round trips per frame, and a batched `api.$batch([...])` if one call per frame is tight |
-| A REDbridge the host can hand out | The asset index and the bake need the bridge | `kernel.bridge()` returning how to reach a running REDbridge, as `kernel.mcp()` does for the MCP server. Until then EDGEbuilder starts its own from a path setting |
-| Dependencies in the manifest | EDGEbuilder needs Codeware at a minimum version | `"requires": { "codeware": ">=1.16" }`, shown in the Mod Manager. Until then EDGEbuilder checks at start and says what is missing |
+| A REDbridge the host can hand out ([REDnode #4](https://github.com/Edgemodders/REDnode/issues/4)) | The asset index and the bake need the bridge | `kernel.bridge()` returning how to reach a running REDbridge, as `kernel.mcp()` does for the MCP server. Until then EDGEbuilder starts its own from a path setting |
+| Dependencies in the manifest ([REDnode #5](https://github.com/Edgemodders/REDnode/issues/5)) | EDGEbuilder needs Codeware at a minimum version | `"requires": { "codeware": ">=1.16" }`, shown in the Mod Manager. Until then EDGEbuilder checks at start and says what is missing |
 
-For REDbridge: `sector.build` as above, a read of a mesh file's bounds and appearances through the existing CR2W reader, and building EDGEbuilder's support archive from JSON.
+For REDbridge: `sector.build` as above ([REDbridge #1](https://github.com/Edgemodders/REDbridge/issues/1)), a read of a mesh file's bounds and appearances ([REDbridge #2](https://github.com/Edgemodders/REDbridge/issues/2)), and building EDGEbuilder's support archive from JSON, which is `project.pack` on a one-file project.
+
+For REDcode, later: the scene file as a project file, Bake from the command palette, validation ([REDcode #2](https://github.com/Edgemodders/REDcode/issues/2)).
 
 For REDdeck, in this session: the `rednode` kind, so a zip or folder with `rednode-app.json` deploys to `red4ext/plugins/REDnode/apps/<id>/`.
 
