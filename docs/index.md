@@ -14,13 +14,13 @@ EDGEbuilder is a world builder for Cyberpunk 2077 that runs inside the game on R
 
 ## Roadmap status
 
-As of B2a built (2026-10-13), in-game test pending. The scene format is pinned and REDbridge can already bake one.
+As of B2a passed in game (2026-10-14). Next: B2b, the editor camera and builder mode. The scene format is pinned and REDbridge can already bake one.
 
 | Phase | Status |
 |---|---|
 | B0 Decide | Done: the design, the repo, the package |
 | B1 Browse and drop | Built (EDGEbuilder 0.1.1): the asset index from the player's game through REDbridge (31,571 meshes and entities in 4 s), search, Drop in front of me through REDnode's world API with a base-game empty entity and a mesh component, select, delete, rebuild after a save loads, settings. The index, the search, the bridge client and the scene file pass the smoke test on real game files, and the page passed a check in REDnode's host without the game (three fixes in 0.1.1). **Passed in game on 2026-10-13**: drops land quickly, the game's outline shows on the selected preview, Rebuild restores the scene after a save loads. Results in [B1 test](b1-test.md) |
-| B2a Position | Built (EDGEbuilder 0.2.0): the full-screen viewport with an Edit switch, the gizmo (arrows and a turn ring), picking in the world, drags, G R S with axis locks and typed numbers, the Selected panel's numbers, drop to floor, mesh scale; REDbridge through REDnode's `kernel.bridge()`, Codeware declared in `requires`. Geometry tested against simulated cameras; page checked in REDnode's host. **In-game test pending**, steps in [B2a test](b2-test.md) |
+| B2a Position | Built (EDGEbuilder 0.2.0): the full-screen viewport with an Edit switch, the gizmo (arrows and a turn ring), picking in the world, drags, G R S with axis locks and typed numbers, the Selected panel's numbers, drop to floor, mesh scale; REDbridge through REDnode's `kernel.bridge()`, Codeware declared in `requires`. **Passed in game on 2026-10-14**: the projection lands 0.0 px from the game's, drags follow at the game's frame rate without lowering it, drop to floor and scale work. 0.2.2 hides the gizmo with Edit off and sends moves once a frame without waiting. Results in [B2a test](b2-test.md) |
 | B2b Camera | Not started: the editor camera, split from B2 |
 | B3 Arrange and save | Not started |
 | B4 Bake | REDbridge side done (0.6.0): `sector.build` bakes a scene into a sector, a block and an `.xl`, verified by the probe but not yet loaded in the game. REDdeck 0.20.0 installs REDnode packages. Left: the bake panel in EDGEbuilder, and the in-game test |

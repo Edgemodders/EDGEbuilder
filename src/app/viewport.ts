@@ -85,7 +85,6 @@ export class Viewport {
   private drag: Drag | undefined;
   private mouse: [number, number] = [0, 0];
   private pending: SceneTransform | undefined;
-  private inflight = false;
   private cameraError = "";
 
   constructor(
@@ -180,19 +179,21 @@ export class Viewport {
 
   // ---- the frame loop ----------------------------------------------------------------------------
 
+  /** The loop runs only in Edit: with Edit off nothing is drawn (the game's outline marks the selection) and the game is not asked for the camera. */
   private kick(): void {
-    if (this.running || !(this.edit || this.selected)) {
-      if (!this.edit && !this.selected) this.clear();
+    if (this.running || !this.edit) {
+      if (!this.edit) this.clear();
       return;
     }
     this.running = true;
     const tick = async () => {
-      if (!(this.edit || this.selected)) {
+      if (!this.edit) {
         this.running = false;
         this.clear();
         return;
       }
       this.frame++;
+      this.flushMove();
       const ok = await this.updateCamera();
       this.draw(ok);
       // Without a camera, try again once a second rather than every frame.
@@ -506,29 +507,30 @@ export class Viewport {
     return { ...s, scale: this.scaled(s.scale as V3, n || 1, d.axis) };
   }
 
-  /** Shows a transform on the preview: at most one move waits for the game at a time, the newest wins. */
+  /** Shows a transform on the preview: the newest one is sent once a frame, by the frame loop. */
   private apply(t: SceneTransform): void {
     const d = this.drag!;
     d.now = t;
     if (d.mode === "scale") return; // the box shows a new scale; the mod rebuilds the preview on keep
+    this.pending = t;
+  }
+
+  /**
+   * Sends the newest pending transform without waiting for the answer. REDnode runs every call that
+   * is waiting when a game frame starts in that frame, so one move a page frame keeps the object with
+   * the cursor; waiting for each answer let it fall a frame or two behind (B2a test).
+   */
+  private flushMove(): void {
+    const p = this.pending;
+    const d = this.drag;
+    if (!p || !d) return;
+    this.pending = undefined;
     const o = this.objects.find((x) => x.id === d.id);
     if (!o?.entityId) return;
-    this.pending = t;
-    if (this.inflight) return;
-    this.inflight = true;
-    void (async () => {
-      while (this.pending) {
-        const p = this.pending;
-        this.pending = undefined;
-        try {
-          await world.move(o.entityId!, { x: p.position[0], y: p.position[1], z: p.position[2] }, { i: p.rotation[0], j: p.rotation[1], k: p.rotation[2], r: p.rotation[3] });
-          if (this.drag) this.drag.moves++;
-        } catch (err) {
-          this.hooks.log(`Move failed: ${(err as Error).message}`);
-        }
-      }
-      this.inflight = false;
-    })();
+    d.moves++;
+    world
+      .move(o.entityId, { x: p.position[0], y: p.position[1], z: p.position[2] }, { i: p.rotation[0], j: p.rotation[1], k: p.rotation[2], r: p.rotation[3] })
+      .catch((err: Error) => this.hooks.log(`Move failed: ${err.message}`));
   }
 
   private confirm(): void {

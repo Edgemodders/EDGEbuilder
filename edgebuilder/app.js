@@ -151,7 +151,6 @@ var Viewport = class {
   drag;
   mouse = [0, 0];
   pending;
-  inflight = false;
   cameraError = "";
   setEdit(on) {
     this.edit = on;
@@ -224,19 +223,21 @@ var Viewport = class {
     if (mine) this.hooks.log(`Viewport check: a test point lands ${Math.hypot(mine[0] - gx, mine[1] - gy).toFixed(1)} px from where the game projects it`);
   }
   // ---- the frame loop ----------------------------------------------------------------------------
+  /** The loop runs only in Edit: with Edit off nothing is drawn (the game's outline marks the selection) and the game is not asked for the camera. */
   kick() {
-    if (this.running || !(this.edit || this.selected)) {
-      if (!this.edit && !this.selected) this.clear();
+    if (this.running || !this.edit) {
+      if (!this.edit) this.clear();
       return;
     }
     this.running = true;
     const tick = async () => {
-      if (!(this.edit || this.selected)) {
+      if (!this.edit) {
         this.running = false;
         this.clear();
         return;
       }
       this.frame++;
+      this.flushMove();
       const ok = await this.updateCamera();
       this.draw(ok);
       if (ok) requestAnimationFrame(() => void tick());
@@ -526,29 +527,27 @@ var Viewport = class {
     if (d.mode === "rotate") return { ...s, rotation: qNorm(qMul(qAxisAngle(AXES[d.axis ?? "z"], n), s.rotation)) };
     return { ...s, scale: this.scaled(s.scale, n || 1, d.axis) };
   }
-  /** Shows a transform on the preview: at most one move waits for the game at a time, the newest wins. */
+  /** Shows a transform on the preview: the newest one is sent once a frame, by the frame loop. */
   apply(t) {
     const d = this.drag;
     d.now = t;
     if (d.mode === "scale") return;
+    this.pending = t;
+  }
+  /**
+   * Sends the newest pending transform without waiting for the answer. REDnode runs every call that
+   * is waiting when a game frame starts in that frame, so one move a page frame keeps the object with
+   * the cursor; waiting for each answer let it fall a frame or two behind (B2a test).
+   */
+  flushMove() {
+    const p = this.pending;
+    const d = this.drag;
+    if (!p || !d) return;
+    this.pending = void 0;
     const o = this.objects.find((x) => x.id === d.id);
     if (!o?.entityId) return;
-    this.pending = t;
-    if (this.inflight) return;
-    this.inflight = true;
-    void (async () => {
-      while (this.pending) {
-        const p = this.pending;
-        this.pending = void 0;
-        try {
-          await world.move(o.entityId, { x: p.position[0], y: p.position[1], z: p.position[2] }, { i: p.rotation[0], j: p.rotation[1], k: p.rotation[2], r: p.rotation[3] });
-          if (this.drag) this.drag.moves++;
-        } catch (err) {
-          this.hooks.log(`Move failed: ${err.message}`);
-        }
-      }
-      this.inflight = false;
-    })();
+    d.moves++;
+    world.move(o.entityId, { x: p.position[0], y: p.position[1], z: p.position[2] }, { i: p.rotation[0], j: p.rotation[1], k: p.rotation[2], r: p.rotation[3] }).catch((err) => this.hooks.log(`Move failed: ${err.message}`));
   }
   confirm() {
     const d = this.drag;

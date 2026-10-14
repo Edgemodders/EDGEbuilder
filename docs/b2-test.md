@@ -21,7 +21,7 @@ If the EDGEbuilder window sits in the wrong place (it is full-screen now; a posi
 
 Other overlay windows and the game's HUD stay on screen during Edit; windows under EDGEbuilder's tint cannot be clicked until Edit is off. Builder mode, which hides them, comes with B2b.
 
-Use the **Test timer**: Start, then Mark after each step.
+Use the **Test timer**: Start, then Mark after each step. While Edit is on, EDGEbuilder's layer covers the Timer: switch Edit off to press Mark (REDnode #10).
 
 ## Steps
 
@@ -60,6 +60,27 @@ Use the **Test timer**: Start, then Mark after each step.
 | Requires | REDnode's host found Codeware 1.20.3 for EDGEbuilder's `>=1.14` |
 | Found on the way | An unreadable scene file was replaced by an empty scene on the next save. Now it is kept beside as `working.scene.json.unreadable-<time>` and the message line says so |
 
-### In the game
+### In the game, 2026-10-14: passed
 
-Not run yet.
+On the owner's PC with EDGEbuilder 0.2.0, REDnode host 0.17.0, Codeware 1.20.3 and REDbridge 0.6.0. "Everything seemed to work fine." The owner could not press Mark in the Test timer while Edit was on, so the steps have no marks; the logs give the times.
+
+| What | Result |
+|---|---|
+| The projection | Calibrated from three `ProjectPoint` calls: FOV 51 (the game's FOV is vertical: `ky` 2.096 = 1 / tan(25.5°), and `kx` / `ky` = 16:9), `ProjectPoint` answers in -1..1 with y up. The check point landed **0.0 px** from where the game projects it, and the owner saw the box and gizmo sit on the crate |
+| REDbridge through REDnode | "Allow REDbridge" until the owner allowed it in the Mod Manager; EDGEbuilder picked it up by itself within five seconds, from REDdeck's copy |
+| Drags | 14 to 28 moves a second on arrows and the ring, at about 38 fps. The object and its outline trailed the cursor "a little bit, but it wasn't too bad": each move waited for the game's answer before the next was sent |
+| Frame rate | The same 38 to 39 fps in interactive mode with and without dragging, and 68 to 73 in passive mode. Game calls went from 33 a second without EDGEbuilder to about 72 with Edit on (the camera each frame) and up to 105 while dragging; their cost peaked at 1.6 ms a frame. Dragging does not lower the frame rate |
+| Drop to floor | Static and PlayerBlocker hit at z 119.08, Terrain missed; the crate went down 1.00 m onto the ground |
+| Scale | S, 2, Enter rebuilt the crate's preview at twice the size |
+| Selecting in the world, keys, numbers, Delete | As expected |
+| Save loaded mid-session | The viewport logged once that its camera reference was gone and picked up the new one by itself |
+
+| Found | What happened about it |
+|---|---|
+| Other windows cannot be clicked while Edit is on: the Test timer's Mark, the launcher, the Mod log | EDGEbuilder's layer covers them. Asked of REDnode: tool windows above packages' windows ([REDnode #10](https://github.com/Edgemodders/REDnode/issues/10)); a solo mode that hides the rest ([REDnode #7](https://github.com/Edgemodders/REDnode/issues/7)). Until then: switch Edit off to press Mark |
+| The gizmo stayed on the selected object after Edit was switched off | **0.2.2**: nothing is drawn and the camera is not read with Edit off; the game's outline still marks the selection |
+| The object trailed the cursor while dragging | **0.2.2**: the newest position is sent once a frame without waiting for the answer, as REDnode measured calls batch per frame. To confirm in B2b's test |
+| An object the owner did not remember placing was in the scene | The log shows a drop at 03:49:49 in an earlier session; the scene file kept it, as designed. 0.2.1 now says so when the game is ready, and a drop that fails no longer leaves an object behind |
+| Two EDGEbuilder versions on in REDdeck after installing 0.2.0 | REDdeck 0.21.1: a new version takes the old one's place |
+
+**B2a passed.** Next: B2b, the editor camera and builder mode.
