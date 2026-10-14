@@ -26,7 +26,7 @@ Use the **Test timer**: Start, then Mark after each step.
 ## Steps
 
 1. Load a save in an open spot, F10, open EDGEbuilder. Expected: the panel at the right as before; the pills say **World ready**, **REDbridge 0.6.0** and about 31,500 assets. In the Mod Manager, EDGEbuilder's **Requires** lists Codeware with a tick. Mark.
-2. Drop a cargo crate in front of V (Assets tab, as in B1). Switch **Edit** on in the panel's title bar. Expected: the screen darkens very slightly, and a line at the bottom left says what to do. Mark.
+2. Drop a cargo crate in front of V (Assets tab, as in B1). Switch **Edit** on: in EDGEbuilder's window at the right of the screen, the top bar that says EDGEBUILDER has a small switch at its right end labelled Edit OFF; click it so it says ON (the overlay must be interactive, F10). Expected: the screen darkens very slightly, and a line at the bottom left says what to do. Mark.
 3. Look at the crate. Expected: three arrows from its base (red X, green Y, blue Z), a yellow ring around it, and a thin cyan box around the crate. **Say how well the box fits the crate**: on it, a little off, or far off. Press F10 to passive and walk around it: the gizmo should stay on the crate. Mark.
 4. Back in interactive mode (F10), drag the red arrow: the crate slides along X under the cursor, and stays when you let go. The same with green and blue. Hold Ctrl while dragging: it moves in 0.25 m steps. Mark.
 5. Drag the yellow ring: the crate turns around the vertical. Ctrl gives 15° steps. Mark.
