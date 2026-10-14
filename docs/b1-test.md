@@ -68,18 +68,18 @@ On the owner's PC, EDGEbuilder 0.1.1 installed with REDdeck 0.20.1 after Vortex 
 |---|---|
 | 1 to 2: open, status pills | As expected |
 | 3: search and pick `cargo_crate_a.mesh` | As expected |
-| 4 to 5: drop two crates, two appearances | Both appeared in front of V. "Not instant, but no real noticeable lag" |
-| 6: drop an entity | A vending machine appeared; it took a fraction longer than the crates |
+| 4 to 5: drop two crates, two appearances | Both appeared in front of V, in 357 and 443 ms from the click. "Not instant, but no real noticeable lag" |
+| 6: drop an entity | Two vending machines (`v_vending_machine.ent`, `vending_machine_weapons_1.ent`) in 418 and 416 ms: no slower to spawn than the crates. The owner saw them take a fraction longer, most likely the larger model's textures streaming in after the entity was there |
 | 7: delete | As expected |
-| 8: rebuild after a save loads | The previews came back where they were |
+| 8: rebuild after a save loads | On the load all four previews detached and the mod said "4 objects in the scene; press Rebuild previews"; Rebuild brought all four back in the same second, where they were |
 | 9: clear scene | As expected |
-| 10: logs | No errors seen; the logs were not sent |
+| 10: logs | `rednode-mods.log` and `rednode-overlay.log` (host 0.16.0): no errors or warnings from EDGEbuilder. REDbridge was ready 4 s after the mod started and the index built 2 s later. The mod process peaked at 166 MB while building the index and settled at 144 MB; the other mods sat at 100 to 120 MB |
 
 | Question | Answer | What it decides |
 |---|---|---|
 | Does the drop land quickly where expected | Yes, without noticeable lag | B2 relies on `world.spawn` as it is |
 | Does the game's outline show on a selected preview | **Yes** | B2 uses the game's own highlight for selection; the overlay canvas draws only the gizmo and helpers |
-| Does the frame rate hold with ten previews | Looked fine to the owner; not measured | Measure in B2's test, while dragging, with REDnode 0.15.1's game-call timing in its perf line |
+| Does the frame rate hold with ten previews | Yes. Game calls stayed at about 33 a second and under 1 ms a frame all session, before and after EDGEbuilder opened, with one blip to 45 a second at a drop. The game ran at 230 to 310 fps with the overlay passive and flipped between about 30 and 65 fps whenever it was interactive (F10), from the first F10, before EDGEbuilder was open: the game's or the driver's frame limit while the cursor is up, not the mod | B2 measures it again while dragging, the heavier case |
 | Does Rebuild bring everything back after a save loads | Yes | The scene file is the truth, as designed |
 
 **B1 passed.** Next: B2 Position.
