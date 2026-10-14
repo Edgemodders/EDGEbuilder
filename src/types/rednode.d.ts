@@ -97,6 +97,25 @@ declare module "rednode" {
     on<T = any>(handler: (data: T) => void): () => void;
   };
 
+  export interface KernelBridgeHandle {
+    readonly version: string | null;
+    readonly source: string | null;
+    call<T = any>(method: string, params?: Record<string, unknown>): Promise<T>;
+  }
+  export interface Requirement {
+    name: string;
+    wants: string;
+    found: string | null;
+    installed: boolean;
+    ok: boolean;
+    note: string;
+  }
+  /** REDnode 0.17 and later have bridge() and requirements(); older hosts do not. */
+  export const kernel: {
+    bridge?: () => Promise<KernelBridgeHandle>;
+    requirements?: () => Promise<Requirement[]>;
+  };
+
   export const secrets: {
     get(name: string): Promise<string | null>;
     set(name: string, value: string): Promise<void>;

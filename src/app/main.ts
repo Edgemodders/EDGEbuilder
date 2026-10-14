@@ -1,6 +1,8 @@
 // The editor page: shows the mod's state and sends requests. No truth lives here.
 import { channel } from "rednode";
-import type { AssetKind, PageMessage, SceneObject, Snapshot } from "../protocol";
+import { AXES, qAxisAngle, qMul, qNorm, qYaw, type Q } from "../math";
+import type { AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "../protocol";
+import { Viewport } from "./viewport";
 
 declare const RednodeUI: { notify(text: string, options?: Record<string, unknown>): void } | undefined;
 
@@ -25,7 +27,7 @@ function render(s: Snapshot): void {
   $("world").className = `pill ${s.world === "ready" ? "ok" : s.world === "unknown" || s.world === "no-game" ? "" : "warn"}`;
   $("world").title = s.world === "no-game" ? "REDnode is not linked to a running game. Browsing works; dropping needs the game with a save loaded." : "";
   const b = s.bridge;
-  $("bridge").textContent = b.status === "ready" ? `REDbridge ${b.version}` : b.status === "starting" ? "REDbridge starting" : b.status === "missing" ? "No REDbridge" : b.status === "failed" ? "REDbridge failed" : "REDbridge off";
+  $("bridge").textContent = b.status === "ready" ? `REDbridge ${b.version}` : b.status === "starting" ? "REDbridge starting" : b.status === "blocked" ? "Allow REDbridge" : b.status === "missing" ? "No REDbridge" : b.status === "failed" ? "REDbridge failed" : "REDbridge off";
   $("bridge").className = `pill ${b.status === "ready" ? "ok" : b.status === "starting" ? "" : "warn"}`;
   $("bridge").title = b.detail ?? b.path ?? "";
   const ix = s.index;
@@ -74,6 +76,9 @@ function render(s: Snapshot): void {
   const sel = s.scene.objects.find((o) => o.id === s.selected);
   renderSelected(sel);
   $("delete").toggleAttribute("disabled", !sel);
+  $("floor").toggleAttribute("disabled", !sel?.entityId);
+  $("apply").toggleAttribute("disabled", !sel);
+  viewport.setScene(s.scene.objects, s.selected);
   const missing = s.scene.objects.some((o) => !o.entityId && o.kind !== "light");
   $("rebuild").toggleAttribute("disabled", !missing);
 
@@ -93,7 +98,23 @@ function render(s: Snapshot): void {
   }
 }
 
+type Field = HTMLElement & { value: string };
+const fields = ["px", "py", "pz", "yaw", "scale"] as const;
+const field = (id: (typeof fields)[number]) => $<Field>(id);
+
 function renderSelected(o: SceneObject | undefined): void {
+  const focused = document.activeElement?.id;
+  if (o) {
+    const values: Record<(typeof fields)[number], string> = {
+      px: o.transform.position[0].toFixed(2),
+      py: o.transform.position[1].toFixed(2),
+      pz: o.transform.position[2].toFixed(2),
+      yaw: qYaw(o.transform.rotation as Q).toFixed(1),
+      scale: o.transform.scale[0].toFixed(2),
+    };
+    for (const f of fields) if (focused !== f) field(f).value = values[f];
+    field("scale").toggleAttribute("disabled", o.kind !== "mesh");
+  }
   if (!o) {
     $("selected").textContent = "Nothing selected";
     return;
@@ -129,6 +150,47 @@ $("drop").addEventListener("click", () => {
 });
 $("objects").addEventListener("select", (e) => post({ type: "select", id: (e as CustomEvent<{ value: string }>).detail.value }));
 $("delete").addEventListener("click", () => state?.selected && post({ type: "delete", id: state.selected }));
+$("floor").addEventListener("click", () => state?.selected && post({ type: "floor", id: state.selected }));
+
+/** The numbers in the Selected panel as a transform: position, a new heading, a uniform scale for meshes. */
+function applyFields(): void {
+  const o = state?.scene.objects.find((x) => x.id === state?.selected);
+  if (!o) return;
+  const num = (f: (typeof fields)[number], fallback: number) => {
+    const n = Number(field(f).value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const t = o.transform;
+  const yawNow = qYaw(t.rotation as Q);
+  const turn = num("yaw", yawNow) - yawNow;
+  const s = o.kind === "mesh" ? num("scale", t.scale[0]) || t.scale[0] : 1;
+  const next: SceneTransform = {
+    position: [num("px", t.position[0]), num("py", t.position[1]), num("pz", t.position[2])],
+    rotation: Math.abs(turn) > 1e-3 ? qNorm(qMul(qAxisAngle(AXES.z, turn), t.rotation as Q)) : t.rotation,
+    scale: o.kind === "mesh" ? [s, s, s] : t.scale,
+  };
+  post({ type: "transform", id: o.id, transform: next });
+}
+$("apply").addEventListener("click", applyFields);
+for (const f of fields) field(f).addEventListener("submit", applyFields);
+
+// ---- the viewport ------------------------------------------------------------------------------
+
+const viewport = new Viewport($<HTMLCanvasElement>("view"), {
+  select(id) {
+    post({ type: "select", id });
+    if (id) (document.getElementById("mainTabs") as HTMLElement & { select?(i: number): void }).select?.(1);
+  },
+  commit: (id, transform) => post({ type: "transform", id, transform }),
+  remove: (id) => post({ type: "delete", id }),
+  floor: (id) => post({ type: "floor", id }),
+  log: (text) => post({ type: "log", text }),
+  status(text) {
+    $("message").textContent = text;
+    $("message").className = "message warn";
+  },
+});
+$("edit").addEventListener("change", (e) => viewport.setEdit(!!(e as CustomEvent<{ checked: boolean }>).detail.checked));
 $("rebuild").addEventListener("click", () => post({ type: "rebuild" }));
 $("clear").addEventListener("click", () => post({ type: "clear" }));
 $("buildIndex").addEventListener("click", () => post({ type: "index.build" }));

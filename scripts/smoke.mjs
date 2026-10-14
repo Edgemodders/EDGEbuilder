@@ -7,6 +7,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import * as core from "../dist/core.mjs";
 import { AssetIndex, BridgeClient, Scene, findBridge, isGameFolder, kindOf, quaternionToYaw, yawToQuaternion } from "../dist/core.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -36,7 +37,59 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.equal(scene.objects[0].entityId, undefined);
   scene.clear();
   assert.equal(scene.objects.length, 0);
+  // A damaged file is set aside, not overwritten by the next save.
+  fs.writeFileSync(scene.file, '{ "format": 1, "objects": [ { "id": "broken", "resource": ');
+  const damaged = new Scene(scene.file);
+  assert.equal(damaged.load(), false);
+  assert.ok(damaged.loadError && damaged.setAside && fs.existsSync(damaged.setAside), "the unreadable file is kept");
+  assert.ok(!fs.existsSync(scene.file));
+  damaged.add("mesh", "base/a.mesh", { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
+  assert.ok(fs.readFileSync(damaged.setAside, "utf8").includes("broken"), "the next save did not touch it");
   console.log("scene: ok");
+}
+
+// The viewport's geometry against a simulated game camera, for both ways ProjectPoint might answer.
+{
+  const m = core;
+  const close = (a, b, eps, what) => assert.ok(Math.abs(a - b) < eps, `${what}: ${a} vs ${b}`);
+  // A camera at a height, turned 30 degrees and pitched down 10.
+  const q = m.qMul(m.qAxisAngle([0, 0, 1], 30), m.qAxisAngle([1, 0, 0], -10));
+  const basis = { pos: [100, -50, 12], right: m.qRotate(q, [1, 0, 0]), fwd: m.qRotate(q, [0, 1, 0]), up: m.qRotate(q, [0, 0, 1]) };
+  const W = 1920, H = 1080, vfov = (55 * Math.PI) / 180, aspect = 16 / 9;
+  const camSpace = (p) => { const d = m.sub(p, basis.pos); return [m.dot(d, basis.right), m.dot(d, basis.up), m.dot(d, basis.fwd)]; };
+  const games = {
+    "-1..1, y up": (p) => { const [x, y, z] = camSpace(p); return { X: x / z / (aspect * Math.tan(vfov / 2)), Y: y / z / Math.tan(vfov / 2) }; },
+    "pixels, y down": (p) => { const [x, y, z] = camSpace(p); return { X: 1920 + (x / z / (aspect * Math.tan(vfov / 2))) * 1920, Y: 1080 - (y / z / Math.tan(vfov / 2)) * 1080 }; },
+  };
+  const truthPx = (p) => { const [x, y, z] = camSpace(p); const nx = x / z / (aspect * Math.tan(vfov / 2)); const ny = y / z / Math.tan(vfov / 2); return [((nx + 1) / 2) * W, ((1 - ny) / 2) * H]; };
+  for (const [name, projectPoint] of Object.entries(games)) {
+    const cal = m.calibrate(m.calibrationPoints(basis).map(projectPoint));
+    const cam = { ...basis, ...cal, pageW: W, pageH: H };
+    for (const p of [[110, -40, 13], [95, -30, 5], [120, -20, 20]]) {
+      const got = m.project(cam, p);
+      const want = truthPx(p);
+      close(got[0], want[0], 0.5, `${name} x`);
+      close(got[1], want[1], 0.5, `${name} y`);
+      const ray = m.rayFrom(cam, got[0], got[1]);
+      const toP = m.norm(m.sub(p, basis.pos));
+      close(m.dot(ray.d, toP), 1, 1e-6, `${name} ray through the point`);
+    }
+    assert.equal(m.project(cam, m.add(basis.pos, m.mul(basis.fwd, -5))), null, "behind the camera");
+  }
+  // Picking: a 2 x 2 x 2 box at (10, 0, 0), turned 45 degrees; a ray along +X hits its corner side.
+  const hit = m.rayHitsBox({ o: [0, 0, 1], d: [1, 0, 0] }, { min: [-1, -1, 0], max: [1, 1, 2] }, [10, 0, 0], m.qAxisAngle([0, 0, 1], 45), [1, 1, 1]);
+  close(hit, 10 - Math.SQRT2, 1e-6, "ray meets the turned box");
+  assert.equal(m.rayHitsBox({ o: [0, 5, 1], d: [1, 0, 0] }, { min: [-1, -1, 0], max: [1, 1, 2] }, [10, 0, 0], [0, 0, 0, 1], [1, 1, 1]), null, "a ray beside the box misses");
+  close(m.rayHitsBox({ o: [0, 0, 1], d: [1, 0, 0] }, { min: [-1, -1, 0], max: [1, 1, 2] }, [10, 0, 0], [0, 0, 0, 1], [2, 2, 2]), 8, 1e-6, "scale grows the box");
+  // Dragging along an axis: a ray crossing the X axis at x = 3 gives 3.
+  close(m.closestOnAxis({ o: [3, -5, 0], d: [0, 1, 0] }, [0, 0, 0], [1, 0, 0]), 3, 1e-9, "closest point on the axis");
+  assert.equal(m.closestOnAxis({ o: [0, 0, 0], d: [1, 0, 0] }, [5, 0, 0], [1, 0, 0]), null, "looking along the axis");
+  // Headings: a turn of 90 degrees left reads 90, and the scene file's yaw helper agrees.
+  close(m.qYaw(m.qAxisAngle([0, 0, 1], 90)), 90, 1e-9, "yaw");
+  close(m.qYaw(yawToQuaternion(-35)), -35, 1e-9, "yaw from the scene helper");
+  const onFloor = m.rayOnPlaneZ({ o: [0, 0, 10], d: m.norm([1, 0, -1]) }, 0);
+  close(onFloor[0], 10, 1e-9, "ray meets the floor plane");
+  console.log("viewport math: ok");
 }
 
 // Kinds and yaw.

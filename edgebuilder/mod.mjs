@@ -3,13 +3,30 @@
 // src/mod.ts
 import * as fs4 from "node:fs";
 import * as path4 from "node:path";
-import { api, channel, game, pkg, world } from "rednode";
+import { api, channel, game, kernel, pkg, world } from "rednode";
 
 // src/bridge.ts
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 var BridgeError = class extends Error {
+};
+var KernelBridge = class {
+  constructor(handle) {
+    this.handle = handle;
+  }
+  running = true;
+  info() {
+    return this.handle.call("bridge.info");
+  }
+  list(prefix, offset, limit = 5e3) {
+    return this.handle.call("archive.list", { prefix, offset, limit });
+  }
+  meshInfoMany(paths) {
+    return this.handle.call("mesh.infoMany", { paths });
+  }
+  stop() {
+  }
 };
 var BridgeClient = class {
   constructor(exe, gameDir2, dotnetRoot = defaultDotnetRoot()) {
@@ -267,18 +284,34 @@ var Scene = class {
   name = "Working scene";
   objects = [];
   counter = 0;
+  /** Where an unreadable scene file was moved, so the next save does not overwrite it. */
+  setAside;
   load() {
+    let text;
     try {
-      const data = JSON.parse(fs3.readFileSync(this.file, "utf8"));
-      if (data.format !== 1 || !Array.isArray(data.objects)) return false;
+      text = fs3.readFileSync(this.file, "utf8");
+    } catch {
+      return false;
+    }
+    try {
+      const data = JSON.parse(text);
+      if (data.format !== 1 || !Array.isArray(data.objects)) throw new Error(`not a format 1 scene`);
       this.name = data.name || this.name;
       this.objects = data.objects.map((o) => ({ ...o }));
       this.counter = this.objects.length;
       return true;
-    } catch {
+    } catch (err) {
+      this.setAside = `${this.file}.unreadable-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}`;
+      try {
+        fs3.renameSync(this.file, this.setAside);
+      } catch {
+        this.setAside = void 0;
+      }
+      this.loadError = err.message;
       return false;
     }
   }
+  loadError;
   save() {
     fs3.mkdirSync(path3.dirname(this.file), { recursive: true });
     const data = {
@@ -336,6 +369,7 @@ var scene = new Scene(path4.join(pkg.dataDir, "scenes", "working.scene.json"));
 scene.load();
 var index = new AssetIndex(path4.join(pkg.dataDir, "index"));
 var bridge;
+var blockedRetry;
 var gameKey = "";
 var state = {
   ready: true,
@@ -369,6 +403,8 @@ function gameDir() {
 async function startBridge() {
   bridge?.stop();
   bridge = void 0;
+  clearTimeout(blockedRetry);
+  if (!settings.bridgePath && typeof kernel?.bridge === "function") return startKernelBridge(kernel.bridge);
   const exe = findBridge(settings.bridgePath);
   if (!exe) {
     state.bridge = { status: "missing", detail: `No REDbridge found. Install it with REDdeck (Get REDbridge), or put its path in ${settingsFile} as "bridgePath".` };
@@ -392,19 +428,48 @@ async function startBridge() {
     bridge = b;
     const info = await b.info();
     if (!info.gameLoaded) throw new Error("the bridge has no game loaded; set gameDir in the settings");
-    state.bridge = { status: "ready", path: exe, version: info.version };
-    gameKey = `${info.archives}-${info.files}`;
-    console.log(`REDbridge ${info.version} ready, ${info.files} files in ${info.archives} archives`);
-    publish();
-    if (index.load(gameKey)) {
-      state.index = { status: "ready", count: index.entries.length, file: index.file };
-      publish();
-    } else {
-      await buildIndex();
-    }
+    await bridgeReady(info, exe);
   } catch (err) {
     state.bridge = { status: "failed", path: exe, detail: `${err.message}. ${b.log.slice(-3).join(" | ")}` };
     publish();
+  }
+}
+async function startKernelBridge(get) {
+  state.bridge = { status: "starting", detail: "Asking REDnode for REDbridge" };
+  publish();
+  try {
+    const handle = await get();
+    const b = new KernelBridge(handle);
+    bridge = b;
+    const info = await b.info();
+    if (!info.gameLoaded) throw new Error("REDnode's REDbridge has no game loaded");
+    await bridgeReady(info, handle.source ?? "REDnode");
+  } catch (err) {
+    bridge = void 0;
+    const why = err.message;
+    if (/allow/i.test(why)) {
+      state.bridge = { status: "blocked", detail: "Allow REDbridge for EDGEbuilder in REDnode's Mod Manager: select EDGEbuilder, Permissions, switch Allowed on." };
+      publish();
+      blockedRetry = setTimeout(() => void startBridge(), 5e3);
+    } else if (/not installed/i.test(why)) {
+      state.bridge = { status: "missing", detail: why };
+      publish();
+    } else {
+      state.bridge = { status: "failed", detail: why };
+      publish();
+    }
+  }
+}
+async function bridgeReady(info, source) {
+  state.bridge = { status: "ready", path: source, version: info.version };
+  gameKey = `${info.archives}-${info.files}`;
+  console.log(`REDbridge ${info.version} ready (${source}), ${info.files} files in ${info.archives} archives`);
+  publish();
+  if (index.load(gameKey)) {
+    state.index = { status: "ready", count: index.entries.length, file: index.file };
+    publish();
+  } else {
+    await buildIndex();
   }
 }
 async function buildIndex() {
@@ -495,6 +560,53 @@ async function highlight(o, on) {
   } catch (err) {
     console.log(`Highlight ${o.id} ${on ? "on" : "off"}: ${err.message}`);
   }
+}
+var toPoint = (p) => ({ x: p[0], y: p[1], z: p[2] });
+var toQuat = (q) => ({ i: q[0], j: q[1], k: q[2], r: q[3] });
+async function setTransform(id, t) {
+  const o = scene.get(id);
+  if (!o) return;
+  if (o.kind !== "mesh") t = { ...t, scale: [1, 1, 1] };
+  const scaled = t.scale.some((s, i) => Math.abs(s - o.transform.scale[i]) > 1e-6);
+  o.transform = t;
+  scene.save();
+  if (o.entityId) {
+    if (scaled) {
+      await removePreview(o);
+      await spawnPreview(o);
+      scene.save();
+      if (state.selected === o.id) await highlight(o, true);
+    } else {
+      await world.move(o.entityId, toPoint(t.position), toQuat(t.rotation));
+    }
+  }
+  publish();
+}
+var FloorGroups = ["Static", "Terrain", "PlayerBlocker"];
+async function dropToFloor(id) {
+  const o = scene.get(id);
+  if (!o) return;
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const [x, y, z] = o.transform.position;
+  const lowest = (o.bounds?.min[2] ?? 0) * o.transform.scale[2];
+  const startZ = z + lowest + 0.05;
+  const queries = await api.GameInstance.GetSpatialQueriesSystem(game.instance);
+  if (!queries) return say("The game's spatial queries are not available right now.", "warn");
+  let floor;
+  const tried = [];
+  for (const group of FloorGroups) {
+    try {
+      const r = await queries.SyncRaycastByCollisionGroup({ X: x, Y: y, Z: startZ, W: 1 }, { X: x, Y: y, Z: startZ - 100, W: 1 }, group, null, false, false);
+      tried.push(`${group}: ${r.result ? r.out.result.position.Z.toFixed(2) : "miss"}`);
+      if (r.result && (floor === void 0 || r.out.result.position.Z > floor)) floor = r.out.result.position.Z;
+    } catch (err) {
+      tried.push(`${group}: ${err.message}`);
+    }
+  }
+  console.log(`Drop to floor ${o.id} from z ${startZ.toFixed(2)}: ${tried.join("; ")}`);
+  if (floor === void 0) return say("Nothing below to drop onto within 100 m.", "warn");
+  await setTransform(id, { ...o.transform, position: [x, y, floor - lowest] });
+  say(`Dropped ${o.id} to the floor, ${(z - (floor - lowest)).toFixed(2)} m down.`, "ok");
 }
 function runSearch() {
   state.results = index.entries.length ? index.search(state.query.text, state.query.kind, ResultLimit) : [];
@@ -609,6 +721,15 @@ channel.on((m) => {
       case "bridge.restart":
         await startBridge();
         break;
+      case "transform":
+        await setTransform(m.id, m.transform);
+        break;
+      case "floor":
+        await dropToFloor(m.id);
+        break;
+      case "log":
+        console.log(m.text);
+        break;
       case "settings":
         saveSettings({ bridgePath: m.bridgePath, gameDir: m.gameDir });
         say("Settings saved; restarting REDbridge.", "info");
@@ -643,6 +764,10 @@ world.on("Entity/Detach", (e) => {
   }
 });
 console.log(`EDGEbuilder starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+if (scene.loadError) {
+  state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path4.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
+  console.log(state.message.text);
+}
 publish();
 void checkWorld();
 void startBridge();

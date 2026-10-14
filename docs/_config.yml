@@ -29,6 +29,8 @@ nav:
     url: /scene.html
   - title: B1 test
     url: /b1-test.html
+  - title: B2a test
+    url: /b2-test.html
   - title: Study
     url: /study.html
   - title: Dev setup

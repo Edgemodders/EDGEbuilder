@@ -137,7 +137,9 @@ The panel docks to the right edge. The rest of the screen is the viewport: in RE
 | Ctrl+S | Save the scene |
 | Shift+A | Drop the last asset under the cursor |
 
-**Camera.** v1 drives the player: while the editor is active the player is kept at an orbit pivot and the first-person camera is offset back by the orbit distance, so the middle mouse orbits, Shift pans and the wheel zooms. Leaving the editor puts the player back. This is the approach World Builder verified in game, and it needs no plugin work. A true free camera inside REDnode is a later improvement.
+**Viewport (B2a).** The page covers the game view (1920 x 1080 reference pixels) with the panel at the right. An **Edit** switch in the panel's title bar tints the rest by 4%, which puts it above REDnode's click-through threshold (alpha 8 of 255), so the viewport takes the mouse; with Edit off it is see-through and the game has the mouse. Each frame the page reads one value from the game, the first-person camera's local-to-world matrix, and projects everything itself; how the game's screen maps camera space is learned from three `CameraSystem.ProjectPoint` calls whenever the field of view changes, so the gizmo lines up whatever units `ProjectPoint` answers in. Picking is a ray from the cursor against each object's box from the asset index. Moves go to the preview with `world.move`, one waiting at a time; the mod saves the result. A mesh's scale is fixed when its component is built, so a new scale rebuilds the preview.
+
+**Camera (B2b).** It drives the player: while the editor is active the player is kept at an orbit pivot and the first-person camera is offset back by the orbit distance, so the middle mouse orbits, Shift pans and the wheel zooms. Leaving the editor puts the player back. This is the approach World Builder verified in game, and it needs no plugin work. A true free camera inside REDnode is a later improvement.
 
 **Picking.** A ray from the cursor, built from the camera's transform and field of view, tested against each object's oriented bounds in the Node mod. The nearest hit wins; an object whose bounds sit inside another's is preferred. Surface hits use the game's physics raycast.
 
@@ -186,8 +188,8 @@ For REDnode, the design's assumptions that are not in the SDK today, in the orde
 | Game callbacks as events ([REDnode #2](https://github.com/Edgemodders/REDnode/issues/2)) | Components attach during Codeware's `Entity/Initialize` callback; the mod must hear it for the entity it spawned | `game.on("Entity/Initialize", handler)` with the entity in the event, or a plugin-side spawn that attaches a given component and resolves when attached |
 | Resource references as arguments ([REDnode #3](https://github.com/Edgemodders/REDnode/issues/3)) | The mesh component's `mesh` is a resource reference, which the bridge refuses today | Accept a path string where a `ResRef`, `raRef` or `rRef` is expected |
 | Known per-frame budget | Dragging sets one transform per frame; the gizmo projects a few points per frame | A measured number for round trips per frame, and a batched `api.$batch([...])` if one call per frame is tight |
-| A REDbridge the host can hand out ([REDnode #4](https://github.com/Edgemodders/REDnode/issues/4)) | The asset index and the bake need the bridge | `kernel.bridge()` returning how to reach a running REDbridge, as `kernel.mcp()` does for the MCP server. Until then EDGEbuilder starts its own from a path setting |
-| Dependencies in the manifest ([REDnode #5](https://github.com/Edgemodders/REDnode/issues/5)) | EDGEbuilder needs Codeware at a minimum version | `"requires": { "codeware": ">=1.16" }`, shown in the Mod Manager. Until then EDGEbuilder checks at start and says what is missing |
+| A REDbridge the host can hand out ([REDnode #4](https://github.com/Edgemodders/REDnode/issues/4)) | The asset index and the bake need the bridge | Shipped in REDnode 0.17.0 as `kernel.bridge()` behind the `bridge` permission; EDGEbuilder uses it from 0.2.0, and starts its own REDbridge only with an older REDnode or a path in its settings |
+| Dependencies in the manifest ([REDnode #5](https://github.com/Edgemodders/REDnode/issues/5)) | EDGEbuilder needs Codeware at a minimum version | Shipped in REDnode 0.17.0; EDGEbuilder 0.2.0 declares `"requires": { "codeware": ">=1.14" }` |
 
 For REDbridge: `sector.build` as above ([REDbridge #1](https://github.com/Edgemodders/REDbridge/issues/1), done in 0.6.0), a read of a mesh file's bounds and appearances ([REDbridge #2](https://github.com/Edgemodders/REDbridge/issues/2), done in 0.6.0 as `mesh.info`), and building EDGEbuilder's support archive from JSON, which is `project.pack` on a one-file project. The scene file is pinned on the [scene format](scene.md) page.
 
@@ -212,7 +214,8 @@ For REDdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` depl
 |---|---|---|
 | **B0 Decide** | This page, the repo, a package that installs and opens an empty window | The user sees EDGEbuilder in the REDnode launcher |
 | **B1 Browse and drop** | The asset index from REDbridge; drop a mesh and an entity in front of the camera; select, delete | A crate spawns and despawns in game |
-| **B2 Position** | The gizmo, G R S, numbers, drop to floor, the editor camera | A crate goes where it is put, from any angle |
+| **B2a Position** | The viewport layer and Edit switch, the gizmo, picking in the world, G R S with axis locks and typed numbers, the Selected panel's numbers, drop to floor, mesh scale | A crate goes where it is put |
+| **B2b Camera** | The editor camera (split from B2 on 2026-10-13: it moves V every frame, the riskiest part) | A crate can be placed from any angle |
 | **B3 Arrange and save** | Groups, multi-select, duplicate, undo and redo, scene files, return to a scene | A scene survives a restart |
 | **B4 Bake** | `sector.build` in REDbridge, the bake panel, the scene file in the REDcode project, Bake from REDcode's command palette, install through REDdeck | A baked crate stands in Night City with EDGEbuilder off, baked once from the game and once from REDcode |
 | **B5 Lights and more kinds** | Lights, decals, particles, effects, sounds, colliders | Each kind bakes and loads |

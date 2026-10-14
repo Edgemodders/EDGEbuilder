@@ -47,7 +47,8 @@ export interface Snapshot {
   /** REDnode's world support: Codeware installed and a game loaded. */
   /** no-game: the REDnode host is not linked to a running game (window mode, or the game closed). */
   world: "ready" | "no-game" | "no-save" | "no-codeware" | "unknown";
-  bridge: { status: "off" | "starting" | "ready" | "missing" | "failed"; path?: string; version?: string; detail?: string };
+  /** blocked: REDnode has REDbridge but the player has not allowed EDGEbuilder to use it yet. */
+  bridge: { status: "off" | "starting" | "ready" | "blocked" | "missing" | "failed"; path?: string; version?: string; detail?: string };
   index: { status: "none" | "building" | "ready" | "failed"; count: number; progress?: string; file?: string };
   results: AssetEntry[];
   query: { text: string; kind: AssetKind | "all" };
@@ -71,6 +72,12 @@ export type PageMessage =
   | { type: "clear" }
   | { type: "index.build" }
   | { type: "bridge.restart" }
-  | { type: "settings"; bridgePath?: string; gameDir?: string };
+  | { type: "settings"; bridgePath?: string; gameDir?: string }
+  /** The page moved, turned or scaled an object; the mod saves it and places the preview. */
+  | { type: "transform"; id: string; transform: SceneTransform }
+  /** Drop the object onto whatever is below it. */
+  | { type: "floor"; id: string }
+  /** A line for the mod log, so the page's measurements land beside the mod's. */
+  | { type: "log"; text: string };
 
 export type ModMessage = { type: "state"; state: Snapshot };

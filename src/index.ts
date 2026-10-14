@@ -4,7 +4,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { BridgeClient } from "./bridge";
+import type { Bridge } from "./bridge";
 import type { AssetEntry, AssetInfo, AssetKind } from "./protocol";
 
 /** The folders worth indexing for world building. Characters, weapons and UI are left out. */
@@ -52,7 +52,7 @@ export class AssetIndex {
   }
 
   /** Reads the index from the game through the bridge. Pages of 5,000 files per folder prefix. */
-  async build(bridge: BridgeClient, game: string, progress?: (text: string) => void): Promise<void> {
+  async build(bridge: Bridge, game: string, progress?: (text: string) => void): Promise<void> {
     this.game = game;
     this.file = path.join(this.dir, `${game}.json`);
     const entries: AssetEntry[] = [];
@@ -103,7 +103,7 @@ export class AssetIndex {
   }
 
   /** What the bridge knows about an asset, asked once and remembered. */
-  async lookAt(bridge: BridgeClient, assetPath: string): Promise<AssetInfo> {
+  async lookAt(bridge: Bridge, assetPath: string): Promise<AssetInfo> {
     const known = this.info[assetPath];
     if (known && !known.error) return known;
     const [r] = await bridge.meshInfoMany([assetPath]);

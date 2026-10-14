@@ -2,4 +2,5 @@
 export { BridgeClient, BridgeError, defaultDotnetRoot, findBridge, isGameFolder } from "./bridge";
 export { AssetIndex, IndexPrefixes, kindOf } from "./index";
 export { Scene, quaternionToYaw, yawToQuaternion } from "./scene";
+export * from "./math";
 export type * from "./protocol";

@@ -20,18 +20,37 @@ export class Scene {
 
   constructor(readonly file: string) {}
 
+  /** Where an unreadable scene file was moved, so the next save does not overwrite it. */
+  setAside: string | undefined;
+
   load(): boolean {
+    let text: string;
     try {
-      const data = JSON.parse(fs.readFileSync(this.file, "utf8")) as SceneFile;
-      if (data.format !== 1 || !Array.isArray(data.objects)) return false;
+      text = fs.readFileSync(this.file, "utf8");
+    } catch {
+      return false; // no scene yet
+    }
+    try {
+      const data = JSON.parse(text) as SceneFile;
+      if (data.format !== 1 || !Array.isArray(data.objects)) throw new Error(`not a format 1 scene`);
       this.name = data.name || this.name;
       this.objects = data.objects.map((o) => ({ ...o }));
       this.counter = this.objects.length;
       return true;
-    } catch {
+    } catch (err) {
+      // A damaged or hand-edited file: keep it beside, start empty, and let the mod say so.
+      this.setAside = `${this.file}.unreadable-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+      try {
+        fs.renameSync(this.file, this.setAside);
+      } catch {
+        this.setAside = undefined;
+      }
+      this.loadError = (err as Error).message;
       return false;
     }
   }
+
+  loadError: string | undefined;
 
   save(): void {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });

@@ -1,16 +1,22 @@
 {
   "id": "edgebuilder",
   "name": "EDGEbuilder",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "author": "Edgemodders",
-  "description": "A world builder: browse the game's assets, drop them into the live world, position, arrange, bake. B1: browse and drop.",
+  "description": "A world builder: browse the game's assets, drop them into the live world, move, turn and scale them with a gizmo, bake them into the world. B2a: position.",
   "entry": "index.html",
   "main": "mod.mjs",
   "kind": "window",
-  "width": 460,
-  "height": 920,
-  "anchor": "top-right",
-  "x": -24,
-  "y": 70,
+  "width": 1920,
+  "height": 1080,
+  "anchor": "top-left",
+  "x": 0,
+  "y": 0,
+  "permissions": [
+    "bridge"
+  ],
+  "requires": {
+    "codeware": ">=1.14"
+  },
   "open": false
 }

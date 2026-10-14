@@ -1,14 +1,15 @@
 // EDGEbuilder's Node mod: the brain behind the editor page. It owns the scene, the asset index,
-// the REDbridge process and the preview entities; the page only shows state and sends requests.
-// Phase B1: browse the game's assets, drop one in front of V, select it, delete it.
+// REDbridge and the preview entities; the page shows state, draws the gizmo and sends requests.
+// B1: browse the game's assets, drop one in front of V, select it, delete it.
+// B2a: move, turn and scale with the page's gizmo and keys, drop to the floor.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { api, channel, game, pkg, world, type GameRef } from "rednode";
-import { BridgeClient, findBridge, isGameFolder } from "./bridge";
+import { api, channel, game, kernel, pkg, world, type GameRef } from "rednode";
+import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge } from "./bridge";
 import { AssetIndex, kindOf } from "./index";
 import { Scene, yawToQuaternion } from "./scene";
-import type { AssetKind, PageMessage, SceneObject, Snapshot } from "./protocol";
+import type { AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "./protocol";
 
 /** A base-game entity template that is a bare entity: no components, no appearances. The preview of a mesh is this with a mesh component attached. */
 const EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
@@ -31,7 +32,8 @@ try {
 const scene = new Scene(path.join(pkg.dataDir, "scenes", "working.scene.json"));
 scene.load();
 const index = new AssetIndex(path.join(pkg.dataDir, "index"));
-let bridge: BridgeClient | undefined;
+let bridge: Bridge | undefined;
+let blockedRetry: ReturnType<typeof setTimeout> | undefined;
 let gameKey = "";
 
 const state: Snapshot = {
@@ -72,6 +74,11 @@ function gameDir(): string | undefined {
 async function startBridge(): Promise<void> {
   bridge?.stop();
   bridge = undefined;
+  clearTimeout(blockedRetry);
+  // REDnode 0.17 and later share one REDbridge between packages, behind the "bridge" permission the
+  // player grants in the Mod Manager. A REDbridge named in the settings, or an older REDnode, means
+  // EDGEbuilder runs its own.
+  if (!settings.bridgePath && typeof kernel?.bridge === "function") return startKernelBridge(kernel.bridge);
   const exe = findBridge(settings.bridgePath);
   if (!exe) {
     state.bridge = { status: "missing", detail: `No REDbridge found. Install it with REDdeck (Get REDbridge), or put its path in ${settingsFile} as "bridgePath".` };
@@ -95,19 +102,51 @@ async function startBridge(): Promise<void> {
     bridge = b;
     const info = await b.info();
     if (!info.gameLoaded) throw new Error("the bridge has no game loaded; set gameDir in the settings");
-    state.bridge = { status: "ready", path: exe, version: info.version };
-    gameKey = `${info.archives}-${info.files}`;
-    console.log(`REDbridge ${info.version} ready, ${info.files} files in ${info.archives} archives`);
-    publish();
-    if (index.load(gameKey)) {
-      state.index = { status: "ready", count: index.entries.length, file: index.file };
-      publish();
-    } else {
-      await buildIndex();
-    }
+    await bridgeReady(info, exe);
   } catch (err) {
     state.bridge = { status: "failed", path: exe, detail: `${(err as Error).message}. ${b.log.slice(-3).join(" | ")}` };
     publish();
+  }
+}
+
+async function startKernelBridge(get: () => Promise<{ version: string | null; source: string | null; call<T = any>(method: string, params?: Record<string, unknown>): Promise<T> }>): Promise<void> {
+  state.bridge = { status: "starting", detail: "Asking REDnode for REDbridge" };
+  publish();
+  try {
+    const handle = await get();
+    const b = new KernelBridge(handle);
+    bridge = b;
+    const info = await b.info();
+    if (!info.gameLoaded) throw new Error("REDnode's REDbridge has no game loaded");
+    await bridgeReady(info, handle.source ?? "REDnode");
+  } catch (err) {
+    bridge = undefined;
+    const why = (err as Error).message;
+    if (/allow/i.test(why)) {
+      // Not allowed yet: ask once, then look again every few seconds so allowing it is enough.
+      state.bridge = { status: "blocked", detail: "Allow REDbridge for EDGEbuilder in REDnode's Mod Manager: select EDGEbuilder, Permissions, switch Allowed on." };
+      publish();
+      blockedRetry = setTimeout(() => void startBridge(), 5000);
+    } else if (/not installed/i.test(why)) {
+      state.bridge = { status: "missing", detail: why };
+      publish();
+    } else {
+      state.bridge = { status: "failed", detail: why };
+      publish();
+    }
+  }
+}
+
+async function bridgeReady(info: { version: string; archives: number; files: number }, source: string): Promise<void> {
+  state.bridge = { status: "ready", path: source, version: info.version };
+  gameKey = `${info.archives}-${info.files}`;
+  console.log(`REDbridge ${info.version} ready (${source}), ${info.files} files in ${info.archives} archives`);
+  publish();
+  if (index.load(gameKey)) {
+    state.index = { status: "ready", count: index.entries.length, file: index.file };
+    publish();
+  } else {
+    await buildIndex();
   }
 }
 
@@ -216,6 +255,67 @@ async function highlight(o: SceneObject | undefined, on: boolean): Promise<void>
   } catch (err) {
     console.log(`Highlight ${o.id} ${on ? "on" : "off"}: ${(err as Error).message}`);
   }
+}
+
+// ---- positioning (B2a) -----------------------------------------------------------------------------
+
+const toPoint = (p: [number, number, number]) => ({ x: p[0], y: p[1], z: p[2] });
+const toQuat = (q: [number, number, number, number]) => ({ i: q[0], j: q[1], k: q[2], r: q[3] });
+
+/** The page moved, turned or scaled an object: keep it, and put the preview there. */
+async function setTransform(id: string, t: SceneTransform): Promise<void> {
+  const o = scene.get(id);
+  if (!o) return;
+  if (o.kind !== "mesh") t = { ...t, scale: [1, 1, 1] }; // an entity template keeps its own size
+  const scaled = t.scale.some((s, i) => Math.abs(s - o.transform.scale[i]) > 1e-6);
+  o.transform = t;
+  scene.save();
+  if (o.entityId) {
+    if (scaled) {
+      // A mesh component's scale is set when it is built, so a new scale means a new preview.
+      await removePreview(o);
+      await spawnPreview(o);
+      scene.save();
+      if (state.selected === o.id) await highlight(o, true);
+    } else {
+      await world.move(o.entityId, toPoint(t.position), toQuat(t.rotation));
+    }
+  }
+  publish();
+}
+
+/** The collision groups a floor can be in. The first that answers is not always the nearest, so all are asked. */
+const FloorGroups = ["Static", "Terrain", "PlayerBlocker"];
+
+/** Puts an object's lowest point on whatever is below it. */
+async function dropToFloor(id: string): Promise<void> {
+  const o = scene.get(id);
+  if (!o) return;
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const [x, y, z] = o.transform.position;
+  const lowest = (o.bounds?.min[2] ?? 0) * o.transform.scale[2];
+  // Start just above the object's base, so an entity's own colliders above it are not hit.
+  const startZ = z + lowest + 0.05;
+  const queries = await api.GameInstance.GetSpatialQueriesSystem(game.instance);
+  if (!queries) return say("The game's spatial queries are not available right now.", "warn");
+  let floor: number | undefined;
+  const tried: string[] = [];
+  for (const group of FloorGroups) {
+    try {
+      const r = (await queries.SyncRaycastByCollisionGroup({ X: x, Y: y, Z: startZ, W: 1 }, { X: x, Y: y, Z: startZ - 100, W: 1 }, group, null, false, false)) as {
+        result: boolean;
+        out: { result: { position: { X: number; Y: number; Z: number } } };
+      };
+      tried.push(`${group}: ${r.result ? r.out.result.position.Z.toFixed(2) : "miss"}`);
+      if (r.result && (floor === undefined || r.out.result.position.Z > floor)) floor = r.out.result.position.Z;
+    } catch (err) {
+      tried.push(`${group}: ${(err as Error).message}`);
+    }
+  }
+  console.log(`Drop to floor ${o.id} from z ${startZ.toFixed(2)}: ${tried.join("; ")}`);
+  if (floor === undefined) return say("Nothing below to drop onto within 100 m.", "warn");
+  await setTransform(id, { ...o.transform, position: [x, y, floor - lowest] });
+  say(`Dropped ${o.id} to the floor, ${(z - (floor - lowest)).toFixed(2)} m down.`, "ok");
 }
 
 // ---- requests from the page -------------------------------------------------------------------
@@ -341,6 +441,15 @@ channel.on<PageMessage>((m) => {
       case "bridge.restart":
         await startBridge();
         break;
+      case "transform":
+        await setTransform(m.id, m.transform);
+        break;
+      case "floor":
+        await dropToFloor(m.id);
+        break;
+      case "log":
+        console.log(m.text);
+        break;
       case "settings":
         saveSettings({ bridgePath: m.bridgePath, gameDir: m.gameDir });
         say("Settings saved; restarting REDbridge.", "info");
@@ -383,6 +492,10 @@ world.on("Entity/Detach", (e) => {
 });
 
 console.log(`EDGEbuilder starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+if (scene.loadError) {
+  state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
+  console.log(state.message.text);
+}
 publish();
 void checkWorld();
 void startBridge();

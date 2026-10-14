@@ -38,7 +38,34 @@ export interface MeshInfoResult {
 
 export class BridgeError extends Error {}
 
-export class BridgeClient {
+/** What the mod needs from REDbridge, whether it is REDnode's shared one or a process of its own. */
+export interface Bridge {
+  readonly running: boolean;
+  info(): Promise<BridgeInfo>;
+  list(prefix: string, offset: number, limit?: number): Promise<FileList>;
+  meshInfoMany(paths: string[]): Promise<MeshInfoResult[]>;
+  stop(): void;
+}
+
+/** REDbridge as REDnode 0.17 and later hand it out with kernel.bridge(): one process shared by every package. */
+export class KernelBridge implements Bridge {
+  readonly running = true;
+  constructor(readonly handle: { version: string | null; source: string | null; call<T = any>(method: string, params?: Record<string, unknown>): Promise<T> }) {}
+  info(): Promise<BridgeInfo> {
+    return this.handle.call<BridgeInfo>("bridge.info");
+  }
+  list(prefix: string, offset: number, limit = 5000): Promise<FileList> {
+    return this.handle.call<FileList>("archive.list", { prefix, offset, limit });
+  }
+  meshInfoMany(paths: string[]): Promise<MeshInfoResult[]> {
+    return this.handle.call<MeshInfoResult[]>("mesh.infoMany", { paths });
+  }
+  stop(): void {
+    // REDnode owns the process and stops it when no package has used it for a while.
+  }
+}
+
+export class BridgeClient implements Bridge {
   private process: ChildProcess | undefined;
   private buffer = Buffer.alloc(0);
   private nextId = 1;
