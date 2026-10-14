@@ -79,12 +79,15 @@ function render(s: Snapshot): void {
   $("floor").toggleAttribute("disabled", !sel?.entityId);
   $("apply").toggleAttribute("disabled", !sel);
   viewport.setScene(s.scene.objects, s.selected);
+  viewport.setCamera(s.camera?.entityId);
   const missing = s.scene.objects.some((o) => !o.entityId && o.kind !== "light");
   $("rebuild").toggleAttribute("disabled", !missing);
 
   // Settings.
   if (document.activeElement?.id !== "bridgePath") ($("bridgePath") as HTMLInputElement & { value: string }).value = s.settings.bridgePath ?? "";
   if (document.activeElement?.id !== "gameDir") ($("gameDir") as HTMLInputElement & { value: string }).value = s.settings.gameDir ?? "";
+  ($("editorCamera") as HTMLElement & { checked: boolean }).checked = s.settings.editorCamera !== false;
+  ($("hideHud") as HTMLElement & { checked: boolean }).checked = s.settings.hideHud !== false;
   $("settingsFile").textContent = s.settings.settingsFile;
   $("bridgeDetail").textContent = [b.path, b.detail].filter(Boolean).join("\n");
   $("indexDetail").textContent = ix.file ?? "";
@@ -185,11 +188,16 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
   remove: (id) => post({ type: "delete", id }),
   floor: (id) => post({ type: "floor", id }),
   log: (text) => post({ type: "log", text }),
+  builderStart: (pose) => post({ type: "builder.start", pose }),
+  builderStop: () => post({ type: "builder.stop" }),
   status(text) {
     $("message").textContent = text;
     $("message").className = "message warn";
   },
 });
+for (const id of ["editorCamera", "hideHud"] as const) {
+  $(id).addEventListener("change", (e) => post({ type: "settings", [id]: !!(e as CustomEvent<{ checked: boolean }>).detail.checked }));
+}
 $("edit").addEventListener("change", (e) => viewport.setEdit(!!(e as CustomEvent<{ checked: boolean }>).detail.checked));
 $("rebuild").addEventListener("click", () => post({ type: "rebuild" }));
 $("clear").addEventListener("click", () => post({ type: "clear" }));

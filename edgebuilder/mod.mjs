@@ -133,7 +133,7 @@ var BridgeClient = class {
 function defaultDotnetRoot() {
   const root = path.join(process.env.LOCALAPPDATA ?? "", "Microsoft", "dotnet");
   try {
-    const has10 = fs.readdirSync(path.join(root, "shared", "Microsoft.NETCore.App")).some((v) => v.startsWith("10."));
+    const has10 = fs.readdirSync(path.join(root, "shared", "Microsoft.NETCore.App")).some((v2) => v2.startsWith("10."));
     return has10 ? root : void 0;
   } catch {
     return void 0;
@@ -369,6 +369,20 @@ function yawToQuaternion(yawDegrees) {
   return [0, 0, Math.sin(half), Math.cos(half)];
 }
 
+// src/math.ts
+var add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+var sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+var mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+var len = (a) => Math.hypot(a[0], a[1], a[2]);
+var norm = (a) => {
+  const l = len(a);
+  return l > 1e-9 ? mul(a, 1 / l) : [0, 0, 0];
+};
+var v = (r) => [r.X, r.Y, r.Z];
+function basisFromMatrix(m) {
+  return { pos: v(m.W), right: norm(v(m.X)), fwd: norm(v(m.Y)), up: norm(v(m.Z)) };
+}
+
 // src/mod.ts
 var EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
 var SpawnDistance = 3;
@@ -525,6 +539,11 @@ async function checkWorld() {
   } catch {
     state.world = "unknown";
   }
+  if (state.world === "ready" && before !== "ready" && !editorCam && readBuilderRecord()) {
+    await builderStop();
+    say("Builder mode was still on from last time (EDGEbuilder stopped while Edit was on); V's camera and HUD are back.", "info");
+    return;
+  }
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light").length;
   if (state.world === "ready" && before !== "ready" && away) {
     say(`${away} object${away === 1 ? " is" : "s are"} in the scene but not in the world. Press Rebuild previews in the Scene tab to place ${away === 1 ? "it" : "them"}, or delete ${away === 1 ? "it" : "them"} there.`, "info");
@@ -539,6 +558,20 @@ async function inFrontOfPlayer() {
   const f = await player.GetWorldForward();
   const yaw = Math.atan2(f.X, -f.Y) * 180 / Math.PI;
   return { position: [p.X + f.X * SpawnDistance, p.Y + f.Y * SpawnDistance, p.Z], yaw };
+}
+async function dropPlace() {
+  if (editorCam) {
+    try {
+      const b = basisFromMatrix(await editorCam.component.GetLocalToWorld());
+      const { hit } = await raycast(b.pos, add(b.pos, mul(b.fwd, 60)));
+      const position = hit ?? add(b.pos, mul(b.fwd, 6));
+      const yaw = Math.atan2(b.fwd[0], -b.fwd[1]) * 180 / Math.PI;
+      return { position, yaw };
+    } catch (err) {
+      console.log(`Drop at the camera: ${err.message}; dropping in front of V`);
+    }
+  }
+  return inFrontOfPlayer();
 }
 async function spawnPreview(o) {
   const [x, y, z] = o.transform.position;
@@ -603,6 +636,31 @@ async function setTransform(id, t) {
   publish();
 }
 var FloorGroups = ["Static", "Terrain", "PlayerBlocker"];
+async function raycast(start, end) {
+  const queries = await api.GameInstance.GetSpatialQueriesSystem(game.instance);
+  if (!queries) return { tried: ["no spatial queries"] };
+  let hit;
+  let best = Infinity;
+  const tried = [];
+  for (const group of FloorGroups) {
+    try {
+      const r = await queries.SyncRaycastByCollisionGroup({ X: start[0], Y: start[1], Z: start[2], W: 1 }, { X: end[0], Y: end[1], Z: end[2], W: 1 }, group, null, false, false);
+      const p = r.out?.result?.position;
+      tried.push(`${group}: ${r.result && p ? p.Z.toFixed(2) : "miss"}`);
+      if (r.result && p) {
+        const at = [p.X, p.Y, p.Z];
+        const d = Math.hypot(...sub(at, start));
+        if (d < best) {
+          best = d;
+          hit = at;
+        }
+      }
+    } catch (err) {
+      tried.push(`${group}: ${err.message}`);
+    }
+  }
+  return { hit, tried };
+}
 async function dropToFloor(id) {
   const o = scene.get(id);
   if (!o) return;
@@ -610,23 +668,118 @@ async function dropToFloor(id) {
   const [x, y, z] = o.transform.position;
   const lowest = (o.bounds?.min[2] ?? 0) * o.transform.scale[2];
   const startZ = z + lowest + 0.05;
-  const queries = await api.GameInstance.GetSpatialQueriesSystem(game.instance);
-  if (!queries) return say("The game's spatial queries are not available right now.", "warn");
-  let floor;
-  const tried = [];
-  for (const group of FloorGroups) {
-    try {
-      const r = await queries.SyncRaycastByCollisionGroup({ X: x, Y: y, Z: startZ, W: 1 }, { X: x, Y: y, Z: startZ - 100, W: 1 }, group, null, false, false);
-      tried.push(`${group}: ${r.result ? r.out.result.position.Z.toFixed(2) : "miss"}`);
-      if (r.result && (floor === void 0 || r.out.result.position.Z > floor)) floor = r.out.result.position.Z;
-    } catch (err) {
-      tried.push(`${group}: ${err.message}`);
-    }
-  }
+  const { hit, tried } = await raycast([x, y, startZ], [x, y, startZ - 100]);
+  const floor = hit?.[2];
   console.log(`Drop to floor ${o.id} from z ${startZ.toFixed(2)}: ${tried.join("; ")}`);
   if (floor === void 0) return say("Nothing below to drop onto within 100 m.", "warn");
   await setTransform(id, { ...o.transform, position: [x, y, floor - lowest] });
   say(`Dropped ${o.id} to the floor, ${(z - (floor - lowest)).toFixed(2)} m down.`, "ok");
+}
+var builderFile = path4.join(pkg.dataDir, "builder-mode.json");
+var CameraName = "edgebuilder_camera";
+var HudHiddenTier = 4;
+var editorCam;
+function readBuilderRecord() {
+  try {
+    return JSON.parse(fs4.readFileSync(builderFile, "utf8"));
+  } catch {
+    return void 0;
+  }
+}
+function writeBuilderRecord(r) {
+  fs4.mkdirSync(pkg.dataDir, { recursive: true });
+  fs4.writeFileSync(builderFile, JSON.stringify(r));
+}
+async function sceneTierBoard() {
+  const player = await api.GetPlayer(game.instance);
+  if (!player) throw new Error("no player");
+  const defs = await api.GetAllBlackboardDefs();
+  const psm = await defs.$get("PlayerStateMachine");
+  const system = await api.GameInstance.GetBlackboardSystem(game.instance);
+  const board = await system.GetLocalInstanced(await player.GetEntityID(), psm);
+  if (!board) throw new Error("V's player-state blackboard is not there");
+  return { board, id: await psm.$get("SceneTier") };
+}
+async function setSceneTier(value) {
+  try {
+    const { board, id } = await sceneTierBoard();
+    const before = await board.GetInt(id);
+    await board.SetInt(id, value, true);
+    const now = await board.GetInt(id);
+    console.log(`Scene tier ${before} -> ${value}${now === value ? "" : `, but it reads ${now}`}`);
+    return before;
+  } catch (err) {
+    console.log(`Scene tier not set: ${err.message}`);
+    return void 0;
+  }
+}
+async function playerCameraBack() {
+  try {
+    const player = await api.GetPlayer(game.instance);
+    const fpp = player ? await player.GetFPPCameraComponent() : null;
+    if (fpp) await fpp.Activate(0, false);
+  } catch (err) {
+    console.log(`V's camera: ${err.message}`);
+  }
+}
+async function builderStart(pose) {
+  if (editorCam) return;
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const record = {};
+  let hudHidden = false;
+  try {
+    if (settings.editorCamera !== false) {
+      const component = await api.$new("gameCameraComponent", { name: CameraName });
+      const { id, entity } = await world.spawn({ template: EmptyEntity, position: toPoint(pose.position), orientation: toQuat(pose.rotation), components: [component], tags: ["edgebuilder", CameraName] });
+      record.entityId = id.hash;
+      writeBuilderRecord(record);
+      const attached = entity ? await entity.FindComponentByName(CameraName) : null;
+      const cam = attached ?? component;
+      if (pose.fov > 1) await cam.SetFOV(pose.fov);
+      await cam.Activate(0, false);
+      editorCam = { id: id.hash, component: cam };
+    }
+    if (settings.hideHud !== false) {
+      const before = await setSceneTier(HudHiddenTier);
+      if (before !== void 0) {
+        record.sceneTier = before;
+        writeBuilderRecord(record);
+        hudHidden = true;
+      }
+    }
+    state.camera = editorCam ? { entityId: editorCam.id, hudHidden } : void 0;
+    console.log(`Builder mode on: ${editorCam ? `editor camera ${editorCam.id}` : "V's camera"}${hudHidden ? ", HUD hidden" : ""}`);
+    publish();
+  } catch (err) {
+    say(`The editor camera could not start (${err.message}); editing with V's camera.`, "warn");
+    await builderStop();
+  }
+}
+async function builderStop() {
+  const record = readBuilderRecord();
+  const camId = editorCam?.id ?? record?.entityId;
+  if (editorCam) {
+    try {
+      await editorCam.component.Deactivate(0, false);
+    } catch {
+    }
+  }
+  if (camId) {
+    try {
+      await world.remove(camId);
+    } catch {
+    }
+  }
+  if (camId || editorCam) await playerCameraBack();
+  if (record?.sceneTier !== void 0) await setSceneTier(record.sceneTier);
+  editorCam = void 0;
+  state.camera = void 0;
+  try {
+    fs4.rmSync(builderFile, { force: true });
+  } catch {
+  }
+  if (record || camId) console.log("Builder mode off");
+  publish();
 }
 function runSearch() {
   state.results = index.entries.length ? index.search(state.query.text, state.query.kind, ResultLimit) : [];
@@ -639,7 +792,7 @@ async function drop(assetPath, appearance) {
   if (state.world !== "ready") return say(worldBlocker(), "warn");
   let added;
   try {
-    const at = await inFrontOfPlayer();
+    const at = await dropPlace();
     const o = scene.add(kind, assetPath, { position: at.position, rotation: yawToQuaternion(at.yaw), scale: [1, 1, 1] }, appearance);
     added = o;
     if (bridge?.running) {
@@ -700,7 +853,7 @@ async function clear() {
 }
 function saveSettings(next) {
   settings = { ...settings, ...next };
-  for (const k of Object.keys(settings)) if (!settings[k]) delete settings[k];
+  for (const k of Object.keys(settings)) if (settings[k] === void 0 || settings[k] === "") delete settings[k];
   fs4.mkdirSync(pkg.dataDir, { recursive: true });
   fs4.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
 }
@@ -748,6 +901,12 @@ channel.on((m) => {
       case "bridge.restart":
         await startBridge();
         break;
+      case "builder.start":
+        await builderStart(m.pose);
+        break;
+      case "builder.stop":
+        await builderStop();
+        break;
       case "transform":
         await setTransform(m.id, m.transform);
         break;
@@ -758,9 +917,14 @@ channel.on((m) => {
         console.log(m.text);
         break;
       case "settings":
-        saveSettings({ bridgePath: m.bridgePath, gameDir: m.gameDir });
-        say("Settings saved; restarting REDbridge.", "info");
-        await startBridge();
+        {
+          const bridgeChanged = "bridgePath" in m && m.bridgePath !== settings.bridgePath || "gameDir" in m && m.gameDir !== settings.gameDir;
+          const next = {};
+          for (const k of ["bridgePath", "gameDir", "hideHud", "editorCamera"]) if (k in m) next[k] = m[k];
+          saveSettings(next);
+          say(bridgeChanged ? "Settings saved; restarting REDbridge." : "Settings saved.", "info");
+          if (bridgeChanged) await startBridge();
+        }
         break;
     }
   })().catch((err) => say(`${m.type}: ${err.message}`, "error"));
@@ -776,6 +940,14 @@ game.onState((s) => {
   void checkWorld();
 });
 game.on("PlayerPuppet.OnGameAttached", () => {
+  if (editorCam || readBuilderRecord()) {
+    editorCam = void 0;
+    state.camera = void 0;
+    try {
+      fs4.rmSync(builderFile, { force: true });
+    } catch {
+    }
+  }
   scene.forgetPreviews();
   state.selected = void 0;
   void checkWorld().then(() => {

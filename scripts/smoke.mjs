@@ -89,6 +89,19 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   close(m.qYaw(yawToQuaternion(-35)), -35, 1e-9, "yaw from the scene helper");
   const onFloor = m.rayOnPlaneZ({ o: [0, 0, 10], d: m.norm([1, 0, -1]) }, 0);
   close(onFloor[0], 10, 1e-9, "ray meets the floor plane");
+  // The editor camera's look: heading and pitch to a rotation and back, and its axes.
+  for (const l of [{ yaw: 0, pitch: 0 }, { yaw: 37, pitch: -20 }, { yaw: -150, pitch: 60 }]) {
+    const a = m.lookAxes(l);
+    const back = m.lookOf(a.fwd);
+    close(back.yaw, l.yaw, 1e-9, "heading round trip");
+    close(back.pitch, l.pitch, 1e-9, "pitch round trip");
+    close(m.dot(a.fwd, a.right), 0, 1e-9, "forward and right are square");
+    close(a.right[2], 0, 1e-9, "no roll: right stays level");
+    close(m.qYaw(m.qLook(l)), l.yaw, 1e-9, "the gizmo's heading reads the same");
+  }
+  const at = m.lookAt([0, 0, 0], [0, 10, 10]);
+  close(at.yaw, 0, 1e-9, "looking north");
+  close(at.pitch, 45, 1e-9, "and up 45 degrees");
   console.log("viewport math: ok");
 }
 

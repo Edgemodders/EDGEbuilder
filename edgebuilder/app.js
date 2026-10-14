@@ -118,6 +118,17 @@ function distToSegment(p, a, b) {
   const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0;
   return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
 }
+function qLook(l) {
+  return qNorm(qMul(qAxisAngle([0, 0, 1], l.yaw), qAxisAngle([1, 0, 0], l.pitch)));
+}
+function lookOf(fwd) {
+  const f = norm(fwd);
+  return { yaw: Math.atan2(-f[0], f[1]) * 180 / Math.PI, pitch: Math.asin(Math.max(-1, Math.min(1, f[2]))) * 180 / Math.PI };
+}
+function lookAxes(l) {
+  const q = qLook(l);
+  return { fwd: qRotate(q, [0, 1, 0]), right: qRotate(q, [1, 0, 0]), up: qRotate(q, [0, 0, 1]) };
+}
 
 // src/app/viewport.ts
 import { api, game, world } from "rednode";
@@ -133,7 +144,16 @@ var Viewport = class {
     canvas.addEventListener("pointerdown", (e) => this.onDown(e));
     canvas.addEventListener("pointerup", (e) => this.onUp(e));
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-    window.addEventListener("keydown", (e) => this.onKey(e));
+    window.addEventListener("keydown", (e) => {
+      this.keys.add(e.key.toLowerCase());
+      this.onKey(e);
+    });
+    window.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
+    window.addEventListener("blur", () => this.keys.clear());
+    canvas.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
+    window.addEventListener("beforeunload", () => {
+      if (this.builderAsked) this.hooks.builderStop();
+    });
     game.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
   }
   ctx;
@@ -152,11 +172,41 @@ var Viewport = class {
   mouse = [0, 0];
   pending;
   cameraError = "";
+  // The editor camera (B2b): its entity, its component, and where the page wants it.
+  camEntity;
+  camComp = null;
+  camPos;
+  look;
+  camDirty = false;
+  builderAsked = false;
+  rmb = false;
+  mmb = false;
+  last = [0, 0];
+  keys = /* @__PURE__ */ new Set();
+  speed = 6;
+  lastTick = 0;
   setEdit(on) {
     this.edit = on;
     this.canvas.classList.toggle("edit", on);
-    if (!on) this.cancel();
+    if (!on) {
+      this.cancel();
+      this.rmb = this.mmb = false;
+      if (this.builderAsked) this.hooks.builderStop();
+      this.builderAsked = false;
+    }
     this.kick();
+  }
+  /** The editor camera's entity from the mod's state, or none (V's camera). */
+  setCamera(entityId) {
+    if (entityId === this.camEntity) return;
+    this.camEntity = entityId;
+    this.camComp = null;
+    this.calib = void 0;
+    if (!entityId) {
+      this.camPos = void 0;
+      this.look = void 0;
+      if (this.edit && this.builderAsked) this.builderAsked = false;
+    }
   }
   setScene(objects, selected) {
     this.objects = objects;
@@ -187,7 +237,16 @@ var Viewport = class {
         this.camSys = await api.GameInstance.GetCameraSystem(game.instance);
         if (!this.fpp || !this.camSys) throw new Error("the camera is not available");
       }
-      const b = basisFromMatrix(await this.fpp.GetLocalToWorld());
+      if (this.camEntity && !this.camComp) {
+        const entity = await world.entity(this.camEntity);
+        this.camComp = entity ? await entity.FindComponentByName("edgebuilder_camera") : null;
+      }
+      const source = this.camEntity && this.camComp ? this.camComp : this.fpp;
+      const b = basisFromMatrix(await source.GetLocalToWorld());
+      if (this.camEntity && this.camComp && !this.camPos) {
+        this.camPos = b.pos;
+        this.look = lookOf(b.fwd);
+      }
       if (this.frame % 30 === 0 || !this.calib) {
         const fov = await this.camSys.GetActiveCameraFOV();
         if (!this.calib || Math.abs(fov - this.fov) > 0.01) {
@@ -238,7 +297,12 @@ var Viewport = class {
       }
       this.frame++;
       this.flushMove();
+      this.flyAndSend();
       const ok = await this.updateCamera();
+      if (ok && this.edit && !this.builderAsked && this.cam) {
+        this.builderAsked = true;
+        this.hooks.builderStart({ position: this.cam.pos, rotation: qLook(lookOf(this.cam.fwd)), fov: this.fov });
+      }
       this.draw(ok);
       if (ok) requestAnimationFrame(() => void tick());
       else setTimeout(() => requestAnimationFrame(() => void tick()), 1e3);
@@ -313,7 +377,10 @@ var Viewport = class {
       }
     }
     if (this.drag) this.label(this.dragText(this.drag));
-    else if (this.edit) this.label(o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.");
+    else if (this.edit) {
+      const camHelp = this.camEntity ? "  \xB7  Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
+      this.label((o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.") + camHelp);
+    }
   }
   drawBox(o) {
     const cam = this.cam;
@@ -397,14 +464,105 @@ var Viewport = class {
   onMove(e) {
     this.mouse = this.pageXY(e);
     if (!this.edit) return;
+    const dx = this.mouse[0] - this.last[0];
+    const dy = this.mouse[1] - this.last[1];
+    this.last = this.mouse;
+    if ((this.rmb || this.mmb) && this.camPos && this.look) {
+      if (this.rmb) {
+        this.look = { yaw: this.look.yaw - dx * 0.15, pitch: Math.max(-89, Math.min(89, this.look.pitch - dy * 0.15)) };
+      } else if (e.shiftKey) {
+        const a = lookAxes(this.look);
+        const k = this.pivotDistance() * 15e-4;
+        this.camPos = add(this.camPos, add(mul(a.right, -dx * k), mul(a.up, dy * k)));
+      } else {
+        const pivot = this.pivot();
+        const dist = Math.hypot(...sub(this.camPos, pivot));
+        this.look = { yaw: this.look.yaw - dx * 0.25, pitch: Math.max(-89, Math.min(89, this.look.pitch - dy * 0.25)) };
+        this.camPos = sub(pivot, mul(lookAxes(this.look).fwd, dist));
+      }
+      this.camDirty = true;
+      return;
+    }
     if (this.drag) this.dragTo(this.mouse, e.ctrlKey);
     else this.hover = this.handleAt(this.mouse);
+  }
+  /** What the camera orbits and dollies towards: the selected object, else a point 10 m ahead. */
+  pivot() {
+    const o = this.current();
+    if (o?.entityId) return o.transform.position;
+    const a = lookAxes(this.look);
+    return add(this.camPos, mul(a.fwd, 10));
+  }
+  pivotDistance() {
+    return this.camPos ? Math.max(1, Math.hypot(...sub(this.camPos, this.pivot()))) : 10;
+  }
+  onWheel(e) {
+    if (!this.edit || !this.camPos || !this.look) return;
+    e.preventDefault();
+    if (this.rmb) {
+      this.speed = Math.max(0.5, Math.min(80, this.speed * (e.deltaY < 0 ? 1.25 : 0.8)));
+      this.hooks.status(`Fly speed ${this.speed.toFixed(1)} m/s`);
+      return;
+    }
+    const step = Math.max(0.25, this.pivotDistance() * 0.15) * (e.deltaY < 0 ? 1 : -1);
+    this.camPos = add(this.camPos, mul(lookAxes(this.look).fwd, step));
+    this.camDirty = true;
+  }
+  /** Moves the editor camera by the held keys, and sends it to the game when it moved. */
+  flyAndSend() {
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - (this.lastTick || now)) / 1e3);
+    this.lastTick = now;
+    if (!this.camEntity || !this.camPos || !this.look) return;
+    if (this.rmb && this.keys.size) {
+      const a = lookAxes(this.look);
+      let v2 = [0, 0, 0];
+      if (this.keys.has("w")) v2 = add(v2, a.fwd);
+      if (this.keys.has("s")) v2 = sub(v2, a.fwd);
+      if (this.keys.has("d")) v2 = add(v2, a.right);
+      if (this.keys.has("a")) v2 = sub(v2, a.right);
+      if (this.keys.has("e")) v2 = add(v2, [0, 0, 1]);
+      if (this.keys.has("q")) v2 = sub(v2, [0, 0, 1]);
+      const fast = this.keys.has("shift") ? 4 : this.keys.has("control") ? 0.25 : 1;
+      if (v2[0] || v2[1] || v2[2]) {
+        this.camPos = add(this.camPos, mul(norm(v2), this.speed * fast * dt));
+        this.camDirty = true;
+      }
+    }
+    if (!this.camDirty) return;
+    this.camDirty = false;
+    const q = qLook(this.look);
+    world.move(this.camEntity, { x: this.camPos[0], y: this.camPos[1], z: this.camPos[2] }, { i: q[0], j: q[1], k: q[2], r: q[3] }).catch((err) => this.hooks.log(`Camera move failed: ${err.message}`));
+  }
+  /** Puts the selected object in front of the camera, at a distance that fits it. */
+  frameSelected() {
+    const o = this.current();
+    if (!o || !this.camPos || !this.look) return;
+    const b = o.bounds ? { min: o.bounds.min, max: o.bounds.max } : UNIT_BOX;
+    const size = Math.max(...[0, 1, 2].map((i) => (b.max[i] - b.min[i]) * o.transform.scale[i]));
+    const centre = add(o.transform.position, mul(add(b.min, b.max), 0.5));
+    const fwd = lookAxes(this.look).fwd;
+    this.camPos = sub(centre, mul(fwd, Math.max(2, size * 2.5)));
+    this.camDirty = true;
   }
   onDown(e) {
     if (!this.edit || !this.cam) return;
     this.mouse = this.pageXY(e);
+    this.last = this.mouse;
     if (e.button === 2) {
       if (this.drag) this.cancel();
+      else if (this.camEntity) {
+        this.rmb = true;
+        this.canvas.setPointerCapture(e.pointerId);
+      }
+      return;
+    }
+    if (e.button === 1) {
+      if (this.camEntity && !this.drag) {
+        e.preventDefault();
+        this.mmb = true;
+        this.canvas.setPointerCapture(e.pointerId);
+      }
       return;
     }
     if (e.button !== 0) return;
@@ -420,6 +578,15 @@ var Viewport = class {
     this.pick(this.mouse);
   }
   onUp(e) {
+    if (e.button === 2 || e.button === 1) {
+      if (e.button === 2) this.rmb = false;
+      else this.mmb = false;
+      try {
+        this.canvas.releasePointerCapture(e.pointerId);
+      } catch {
+      }
+      return;
+    }
     if (this.drag && !this.drag.modal && e.button === 0) {
       this.canvas.releasePointerCapture(e.pointerId);
       this.confirm();
@@ -574,6 +741,8 @@ var Viewport = class {
     const el = document.activeElement;
     if (el && (el.tagName === "INPUT" || el.tagName === "RN-INPUT" || el.isContentEditable)) return;
     const key = e.key.toLowerCase();
+    if (this.rmb && "wasdqe".includes(key)) return;
+    if (key === "f" && !this.drag) return this.frameSelected();
     const d = this.drag;
     if (d) {
       if (key === "escape") return this.cancel();
@@ -671,10 +840,13 @@ function render(s) {
   $("floor").toggleAttribute("disabled", !sel?.entityId);
   $("apply").toggleAttribute("disabled", !sel);
   viewport.setScene(s.scene.objects, s.selected);
+  viewport.setCamera(s.camera?.entityId);
   const missing = s.scene.objects.some((o) => !o.entityId && o.kind !== "light");
   $("rebuild").toggleAttribute("disabled", !missing);
   if (document.activeElement?.id !== "bridgePath") $("bridgePath").value = s.settings.bridgePath ?? "";
   if (document.activeElement?.id !== "gameDir") $("gameDir").value = s.settings.gameDir ?? "";
+  $("editorCamera").checked = s.settings.editorCamera !== false;
+  $("hideHud").checked = s.settings.hideHud !== false;
   $("settingsFile").textContent = s.settings.settingsFile;
   $("bridgeDetail").textContent = [b.path, b.detail].filter(Boolean).join("\n");
   $("indexDetail").textContent = ix.file ?? "";
@@ -765,11 +937,16 @@ var viewport = new Viewport($("view"), {
   remove: (id) => post({ type: "delete", id }),
   floor: (id) => post({ type: "floor", id }),
   log: (text) => post({ type: "log", text }),
+  builderStart: (pose) => post({ type: "builder.start", pose }),
+  builderStop: () => post({ type: "builder.stop" }),
   status(text) {
     $("message").textContent = text;
     $("message").className = "message warn";
   }
 });
+for (const id of ["editorCamera", "hideHud"]) {
+  $(id).addEventListener("change", (e) => post({ type: "settings", [id]: !!e.detail.checked }));
+}
 $("edit").addEventListener("change", (e) => viewport.setEdit(!!e.detail.checked));
 $("rebuild").addEventListener("click", () => post({ type: "rebuild" }));
 $("clear").addEventListener("click", () => post({ type: "clear" }));

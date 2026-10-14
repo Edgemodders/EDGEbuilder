@@ -56,9 +56,11 @@ export interface Snapshot {
   looked?: { path: string; info?: AssetInfo };
   scene: { name: string; objects: SceneObject[]; file?: string };
   selected?: string;
+  /** Builder mode: EDGEbuilder's own camera entity while Edit is on, and whether the game's HUD is hidden. */
+  camera?: { entityId: string; hudHidden: boolean };
   /** The last thing worth telling the player. */
   message?: { text: string; tone: "info" | "ok" | "warn" | "error" };
-  settings: { bridgePath?: string; gameDir?: string; settingsFile: string };
+  settings: { bridgePath?: string; gameDir?: string; hideHud?: boolean; editorCamera?: boolean; settingsFile: string };
 }
 
 export type PageMessage =
@@ -72,7 +74,11 @@ export type PageMessage =
   | { type: "clear" }
   | { type: "index.build" }
   | { type: "bridge.restart" }
-  | { type: "settings"; bridgePath?: string; gameDir?: string }
+  | { type: "settings"; bridgePath?: string; gameDir?: string; hideHud?: boolean; editorCamera?: boolean }
+  /** Edit went on: switch to EDGEbuilder's camera at this pose, and hide the game's HUD. */
+  | { type: "builder.start"; pose: { position: [number, number, number]; rotation: [number, number, number, number]; fov: number } }
+  /** Edit went off: back to V's camera and HUD. */
+  | { type: "builder.stop" }
   /** The page moved, turned or scaled an object; the mod saves it and places the preview. */
   | { type: "transform"; id: string; transform: SceneTransform }
   /** Drop the object onto whatever is below it. */

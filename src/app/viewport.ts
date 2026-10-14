@@ -25,8 +25,12 @@ import {
   type Calibration,
   type Camera,
   type GameMatrix,
+  type Look,
   type Q,
   type V3,
+  lookAxes,
+  lookOf,
+  qLook,
 } from "../math";
 import type { SceneObject, SceneTransform } from "../protocol";
 
@@ -45,6 +49,10 @@ export interface ViewportHooks {
   floor(id: string): void;
   log(text: string): void;
   status(text: string): void;
+  /** Edit went on: switch to EDGEbuilder's camera at this pose. */
+  builderStart(pose: { position: V3; rotation: Q; fov: number }): void;
+  /** Edit went off. */
+  builderStop(): void;
 }
 
 interface Drag {
@@ -86,6 +94,19 @@ export class Viewport {
   private mouse: [number, number] = [0, 0];
   private pending: SceneTransform | undefined;
   private cameraError = "";
+  // The editor camera (B2b): its entity, its component, and where the page wants it.
+  private camEntity: string | undefined;
+  private camComp: GameRef | null = null;
+  private camPos: V3 | undefined;
+  private look: Look | undefined;
+  private camDirty = false;
+  private builderAsked = false;
+  private rmb = false;
+  private mmb = false;
+  private last: [number, number] = [0, 0];
+  private keys = new Set<string>();
+  private speed = 6;
+  private lastTick = 0;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -96,15 +117,44 @@ export class Viewport {
     canvas.addEventListener("pointerdown", (e) => this.onDown(e));
     canvas.addEventListener("pointerup", (e) => this.onUp(e));
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-    window.addEventListener("keydown", (e) => this.onKey(e));
+    window.addEventListener("keydown", (e) => {
+      this.keys.add(e.key.toLowerCase());
+      this.onKey(e);
+    });
+    window.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
+    window.addEventListener("blur", () => this.keys.clear());
+    canvas.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
+    // A page closing or reloading must not leave V looking through a camera nobody drives.
+    window.addEventListener("beforeunload", () => {
+      if (this.builderAsked) this.hooks.builderStop();
+    });
     game.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
   }
 
   setEdit(on: boolean): void {
     this.edit = on;
     this.canvas.classList.toggle("edit", on);
-    if (!on) this.cancel();
+    if (!on) {
+      this.cancel();
+      this.rmb = this.mmb = false;
+      if (this.builderAsked) this.hooks.builderStop();
+      this.builderAsked = false;
+    }
     this.kick();
+  }
+
+  /** The editor camera's entity from the mod's state, or none (V's camera). */
+  setCamera(entityId: string | undefined): void {
+    if (entityId === this.camEntity) return;
+    this.camEntity = entityId;
+    this.camComp = null;
+    this.calib = undefined; // another camera: learn the screen again
+    if (!entityId) {
+      this.camPos = undefined;
+      this.look = undefined;
+      // Builder mode ended without Edit going off (a save loaded, or the camera failed): ask again on the next frame.
+      if (this.edit && this.builderAsked) this.builderAsked = false;
+    }
   }
 
   setScene(objects: SceneObject[], selected: string | undefined): void {
@@ -140,7 +190,17 @@ export class Viewport {
         this.camSys = (await api.GameInstance.GetCameraSystem(game.instance)) as GameRef | null;
         if (!this.fpp || !this.camSys) throw new Error("the camera is not available");
       }
-      const b = basisFromMatrix((await this.fpp.GetLocalToWorld()) as GameMatrix);
+      // With the editor camera on, read its component; else V's first-person camera.
+      if (this.camEntity && !this.camComp) {
+        const entity = (await world.entity(this.camEntity)) as GameRef | null;
+        this.camComp = entity ? ((await entity.FindComponentByName("edgebuilder_camera")) as GameRef | null) : null;
+      }
+      const source = this.camEntity && this.camComp ? this.camComp : this.fpp;
+      const b = basisFromMatrix((await source.GetLocalToWorld()) as GameMatrix);
+      if (this.camEntity && this.camComp && !this.camPos) {
+        this.camPos = b.pos;
+        this.look = lookOf(b.fwd);
+      }
       if (this.frame % 30 === 0 || !this.calib) {
         const fov = (await this.camSys.GetActiveCameraFOV()) as number;
         if (!this.calib || Math.abs(fov - this.fov) > 0.01) {
@@ -194,7 +254,13 @@ export class Viewport {
       }
       this.frame++;
       this.flushMove();
+      this.flyAndSend();
       const ok = await this.updateCamera();
+      if (ok && this.edit && !this.builderAsked && this.cam) {
+        // Edit just went on: start the editor camera exactly where V's camera is.
+        this.builderAsked = true;
+        this.hooks.builderStart({ position: this.cam.pos, rotation: qLook(lookOf(this.cam.fwd)), fov: this.fov });
+      }
       this.draw(ok);
       // Without a camera, try again once a second rather than every frame.
       if (ok) requestAnimationFrame(() => void tick());
@@ -275,7 +341,10 @@ export class Viewport {
       }
     }
     if (this.drag) this.label(this.dragText(this.drag));
-    else if (this.edit) this.label(o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.");
+    else if (this.edit) {
+      const camHelp = this.camEntity ? "  ·  Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
+      this.label((o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.") + camHelp);
+    }
   }
 
   private drawBox(o: SceneObject): void {
@@ -367,15 +436,111 @@ export class Viewport {
   private onMove(e: PointerEvent): void {
     this.mouse = this.pageXY(e);
     if (!this.edit) return;
+    const dx = this.mouse[0] - this.last[0];
+    const dy = this.mouse[1] - this.last[1];
+    this.last = this.mouse;
+    if ((this.rmb || this.mmb) && this.camPos && this.look) {
+      if (this.rmb) {
+        this.look = { yaw: this.look.yaw - dx * 0.15, pitch: Math.max(-89, Math.min(89, this.look.pitch - dy * 0.15)) };
+      } else if (e.shiftKey) {
+        const a = lookAxes(this.look);
+        const k = this.pivotDistance() * 0.0015;
+        this.camPos = add(this.camPos, add(mul(a.right, -dx * k), mul(a.up, dy * k)));
+      } else {
+        const pivot = this.pivot();
+        const dist = Math.hypot(...sub(this.camPos, pivot));
+        this.look = { yaw: this.look.yaw - dx * 0.25, pitch: Math.max(-89, Math.min(89, this.look.pitch - dy * 0.25)) };
+        this.camPos = sub(pivot, mul(lookAxes(this.look).fwd, dist));
+      }
+      this.camDirty = true;
+      return;
+    }
     if (this.drag) this.dragTo(this.mouse, e.ctrlKey);
     else this.hover = this.handleAt(this.mouse);
+  }
+
+  /** What the camera orbits and dollies towards: the selected object, else a point 10 m ahead. */
+  private pivot(): V3 {
+    const o = this.current();
+    if (o?.entityId) return o.transform.position;
+    const a = lookAxes(this.look!);
+    return add(this.camPos!, mul(a.fwd, 10));
+  }
+
+  private pivotDistance(): number {
+    return this.camPos ? Math.max(1, Math.hypot(...sub(this.camPos, this.pivot()))) : 10;
+  }
+
+  private onWheel(e: WheelEvent): void {
+    if (!this.edit || !this.camPos || !this.look) return;
+    e.preventDefault();
+    if (this.rmb) {
+      this.speed = Math.max(0.5, Math.min(80, this.speed * (e.deltaY < 0 ? 1.25 : 0.8)));
+      this.hooks.status(`Fly speed ${this.speed.toFixed(1)} m/s`);
+      return;
+    }
+    const step = Math.max(0.25, this.pivotDistance() * 0.15) * (e.deltaY < 0 ? 1 : -1);
+    this.camPos = add(this.camPos, mul(lookAxes(this.look).fwd, step));
+    this.camDirty = true;
+  }
+
+  /** Moves the editor camera by the held keys, and sends it to the game when it moved. */
+  private flyAndSend(): void {
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - (this.lastTick || now)) / 1000);
+    this.lastTick = now;
+    if (!this.camEntity || !this.camPos || !this.look) return;
+    if (this.rmb && this.keys.size) {
+      const a = lookAxes(this.look);
+      let v: V3 = [0, 0, 0];
+      if (this.keys.has("w")) v = add(v, a.fwd);
+      if (this.keys.has("s")) v = sub(v, a.fwd);
+      if (this.keys.has("d")) v = add(v, a.right);
+      if (this.keys.has("a")) v = sub(v, a.right);
+      if (this.keys.has("e")) v = add(v, [0, 0, 1]);
+      if (this.keys.has("q")) v = sub(v, [0, 0, 1]);
+      const fast = this.keys.has("shift") ? 4 : this.keys.has("control") ? 0.25 : 1;
+      if (v[0] || v[1] || v[2]) {
+        this.camPos = add(this.camPos, mul(norm(v), this.speed * fast * dt));
+        this.camDirty = true;
+      }
+    }
+    if (!this.camDirty) return;
+    this.camDirty = false;
+    const q = qLook(this.look);
+    world.move(this.camEntity, { x: this.camPos[0], y: this.camPos[1], z: this.camPos[2] }, { i: q[0], j: q[1], k: q[2], r: q[3] }).catch((err: Error) => this.hooks.log(`Camera move failed: ${err.message}`));
+  }
+
+  /** Puts the selected object in front of the camera, at a distance that fits it. */
+  private frameSelected(): void {
+    const o = this.current();
+    if (!o || !this.camPos || !this.look) return;
+    const b = o.bounds ? { min: o.bounds.min as V3, max: o.bounds.max as V3 } : UNIT_BOX;
+    const size = Math.max(...[0, 1, 2].map((i) => (b.max[i] - b.min[i]) * o.transform.scale[i]));
+    const centre = add(o.transform.position, mul(add(b.min, b.max), 0.5));
+    const fwd = lookAxes(this.look).fwd;
+    this.camPos = sub(centre, mul(fwd, Math.max(2, size * 2.5)));
+    this.camDirty = true;
   }
 
   private onDown(e: PointerEvent): void {
     if (!this.edit || !this.cam) return;
     this.mouse = this.pageXY(e);
+    this.last = this.mouse;
     if (e.button === 2) {
       if (this.drag) this.cancel();
+      else if (this.camEntity) {
+        this.rmb = true;
+        this.canvas.setPointerCapture(e.pointerId);
+      }
+      return;
+    }
+    if (e.button === 1) {
+      if (this.camEntity && !this.drag) {
+        e.preventDefault();
+        this.mmb = true;
+        this.canvas.setPointerCapture(e.pointerId);
+      }
       return;
     }
     if (e.button !== 0) return;
@@ -392,6 +557,16 @@ export class Viewport {
   }
 
   private onUp(e: PointerEvent): void {
+    if (e.button === 2 || e.button === 1) {
+      if (e.button === 2) this.rmb = false;
+      else this.mmb = false;
+      try {
+        this.canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        // Not captured.
+      }
+      return;
+    }
     if (this.drag && !this.drag.modal && e.button === 0) {
       this.canvas.releasePointerCapture(e.pointerId);
       this.confirm();
@@ -560,6 +735,8 @@ export class Viewport {
     const el = document.activeElement as HTMLElement | null;
     if (el && (el.tagName === "INPUT" || el.tagName === "RN-INPUT" || el.isContentEditable)) return;
     const key = e.key.toLowerCase();
+    if (this.rmb && "wasdqe".includes(key)) return; // flying
+    if (key === "f" && !this.drag) return this.frameSelected();
     const d = this.drag;
     if (d) {
       if (key === "escape") return this.cancel();

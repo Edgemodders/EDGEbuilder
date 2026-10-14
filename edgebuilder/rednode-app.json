@@ -1,9 +1,9 @@
 {
   "id": "edgebuilder",
   "name": "EDGEbuilder",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "author": "Edgemodders",
-  "description": "A world builder: browse the game's assets, drop them into the live world, move, turn and scale them with a gizmo, bake them into the world. B2a: position.",
+  "description": "A world builder: browse the game's assets, drop them into the live world, move, turn and scale them with a gizmo from a camera of its own, bake them into the world. B2b: the editor camera.",
   "entry": "index.html",
   "main": "mod.mjs",
   "kind": "window",

@@ -206,3 +206,33 @@ export function distToSegment(p: [number, number], a: [number, number], b: [numb
   const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0;
   return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
 }
+
+// ---- the editor camera (B2b) -------------------------------------------------------------------------
+
+/** A camera's heading and pitch, in degrees: heading 0 looks north (+Y), positive pitch looks up. */
+export interface Look {
+  yaw: number;
+  pitch: number;
+}
+
+/** The rotation of a camera that looks with this heading and pitch (forward is +Y, as REDengine has it). */
+export function qLook(l: Look): Q {
+  return qNorm(qMul(qAxisAngle([0, 0, 1], l.yaw), qAxisAngle([1, 0, 0], l.pitch)));
+}
+
+/** Heading and pitch of a forward direction. */
+export function lookOf(fwd: V3): Look {
+  const f = norm(fwd);
+  return { yaw: (Math.atan2(-f[0], f[1]) * 180) / Math.PI, pitch: (Math.asin(Math.max(-1, Math.min(1, f[2]))) * 180) / Math.PI };
+}
+
+/** The forward, right and up of a heading and pitch. */
+export function lookAxes(l: Look): { fwd: V3; right: V3; up: V3 } {
+  const q = qLook(l);
+  return { fwd: qRotate(q, [0, 1, 0]), right: qRotate(q, [1, 0, 0]), up: qRotate(q, [0, 0, 1]) };
+}
+
+/** The look from a point towards another. */
+export function lookAt(from: V3, to: V3): Look {
+  return lookOf(sub(to, from));
+}

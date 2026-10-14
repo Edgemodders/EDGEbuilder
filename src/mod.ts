@@ -9,6 +9,7 @@ import { api, channel, game, kernel, pkg, world, type GameRef } from "rednode";
 import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge } from "./bridge";
 import { AssetIndex, kindOf } from "./index";
 import { Scene, yawToQuaternion } from "./scene";
+import { add, basisFromMatrix, mul, sub, type GameMatrix, type V3 } from "./math";
 import type { AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "./protocol";
 
 /** A base-game entity template that is a bare entity: no components, no appearances. The preview of a mesh is this with a mesh component attached. */
@@ -19,6 +20,10 @@ const ResultLimit = 120;
 interface Settings {
   bridgePath?: string;
   gameDir?: string;
+  /** Hide the game's HUD while Edit is on. Default true. */
+  hideHud?: boolean;
+  /** Switch to EDGEbuilder's own camera while Edit is on. Default true. */
+  editorCamera?: boolean;
 }
 
 const settingsFile = path.join(pkg.dataDir, "settings.json");
@@ -194,6 +199,11 @@ async function checkWorld(): Promise<void> {
   } catch {
     state.world = "unknown";
   }
+  if (state.world === "ready" && before !== "ready" && !editorCam && readBuilderRecord()) {
+    await builderStop();
+    say("Builder mode was still on from last time (EDGEbuilder stopped while Edit was on); V's camera and HUD are back.", "info");
+    return;
+  }
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light").length;
   if (state.world === "ready" && before !== "ready" && away) {
     say(`${away} object${away === 1 ? " is" : "s are"} in the scene but not in the world. Press Rebuild previews in the Scene tab to place ${away === 1 ? "it" : "them"}, or delete ${away === 1 ? "it" : "them"} there.`, "info");
@@ -215,6 +225,26 @@ async function inFrontOfPlayer(): Promise<Placement> {
   const f = (await player.GetWorldForward()) as { X: number; Y: number; Z: number };
   const yaw = (Math.atan2(f.X, -f.Y) * 180) / Math.PI;
   return { position: [p.X + f.X * SpawnDistance, p.Y + f.Y * SpawnDistance, p.Z], yaw };
+}
+
+/**
+ * Where a drop lands: with the editor camera, on the first surface the camera looks at within 60 m
+ * (or 6 m ahead when there is none), turned to face the camera; else in front of V.
+ */
+async function dropPlace(): Promise<Placement> {
+  if (editorCam) {
+    try {
+      const b = basisFromMatrix((await editorCam.component.GetLocalToWorld()) as GameMatrix);
+      const { hit } = await raycast(b.pos, add(b.pos, mul(b.fwd, 60)));
+      const position = hit ?? add(b.pos, mul(b.fwd, 6));
+      // Face the camera: the object's forward points back along the camera's heading.
+      const yaw = (Math.atan2(b.fwd[0], -b.fwd[1]) * 180) / Math.PI;
+      return { position, yaw };
+    } catch (err) {
+      console.log(`Drop at the camera: ${(err as Error).message}; dropping in front of V`);
+    }
+  }
+  return inFrontOfPlayer();
 }
 
 /** Puts an object's preview in the world and remembers the entity. */
@@ -293,6 +323,36 @@ async function setTransform(id: string, t: SceneTransform): Promise<void> {
 /** The collision groups a floor can be in. The first that answers is not always the nearest, so all are asked. */
 const FloorGroups = ["Static", "Terrain", "PlayerBlocker"];
 
+/** The nearest thing a straight line from `start` to `end` hits, across the floor groups, and what each said. */
+async function raycast(start: V3, end: V3): Promise<{ hit?: V3; tried: string[] }> {
+  const queries = (await api.GameInstance.GetSpatialQueriesSystem(game.instance)) as GameRef | null;
+  if (!queries) return { tried: ["no spatial queries"] };
+  let hit: V3 | undefined;
+  let best = Infinity;
+  const tried: string[] = [];
+  for (const group of FloorGroups) {
+    try {
+      const r = (await queries.SyncRaycastByCollisionGroup({ X: start[0], Y: start[1], Z: start[2], W: 1 }, { X: end[0], Y: end[1], Z: end[2], W: 1 }, group, null, false, false)) as {
+        result: boolean;
+        out: { result: { position: { X: number; Y: number; Z: number } } };
+      };
+      const p = r.out?.result?.position;
+      tried.push(`${group}: ${r.result && p ? p.Z.toFixed(2) : "miss"}`);
+      if (r.result && p) {
+        const at: V3 = [p.X, p.Y, p.Z];
+        const d = Math.hypot(...sub(at, start));
+        if (d < best) {
+          best = d;
+          hit = at;
+        }
+      }
+    } catch (err) {
+      tried.push(`${group}: ${(err as Error).message}`);
+    }
+  }
+  return { hit, tried };
+}
+
 /** Puts an object's lowest point on whatever is below it. */
 async function dropToFloor(id: string): Promise<void> {
   const o = scene.get(id);
@@ -302,26 +362,147 @@ async function dropToFloor(id: string): Promise<void> {
   const lowest = (o.bounds?.min[2] ?? 0) * o.transform.scale[2];
   // Start just above the object's base, so an entity's own colliders above it are not hit.
   const startZ = z + lowest + 0.05;
-  const queries = await api.GameInstance.GetSpatialQueriesSystem(game.instance);
-  if (!queries) return say("The game's spatial queries are not available right now.", "warn");
-  let floor: number | undefined;
-  const tried: string[] = [];
-  for (const group of FloorGroups) {
-    try {
-      const r = (await queries.SyncRaycastByCollisionGroup({ X: x, Y: y, Z: startZ, W: 1 }, { X: x, Y: y, Z: startZ - 100, W: 1 }, group, null, false, false)) as {
-        result: boolean;
-        out: { result: { position: { X: number; Y: number; Z: number } } };
-      };
-      tried.push(`${group}: ${r.result ? r.out.result.position.Z.toFixed(2) : "miss"}`);
-      if (r.result && (floor === undefined || r.out.result.position.Z > floor)) floor = r.out.result.position.Z;
-    } catch (err) {
-      tried.push(`${group}: ${(err as Error).message}`);
-    }
-  }
+  const { hit, tried } = await raycast([x, y, startZ], [x, y, startZ - 100]);
+  const floor = hit?.[2];
   console.log(`Drop to floor ${o.id} from z ${startZ.toFixed(2)}: ${tried.join("; ")}`);
   if (floor === undefined) return say("Nothing below to drop onto within 100 m.", "warn");
   await setTransform(id, { ...o.transform, position: [x, y, floor - lowest] });
   say(`Dropped ${o.id} to the floor, ${(z - (floor - lowest)).toFixed(2)} m down.`, "ok");
+}
+
+// ---- builder mode (B2b) -----------------------------------------------------------------------------
+//
+// While Edit is on, the view comes from a camera of EDGEbuilder's own: an empty entity with a camera
+// component, switched on with Activate. V stays where V is. The game's HUD is hidden by raising V's
+// scene tier, as cutscenes do. What was changed is written to builder-mode.json first, so if
+// EDGEbuilder stops while Edit is on, its next start puts V's camera and scene tier back.
+
+const builderFile = path.join(pkg.dataDir, "builder-mode.json");
+const CameraName = "edgebuilder_camera";
+/** The scene tier that hides the HUD: SceneTier4, as the game's scenes use. */
+const HudHiddenTier = 4;
+let editorCam: { id: string; component: GameRef } | undefined;
+
+interface BuilderRecord {
+  entityId?: string;
+  /** V's scene tier before EDGEbuilder raised it. */
+  sceneTier?: number;
+}
+
+function readBuilderRecord(): BuilderRecord | undefined {
+  try {
+    return JSON.parse(fs.readFileSync(builderFile, "utf8")) as BuilderRecord;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeBuilderRecord(r: BuilderRecord): void {
+  fs.mkdirSync(pkg.dataDir, { recursive: true });
+  fs.writeFileSync(builderFile, JSON.stringify(r));
+}
+
+/** V's player-state blackboard and its SceneTier field. */
+async function sceneTierBoard(): Promise<{ board: GameRef; id: unknown }> {
+  const player = await api.GetPlayer(game.instance);
+  if (!player) throw new Error("no player");
+  const defs = (await api.GetAllBlackboardDefs()) as GameRef;
+  const psm = (await defs.$get("PlayerStateMachine")) as GameRef;
+  const system = (await api.GameInstance.GetBlackboardSystem(game.instance)) as GameRef;
+  const board = (await system.GetLocalInstanced(await player.GetEntityID(), psm)) as GameRef | null;
+  if (!board) throw new Error("V's player-state blackboard is not there");
+  return { board, id: await psm.$get("SceneTier") };
+}
+
+/** Sets V's scene tier and returns the one before, or undefined when it could not be set. */
+async function setSceneTier(value: number): Promise<number | undefined> {
+  try {
+    const { board, id } = await sceneTierBoard();
+    const before = (await board.GetInt(id)) as number;
+    await board.SetInt(id, value, true);
+    const now = (await board.GetInt(id)) as number;
+    console.log(`Scene tier ${before} -> ${value}${now === value ? "" : `, but it reads ${now}`}`);
+    return before;
+  } catch (err) {
+    console.log(`Scene tier not set: ${(err as Error).message}`);
+    return undefined;
+  }
+}
+
+/** V's own first-person camera, switched back on. */
+async function playerCameraBack(): Promise<void> {
+  try {
+    const player = await api.GetPlayer(game.instance);
+    const fpp = player ? ((await player.GetFPPCameraComponent()) as GameRef | null) : null;
+    if (fpp) await fpp.Activate(0, false);
+  } catch (err) {
+    console.log(`V's camera: ${(err as Error).message}`);
+  }
+}
+
+async function builderStart(pose: { position: [number, number, number]; rotation: [number, number, number, number]; fov: number }): Promise<void> {
+  if (editorCam) return;
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const record: BuilderRecord = {};
+  let hudHidden = false;
+  try {
+    if (settings.editorCamera !== false) {
+      const component = (await api.$new("gameCameraComponent", { name: CameraName })) as GameRef;
+      const { id, entity } = await world.spawn({ template: EmptyEntity, position: toPoint(pose.position), orientation: toQuat(pose.rotation), components: [component], tags: ["edgebuilder", CameraName] });
+      record.entityId = id.hash;
+      writeBuilderRecord(record);
+      const attached = entity ? ((await entity.FindComponentByName(CameraName)) as GameRef | null) : null;
+      const cam = attached ?? component;
+      if (pose.fov > 1) await cam.SetFOV(pose.fov);
+      await cam.Activate(0, false);
+      editorCam = { id: id.hash, component: cam };
+    }
+    if (settings.hideHud !== false) {
+      const before = await setSceneTier(HudHiddenTier);
+      if (before !== undefined) {
+        record.sceneTier = before;
+        writeBuilderRecord(record);
+        hudHidden = true;
+      }
+    }
+    state.camera = editorCam ? { entityId: editorCam.id, hudHidden } : undefined;
+    console.log(`Builder mode on: ${editorCam ? `editor camera ${editorCam.id}` : "V's camera"}${hudHidden ? ", HUD hidden" : ""}`);
+    publish();
+  } catch (err) {
+    say(`The editor camera could not start (${(err as Error).message}); editing with V's camera.`, "warn");
+    await builderStop();
+  }
+}
+
+/** Back to V's camera and scene tier; also cleans up after a builder mode left on by a stopped EDGEbuilder. */
+async function builderStop(): Promise<void> {
+  const record = readBuilderRecord();
+  const camId = editorCam?.id ?? record?.entityId;
+  if (editorCam) {
+    try {
+      await editorCam.component.Deactivate(0, false);
+    } catch {
+      // Gone with a save load, or already off.
+    }
+  }
+  if (camId) {
+    try {
+      await world.remove(camId);
+    } catch {
+      // Already gone.
+    }
+  }
+  if (camId || editorCam) await playerCameraBack();
+  if (record?.sceneTier !== undefined) await setSceneTier(record.sceneTier);
+  editorCam = undefined;
+  state.camera = undefined;
+  try {
+    fs.rmSync(builderFile, { force: true });
+  } catch {
+    // Nothing to remove.
+  }
+  if (record || camId) console.log("Builder mode off");
+  publish();
 }
 
 // ---- requests from the page -------------------------------------------------------------------
@@ -338,7 +519,7 @@ async function drop(assetPath: string, appearance?: string): Promise<void> {
   if (state.world !== "ready") return say(worldBlocker(), "warn");
   let added: SceneObject | undefined;
   try {
-    const at = await inFrontOfPlayer();
+    const at = await dropPlace();
     const o = scene.add(kind, assetPath, { position: at.position, rotation: yawToQuaternion(at.yaw), scale: [1, 1, 1] }, appearance);
     added = o;
     if (bridge?.running) {
@@ -407,7 +588,7 @@ async function clear(): Promise<void> {
 
 function saveSettings(next: Settings): void {
   settings = { ...settings, ...next };
-  for (const k of Object.keys(settings) as (keyof Settings)[]) if (!settings[k]) delete settings[k];
+  for (const k of Object.keys(settings) as (keyof Settings)[]) if (settings[k] === undefined || settings[k] === "") delete settings[k];
   fs.mkdirSync(pkg.dataDir, { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
 }
@@ -456,6 +637,12 @@ channel.on<PageMessage>((m) => {
       case "bridge.restart":
         await startBridge();
         break;
+      case "builder.start":
+        await builderStart(m.pose);
+        break;
+      case "builder.stop":
+        await builderStop();
+        break;
       case "transform":
         await setTransform(m.id, m.transform);
         break;
@@ -466,9 +653,14 @@ channel.on<PageMessage>((m) => {
         console.log(m.text);
         break;
       case "settings":
-        saveSettings({ bridgePath: m.bridgePath, gameDir: m.gameDir });
-        say("Settings saved; restarting REDbridge.", "info");
-        await startBridge();
+      {
+        const bridgeChanged = ("bridgePath" in m && m.bridgePath !== settings.bridgePath) || ("gameDir" in m && m.gameDir !== settings.gameDir);
+        const next: Settings = {};
+        for (const k of ["bridgePath", "gameDir", "hideHud", "editorCamera"] as const) if (k in m) (next as Record<string, unknown>)[k] = m[k];
+        saveSettings(next);
+        say(bridgeChanged ? "Settings saved; restarting REDbridge." : "Settings saved.", "info");
+        if (bridgeChanged) await startBridge();
+      }
         break;
     }
   })().catch((err) => say(`${m.type}: ${(err as Error).message}`, "error"));
@@ -489,6 +681,15 @@ game.onState((s) => {
 });
 
 game.on("PlayerPuppet.OnGameAttached", () => {
+  if (editorCam || readBuilderRecord()) {
+    editorCam = undefined;
+    state.camera = undefined;
+    try {
+      fs.rmSync(builderFile, { force: true });
+    } catch {
+      // Nothing to remove.
+    }
+  }
   // A save loaded: every preview entity of the old session is gone.
   scene.forgetPreviews();
   state.selected = undefined;

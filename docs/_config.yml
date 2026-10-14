@@ -31,6 +31,8 @@ nav:
     url: /b1-test.html
   - title: B2a test
     url: /b2-test.html
+  - title: B2b test
+    url: /b2b-test.html
   - title: Study
     url: /study.html
   - title: Dev setup

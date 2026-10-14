@@ -49,7 +49,7 @@
           <div id="lookedPath" class="path">Pick an asset</div>
           <div id="lookedSize" class="detail"></div>
           <rn-list id="appearances" hidden></rn-list>
-          <div class="row"><rn-button id="drop" disabled sound="ui_menu_onpress">Drop in front of me</rn-button></div>
+          <div class="row"><rn-button id="drop" disabled sound="ui_menu_onpress">Drop where I look</rn-button></div>
         </rn-panel>
       </rn-tab>
       <rn-tab label="Scene">
@@ -79,16 +79,21 @@
         <rn-input id="bridgePath" label="REDbridge.exe" placeholder="Empty: the copy REDdeck fetched"></rn-input>
         <rn-input id="gameDir" label="Game folder" placeholder="Empty: found from where REDnode runs"></rn-input>
         <div class="row"><rn-button id="saveSettings">Save and restart REDbridge</rn-button></div>
+        <rn-panel title="While Edit is on">
+          <rn-toggle id="editorCamera" label="Use EDGEbuilder's own camera (V stays put)" checked></rn-toggle>
+          <rn-toggle id="hideHud" label="Hide the game's HUD" checked></rn-toggle>
+        </rn-panel>
         <div class="row"><rn-button id="buildIndex" variant="ghost">Rebuild asset index</rn-button><rn-button id="restartBridge" variant="ghost">Restart REDbridge</rn-button></div>
         <div id="bridgeDetail" class="detail"></div>
         <div id="indexDetail" class="detail"></div>
         <div id="settingsFile" class="detail"></div>
       </rn-tab>
       <rn-tab label="About">
-        <div class="phase">// B2a · position</div>
+        <div class="phase">// B2b · camera</div>
         <p>A world builder for the EDGE platform: browse the game's assets, drop them into the world, position, arrange, bake.</p>
         <p>Switch <b>Edit</b> on (top of this window) to work in the world: click an object to select it, drag an arrow to move it along that axis, drag the ring to turn it. Keys: G move, R turn, S scale (meshes), then X, Y or Z to lock an axis and a number to type the amount; Enter or a click keeps it, Esc or a right-click undoes it. Ctrl snaps, Ctrl+E drops to the floor, Delete removes. With Edit off the game gets the mouse as usual.</p>
-        <p>Next: the editor camera (B2b), groups and saved scenes (B3), the bake (B4).</p>
+        <p>With Edit on, EDGEbuilder looks through a camera of its own and hides the game's HUD; V stays where V is. Hold the right mouse button to look around and fly with W A S D, Q down, E up (Shift faster, the wheel changes the speed while flying). The middle mouse orbits the selected object, Shift with it pans, the wheel moves closer, F frames the selection. Switch Edit off and the view is V's again. Both can be switched off in Settings.</p>
+        <p>Next: groups and saved scenes (B3), the bake (B4).</p>
         <p>Design and guide: <code>edgemodders.github.io/EDGEbuilder</code></p>
       </rn-tab>
     </rn-tabs>
