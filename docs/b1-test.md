@@ -79,7 +79,7 @@ On the owner's PC, EDGEbuilder 0.1.1 installed with REDdeck 0.20.1 after Vortex 
 |---|---|---|
 | Does the drop land quickly where expected | Yes, without noticeable lag | B2 relies on `world.spawn` as it is |
 | Does the game's outline show on a selected preview | **Yes** | B2 uses the game's own highlight for selection; the overlay canvas draws only the gizmo and helpers |
-| Does the frame rate hold with ten previews | Not measured: not reported in this test | Measure in B2's test, while dragging, with REDnode 0.15.1's game-call timing in its perf line |
+| Does the frame rate hold with ten previews | Looked fine to the owner; not measured | Measure in B2's test, while dragging, with REDnode 0.15.1's game-call timing in its perf line |
 | Does Rebuild bring everything back after a save loads | Yes | The scene file is the truth, as designed |
 
 **B1 passed.** Next: B2 Position.
