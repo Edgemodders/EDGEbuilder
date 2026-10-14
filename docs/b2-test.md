@@ -15,7 +15,7 @@ Built on 2026-10-13. Outside the game: the geometry (camera projection learned f
 | REDnode 0.17.0 or later deployed | `kernel.bridge()` and `requires`. With an older REDnode, EDGEbuilder starts its own REDbridge as before |
 | Codeware 1.14 or later, REDbridge 0.6.0 | As for B1 |
 | EDGEbuilder 0.2.0 installed | With REDdeck: Add mod, pick `edgebuilder-0.2.0.zip` from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases); With REDdeck 0.21.1 or later, 0.2.0 takes 0.1.1's place in the same row and 0.1.1 goes off; with an older REDdeck, turn the old EDGEbuilder off yourself, or both deploy the same files and conflict. Deploy |
-| REDbridge allowed | First start: the second pill says **Allow REDbridge**. In REDnode's Mod Manager select EDGEbuilder, Permissions, switch **Allowed** on; the pill turns green by itself within a few seconds |
+| REDbridge allowed | **New in 0.2.0, do this first.** The second pill says **Allow REDbridge** until you allow it: F10, open the **Mod Manager** from the REDNODE launcher tab, select **EDGEbuilder**, and under **Permissions** switch **Allowed** on. Within about five seconds the pill turns green and the third shows about 31,500 assets. (From 0.2.1 the index from last time loads at once, so search works even before this) |
 
 If the EDGEbuilder window sits in the wrong place (it is full-screen now; a position saved from dragging the B1 window would move it), close the game and remove the `"edgebuilder"` entry from `%APPDATA%\@rednode\overlay\window-positions.json`. REDnode is asked to stop applying a saved position after a window's size changes ([REDnode #8](https://github.com/Edgemodders/REDnode/issues/8)).
 

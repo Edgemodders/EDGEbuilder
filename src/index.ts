@@ -45,6 +45,21 @@ export class AssetIndex {
     }
   }
 
+  /** Loads the newest index on disk, for searching before REDbridge says which game this is. */
+  loadNewest(): boolean {
+    let newest: { game: string; t: number } | undefined;
+    try {
+      for (const f of fs.readdirSync(this.dir)) {
+        if (!f.endsWith(".json")) continue;
+        const t = fs.statSync(path.join(this.dir, f)).mtimeMs;
+        if (!newest || t > newest.t) newest = { game: f.slice(0, -5), t };
+      }
+    } catch {
+      return false;
+    }
+    return newest ? this.load(newest.game) : false;
+  }
+
   save(): void {
     fs.mkdirSync(this.dir, { recursive: true });
     const data: IndexFile = { format: 1, game: this.game, built: new Date().toISOString(), entries: this.entries, info: this.info };

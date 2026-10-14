@@ -126,6 +126,9 @@ if (!exe || !game) {
   assert.equal(index.search("zzzz_nothing_here", "all").length, 0);
   const info1 = await index.lookAt(bridge, crates[0].path);
   assert.ok(info1.bounds && info1.bounds.min.length === 3 && info1.appearances.length >= 1, JSON.stringify(info1));
+  const newest = new AssetIndex(index.dir);
+  assert.equal(newest.loadNewest(), true, "the newest index loads without knowing the game");
+  assert.equal(newest.entries.length, index.entries.length);
   const reloaded = new AssetIndex(index.dir);
   assert.equal(reloaded.load(key), true);
   assert.equal(reloaded.entries.length, index.entries.length);

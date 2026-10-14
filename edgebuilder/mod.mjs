@@ -190,6 +190,20 @@ var AssetIndex = class {
       return false;
     }
   }
+  /** Loads the newest index on disk, for searching before REDbridge says which game this is. */
+  loadNewest() {
+    let newest;
+    try {
+      for (const f of fs2.readdirSync(this.dir)) {
+        if (!f.endsWith(".json")) continue;
+        const t = fs2.statSync(path2.join(this.dir, f)).mtimeMs;
+        if (!newest || t > newest.t) newest = { game: f.slice(0, -5), t };
+      }
+    } catch {
+      return false;
+    }
+    return newest ? this.load(newest.game) : false;
+  }
   save() {
     fs2.mkdirSync(this.dir, { recursive: true });
     const data = { format: 1, game: this.game, built: (/* @__PURE__ */ new Date()).toISOString(), entries: this.entries, info: this.info };
@@ -502,6 +516,7 @@ function worldBlocker() {
   }
 }
 async function checkWorld() {
+  const before = state.world;
   try {
     const s = await game.state();
     if (!s.connected) state.world = "no-game";
@@ -509,6 +524,11 @@ async function checkWorld() {
     else state.world = s.mainMenu ? "no-save" : "no-codeware";
   } catch {
     state.world = "unknown";
+  }
+  const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light").length;
+  if (state.world === "ready" && before !== "ready" && away) {
+    say(`${away} object${away === 1 ? " is" : "s are"} in the scene but not in the world. Press Rebuild previews in the Scene tab to place ${away === 1 ? "it" : "them"}, or delete ${away === 1 ? "it" : "them"} there.`, "info");
+    return;
   }
   publish();
 }
@@ -617,9 +637,11 @@ async function drop(assetPath, appearance) {
   if (!kind) return say(`${assetPath} is not a mesh or an entity template.`, "warn");
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
+  let added;
   try {
     const at = await inFrontOfPlayer();
     const o = scene.add(kind, assetPath, { position: at.position, rotation: yawToQuaternion(at.yaw), scale: [1, 1, 1] }, appearance);
+    added = o;
     if (bridge?.running) {
       try {
         const info = await index.lookAt(bridge, assetPath);
@@ -633,7 +655,11 @@ async function drop(assetPath, appearance) {
     await select(o.id);
     say(`Dropped ${path4.basename(assetPath)} in ${Date.now() - started} ms.`, "ok");
   } catch (err) {
-    say(`Drop failed: ${err.message}`, "error");
+    if (added) {
+      await removePreview(added);
+      scene.remove(added.id);
+    }
+    say(`Drop failed, nothing was added: ${err.message}`, "error");
   }
 }
 async function select(id) {
@@ -690,6 +716,7 @@ channel.on((m) => {
         break;
       case "look":
         state.looked = { path: m.path };
+        if (!bridge?.running) state.looked.info = index.info[m.path] ?? { appearances: [], error: "Size and appearances need REDbridge; it can still be dropped." };
         publish();
         if (bridge?.running) {
           try {
@@ -767,6 +794,10 @@ console.log(`EDGEbuilder starting; data folder ${pkg.dataDir}; ${scene.objects.l
 if (scene.loadError) {
   state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path4.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);
+}
+if (index.loadNewest()) {
+  state.index = { status: "ready", count: index.entries.length, file: index.file, progress: "From the last time REDbridge read the game" };
+  runSearch();
 }
 publish();
 void checkWorld();

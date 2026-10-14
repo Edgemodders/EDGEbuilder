@@ -185,6 +185,7 @@ function worldBlocker(): string {
 }
 
 async function checkWorld(): Promise<void> {
+  const before = state.world;
   try {
     const s = await game.state();
     if (!s.connected) state.world = "no-game";
@@ -192,6 +193,11 @@ async function checkWorld(): Promise<void> {
     else state.world = s.mainMenu ? "no-save" : "no-codeware";
   } catch {
     state.world = "unknown";
+  }
+  const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light").length;
+  if (state.world === "ready" && before !== "ready" && away) {
+    say(`${away} object${away === 1 ? " is" : "s are"} in the scene but not in the world. Press Rebuild previews in the Scene tab to place ${away === 1 ? "it" : "them"}, or delete ${away === 1 ? "it" : "them"} there.`, "info");
+    return;
   }
   publish();
 }
@@ -330,9 +336,11 @@ async function drop(assetPath: string, appearance?: string): Promise<void> {
   if (!kind) return say(`${assetPath} is not a mesh or an entity template.`, "warn");
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
+  let added: SceneObject | undefined;
   try {
     const at = await inFrontOfPlayer();
     const o = scene.add(kind, assetPath, { position: at.position, rotation: yawToQuaternion(at.yaw), scale: [1, 1, 1] }, appearance);
+    added = o;
     if (bridge?.running) {
       try {
         const info = await index.lookAt(bridge, assetPath);
@@ -347,7 +355,13 @@ async function drop(assetPath: string, appearance?: string): Promise<void> {
     await select(o.id);
     say(`Dropped ${path.basename(assetPath)} in ${Date.now() - started} ms.`, "ok");
   } catch (err) {
-    say(`Drop failed: ${(err as Error).message}`, "error");
+    // The object went into the scene before the game was asked to spawn it: take it out again,
+    // so a failed drop leaves nothing behind.
+    if (added) {
+      await removePreview(added);
+      scene.remove(added.id);
+    }
+    say(`Drop failed, nothing was added: ${(err as Error).message}`, "error");
   }
 }
 
@@ -410,6 +424,7 @@ channel.on<PageMessage>((m) => {
         break;
       case "look":
         state.looked = { path: m.path };
+        if (!bridge?.running) state.looked.info = index.info[m.path] ?? { appearances: [], error: "Size and appearances need REDbridge; it can still be dropped." };
         publish();
         if (bridge?.running) {
           try {
@@ -495,6 +510,11 @@ console.log(`EDGEbuilder starting; data folder ${pkg.dataDir}; ${scene.objects.l
 if (scene.loadError) {
   state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);
+}
+// The index built last time loads at once, so search works before REDbridge answers (or is allowed).
+if (index.loadNewest()) {
+  state.index = { status: "ready", count: index.entries.length, file: index.file, progress: "From the last time REDbridge read the game" };
+  runSearch();
 }
 publish();
 void checkWorld();
