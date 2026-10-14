@@ -17,7 +17,7 @@ EDGEbuilder is the first mod built on the EDGE platform end to end: the editor i
 **[Read the design](https://edgemodders.github.io/EDGEbuilder/design.html)** &middot; [REDnode](https://github.com/Edgemodders/REDnode) &middot; [REDbridge](https://github.com/Edgemodders/REDbridge) &middot; [REDcode](https://github.com/Edgemodders/REDcode) &middot; [REDdeck](https://github.com/Edgemodders/REDdeck)
 
 > [!NOTE]
-> **Status: B1 built, in-game test pending.** EDGEbuilder 0.1.1 reads an index of your game's meshes and entities through REDbridge, searches it, drops a picked asset in front of V through REDnode's world API, selects and deletes it, and brings the scene back after a save loads. Not yet run in the game: the [B1 test](https://edgemodders.github.io/EDGEbuilder/b1-test.html) says how. Install it with REDdeck from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases). The [design](https://edgemodders.github.io/EDGEbuilder/design.html) says where it goes.
+> **Status: B1 passed in game.** EDGEbuilder 0.1.1 reads an index of your game's meshes and entities through REDbridge, searches it, drops a picked asset in front of V through REDnode's world API, selects it with the game's own outline, deletes it, and brings the scene back after a save loads. Results: [B1 test](https://edgemodders.github.io/EDGEbuilder/b1-test.html). Next: B2, positioning with a gizmo. Install it with REDdeck from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases). The [design](https://edgemodders.github.io/EDGEbuilder/design.html) says where it goes.
 
 ## How it works
 
@@ -52,7 +52,7 @@ Two halves share the scene file: the **runtime builder** in the game, where what
 ## Roadmap
 
 - **B0 Decide.** The design, the repo, a package that installs and opens an empty window. Done.
-- **B1 Browse and drop.** The asset index from REDbridge; drop a mesh and an entity; select, delete. Built, in-game test pending.
+- **B1 Browse and drop.** The asset index from REDbridge; drop a mesh and an entity; select, delete. Passed in game 2026-10-13.
 - **B2 Position.** The gizmo, G R S, numbers, drop to floor, the editor camera.
 - **B3 Arrange and save.** Groups, multi-select, duplicate, undo and redo, scene files.
 - **B4 Bake.** `sector.build` in REDbridge, the bake panel, the scene in the REDcode project, install through REDdeck.

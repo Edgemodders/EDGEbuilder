@@ -60,6 +60,26 @@ Fixed before the in-game test, in 0.1.1:
 | The page overflowed the window: the Drop button was cut off and the message line, the only feedback after a drop, was below the edge | The message sits under the status pills; the lists are shorter |
 | Some assets were listed twice | A file the game ships in two archives (base and patch) is one asset now: 31,571 instead of 32,416 |
 
-### In the game
+### In the game, 2026-10-13: passed
 
-Not run yet.
+On the owner's PC, EDGEbuilder 0.1.1 installed with REDdeck 0.20.1 after Vortex was purged and RED4ext, redscript and Codeware were added to REDdeck; REDnode 0.15.1; REDbridge 0.6.0. All ten steps behaved as expected, as the owner reported them.
+
+| Step | Result |
+|---|---|
+| 1 to 2: open, status pills | As expected |
+| 3: search and pick `cargo_crate_a.mesh` | As expected |
+| 4 to 5: drop two crates, two appearances | Both appeared in front of V. "Not instant, but no real noticeable lag" |
+| 6: drop an entity | A vending machine appeared; it took a fraction longer than the crates |
+| 7: delete | As expected |
+| 8: rebuild after a save loads | The previews came back where they were |
+| 9: clear scene | As expected |
+| 10: logs | No errors seen; the logs were not sent |
+
+| Question | Answer | What it decides |
+|---|---|---|
+| Does the drop land quickly where expected | Yes, without noticeable lag | B2 relies on `world.spawn` as it is |
+| Does the game's outline show on a selected preview | **Yes** | B2 uses the game's own highlight for selection; the overlay canvas draws only the gizmo and helpers |
+| Does the frame rate hold with ten previews | Not measured: not reported in this test | Measure in B2's test, while dragging, with REDnode 0.15.1's game-call timing in its perf line |
+| Does Rebuild bring everything back after a save loads | Yes | The scene file is the truth, as designed |
+
+**B1 passed.** Next: B2 Position.
