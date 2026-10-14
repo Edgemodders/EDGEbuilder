@@ -17,7 +17,9 @@ Built on 2026-10-13. Outside the game: the geometry (camera projection learned f
 | EDGEbuilder 0.2.0 installed | With REDdeck: Add mod, pick `edgebuilder-0.2.0.zip` from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases); REDdeck replaces 0.1.1 in the same row. Deploy |
 | REDbridge allowed | First start: the second pill says **Allow REDbridge**. In REDnode's Mod Manager select EDGEbuilder, Permissions, switch **Allowed** on; the pill turns green by itself within a few seconds |
 
-If the EDGEbuilder window sits in the wrong place (it is full-screen now; a position saved from dragging the B1 window would move it), close the game and remove the `"edgebuilder"` entry from `%APPDATA%\@rednode\overlay\window-positions.json`.
+If the EDGEbuilder window sits in the wrong place (it is full-screen now; a position saved from dragging the B1 window would move it), close the game and remove the `"edgebuilder"` entry from `%APPDATA%\@rednode\overlay\window-positions.json`. REDnode is asked to stop applying a saved position after a window's size changes ([REDnode #8](https://github.com/Edgemodders/REDnode/issues/8)).
+
+Other overlay windows and the game's HUD stay on screen during Edit; windows under EDGEbuilder's tint cannot be clicked until Edit is off. Builder mode, which hides them, comes with B2b.
 
 Use the **Test timer**: Start, then Mark after each step.
 
