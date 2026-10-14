@@ -679,6 +679,7 @@ var builderFile = path4.join(pkg.dataDir, "builder-mode.json");
 var CameraName = "edgebuilder_camera";
 var HudHiddenTier = 4;
 var editorCam;
+var tierWatch;
 function readBuilderRecord() {
   try {
     return JSON.parse(fs4.readFileSync(builderFile, "utf8"));
@@ -713,6 +714,33 @@ async function setSceneTier(value) {
     return void 0;
   }
 }
+function watchTier() {
+  stopTierWatch();
+  let busy = false;
+  tierWatch = setInterval(() => {
+    if (busy) return;
+    busy = true;
+    void (async () => {
+      try {
+        const { board, id } = await sceneTierBoard();
+        const now = await board.GetInt(id);
+        if (now === HudHiddenTier) return;
+        const record = readBuilderRecord() ?? {};
+        record.sceneTier = now;
+        writeBuilderRecord(record);
+        console.log(`The game set scene tier ${now}; hiding the HUD again`);
+        await board.SetInt(id, HudHiddenTier, true);
+      } catch {
+      } finally {
+        busy = false;
+      }
+    })();
+  }, 1e3);
+}
+function stopTierWatch() {
+  if (tierWatch) clearInterval(tierWatch);
+  tierWatch = void 0;
+}
 async function playerCameraBack() {
   try {
     const player = await api.GetPlayer(game.instance);
@@ -742,9 +770,10 @@ async function builderStart(pose) {
     if (settings.hideHud !== false) {
       const before = await setSceneTier(HudHiddenTier);
       if (before !== void 0) {
-        record.sceneTier = before;
+        record.sceneTier = before === HudHiddenTier || before === 0 ? 1 : before;
         writeBuilderRecord(record);
         hudHidden = true;
+        watchTier();
       }
     }
     state.camera = editorCam ? { entityId: editorCam.id, hudHidden } : void 0;
@@ -756,6 +785,7 @@ async function builderStart(pose) {
   }
 }
 async function builderStop() {
+  stopTierWatch();
   const record = readBuilderRecord();
   const camId = editorCam?.id ?? record?.entityId;
   if (editorCam) {
@@ -940,6 +970,7 @@ game.onState((s) => {
   void checkWorld();
 });
 game.on("PlayerPuppet.OnGameAttached", () => {
+  stopTierWatch();
   if (editorCam || readBuilderRecord()) {
     editorCam = void 0;
     state.camera = void 0;

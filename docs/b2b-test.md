@@ -42,4 +42,13 @@ Built on 2026-10-14. Outside the game: the camera's heading and pitch math passe
 
 ## Results
 
-Not run yet.
+**Passed in game on 2026-10-14** (EDGEbuilder 0.3.0, REDnode overlay host 0.19.0). The editor camera, builder mode, drops where the camera looks, orbit, pan, dolly and frame, Edit off and on, and both Settings switches worked. The world stayed loaded when the camera flew away from V, so the camera roams freely and V need not follow. The viewport stayed exact through every camera switch (0.0 to 0.2 px off the game's own projection in the log).
+
+| Found | Cause | Done |
+|---|---|---|
+| Loading a save with Edit on brought the HUD back | Edit came back on about two seconds after the load, while the save was still settling: the scene tier read 0, EDGEbuilder raised it to 4, and the game then set its own tier 1 as it handed control to V. The log shows `Scene tier 0 -> 4`, then on Edit off `Scene tier 1 -> 0`, so the game had changed it in between | 0.3.1: while builder mode hides the HUD, EDGEbuilder checks the tier every second; when the game has set its own, it remembers that one for Edit off and raises the tier again. A tier of 0 read at the start is remembered as 1 (play) |
+| Holding the right mouse button to look, the cursor still moves across the screen; over the EDGEbuilder window the camera stops | The page only heard mouse moves over its viewport. The cursor itself is the REDnode plugin's, and it keeps moving while a button is held | 0.3.1: moves and releases are heard on the whole page while looking, orbiting, panning or dragging, so crossing the window no longer stops the camera. The cursor still stops at the screen edge: holding it in place needs pointer lock from REDnode, asked in [REDnode #11](https://github.com/Edgemodders/REDnode/issues/11) |
+| The help line at the bottom was sometimes wider than the room left of the window | One line held the selection help and the camera keys | 0.3.1: one line each, wrapping at word breaks to the room left of the EDGEbuilder window; a drag's line puts its keys on a second line |
+| The cursor disappeared from time to time | Not found in these logs: the plugin's own log was not taken. Earlier REDnode tests traced this to interactive mode ending by itself | Next time it happens, send `red4ext/logs/rednode-<date>.log` too. Noted in REDnode #11 |
+
+Retest in 0.3.1: load a save with Edit on (the HUD should stay hidden, and come back with Edit off), and look around with the right mouse button across the EDGEbuilder window.

@@ -382,6 +382,8 @@ const CameraName = "edgebuilder_camera";
 /** The scene tier that hides the HUD: SceneTier4, as the game's scenes use. */
 const HudHiddenTier = 4;
 let editorCam: { id: string; component: GameRef } | undefined;
+/** Keeps the HUD hidden while builder mode is on: the game sets its own scene tier as a save finishes loading (B2b test). */
+let tierWatch: ReturnType<typeof setInterval> | undefined;
 
 interface BuilderRecord {
   entityId?: string;
@@ -429,6 +431,41 @@ async function setSceneTier(value: number): Promise<number | undefined> {
   }
 }
 
+/**
+ * Every second while builder mode hides the HUD: when the game has put its own scene tier back
+ * (it does as a loading save hands control to the player), remember that one for later and raise
+ * the tier again.
+ */
+function watchTier(): void {
+  stopTierWatch();
+  let busy = false;
+  tierWatch = setInterval(() => {
+    if (busy) return;
+    busy = true;
+    void (async () => {
+      try {
+        const { board, id } = await sceneTierBoard();
+        const now = (await board.GetInt(id)) as number;
+        if (now === HudHiddenTier) return;
+        const record = readBuilderRecord() ?? {};
+        record.sceneTier = now;
+        writeBuilderRecord(record);
+        console.log(`The game set scene tier ${now}; hiding the HUD again`);
+        await board.SetInt(id, HudHiddenTier, true);
+      } catch {
+        // No player for a moment, as during a load; try again next second.
+      } finally {
+        busy = false;
+      }
+    })();
+  }, 1000);
+}
+
+function stopTierWatch(): void {
+  if (tierWatch) clearInterval(tierWatch);
+  tierWatch = undefined;
+}
+
 /** V's own first-person camera, switched back on. */
 async function playerCameraBack(): Promise<void> {
   try {
@@ -460,9 +497,11 @@ async function builderStart(pose: { position: [number, number, number]; rotation
     if (settings.hideHud !== false) {
       const before = await setSceneTier(HudHiddenTier);
       if (before !== undefined) {
-        record.sceneTier = before;
+        // Tier 0 is what a save reads while it is still loading; play is tier 1.
+        record.sceneTier = before === HudHiddenTier || before === 0 ? 1 : before;
         writeBuilderRecord(record);
         hudHidden = true;
+        watchTier();
       }
     }
     state.camera = editorCam ? { entityId: editorCam.id, hudHidden } : undefined;
@@ -476,6 +515,7 @@ async function builderStart(pose: { position: [number, number, number]; rotation
 
 /** Back to V's camera and scene tier; also cleans up after a builder mode left on by a stopped EDGEbuilder. */
 async function builderStop(): Promise<void> {
+  stopTierWatch();
   const record = readBuilderRecord();
   const camId = editorCam?.id ?? record?.entityId;
   if (editorCam) {
@@ -681,6 +721,7 @@ game.onState((s) => {
 });
 
 game.on("PlayerPuppet.OnGameAttached", () => {
+  stopTierWatch();
   if (editorCam || readBuilderRecord()) {
     editorCam = undefined;
     state.camera = undefined;

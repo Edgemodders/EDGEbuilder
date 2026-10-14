@@ -113,9 +113,13 @@ export class Viewport {
     private readonly hooks: ViewportHooks,
   ) {
     this.ctx = canvas.getContext("2d")!;
-    canvas.addEventListener("pointermove", (e) => this.onMove(e));
+    // Moves and releases are heard on the whole page: while looking, orbiting or dragging, the
+    // cursor may cross the EDGEbuilder window, and the camera should keep following it (B2b test).
+    window.addEventListener("pointermove", (e) => {
+      if (e.target === canvas || this.rmb || this.mmb || this.drag) this.onMove(e);
+    });
     canvas.addEventListener("pointerdown", (e) => this.onDown(e));
-    canvas.addEventListener("pointerup", (e) => this.onUp(e));
+    window.addEventListener("pointerup", (e) => this.onUp(e));
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     window.addEventListener("keydown", (e) => {
       this.keys.add(e.key.toLowerCase());
@@ -340,10 +344,10 @@ export class Viewport {
         ctx.fill();
       }
     }
-    if (this.drag) this.label(this.dragText(this.drag));
+    if (this.drag) this.label(...this.dragText(this.drag).split("   "));
     else if (this.edit) {
-      const camHelp = this.camEntity ? "  ·  Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
-      this.label((o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.") + camHelp);
+      const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
+      this.label(o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.", camHelp);
     }
   }
 
@@ -370,14 +374,33 @@ export class Viewport {
     this.ctx.stroke();
   }
 
-  private label(text: string): void {
+  /**
+   * The help line at the bottom left. Each part starts a new line, and a part too wide for the
+   * room left of the EDGEbuilder window wraps at word breaks; lines stack upwards.
+   */
+  private label(...parts: string[]): void {
     const ctx = this.ctx;
     ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
-    const w = ctx.measureText(text).width + 24;
+    const max = this.canvas.width - 24 - 448 - 48 - 24;
+    const lines: string[] = [];
+    for (const part of parts.filter(Boolean)) {
+      let line = "";
+      for (const word of part.split(" ")) {
+        const next = line ? `${line} ${word}` : word;
+        if (line && ctx.measureText(next).width > max) {
+          lines.push(line);
+          line = word;
+        } else line = next;
+      }
+      if (line) lines.push(line);
+    }
+    const lineH = 24;
+    const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 24;
+    const top = this.canvas.height - 32 - lines.length * lineH - 8;
     ctx.fillStyle = "rgba(8,9,13,0.85)";
-    ctx.fillRect(24, this.canvas.height - 64, w, 32);
+    ctx.fillRect(24, top, w, lines.length * lineH + 8);
     ctx.fillStyle = "#fcee0a";
-    ctx.fillText(text, 36, this.canvas.height - 42);
+    lines.forEach((l, i) => ctx.fillText(l, 36, top + 22 + i * lineH));
   }
 
   private dragText(d: Drag): string {
