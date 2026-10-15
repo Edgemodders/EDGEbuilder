@@ -1,7 +1,7 @@
 {
   "id": "edgebuilder",
   "name": "EDGEbuilder",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "author": "Edgemodders",
   "description": "A world builder: browse the game's assets, drop them into the live world, move, turn and scale them with a gizmo from a camera of its own, bake them into the world. B2b: the editor camera.",
   "entry": "index.html",

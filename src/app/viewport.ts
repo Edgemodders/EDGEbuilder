@@ -127,6 +127,9 @@ export class Viewport {
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
     window.addEventListener("blur", () => this.keys.clear());
+    document.addEventListener("pointerlockchange", () => {
+      if (!this.locked && (this.rmb || this.mmb)) this.rmb = this.mmb = false;
+    });
     canvas.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
     // A page closing or reloading must not leave V looking through a camera nobody drives.
     window.addEventListener("beforeunload", () => {
@@ -141,6 +144,7 @@ export class Viewport {
     if (!on) {
       this.cancel();
       this.rmb = this.mmb = false;
+      this.unlock();
       if (this.builderAsked) this.hooks.builderStop();
       this.builderAsked = false;
     }
@@ -456,11 +460,35 @@ export class Viewport {
     return undefined;
   }
 
+  /**
+   * While looking, orbiting or panning, the cursor stays where it is, hidden, and the mouse's own
+   * movement turns the view: the web's Pointer Lock, which REDnode 0.22 gives overlay pages (B2b test:
+   * the cursor otherwise crossed the screen and stopped at its edge). Without it, cursor positions.
+   */
+  private lock(): void {
+    try {
+      const r = (this.canvas.requestPointerLock as () => Promise<void> | void)?.call(this.canvas);
+      if (r instanceof Promise) r.catch(() => undefined);
+    } catch {
+      // No pointer lock here: cursor positions still work.
+    }
+  }
+
+  private unlock(): void {
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+  }
+
+  private get locked(): boolean {
+    return document.pointerLockElement === this.canvas;
+  }
+
   private onMove(e: PointerEvent): void {
-    this.mouse = this.pageXY(e);
+    const locked = this.locked;
+    // Locked, the cursor is held still and the movement comes as movementX and movementY.
+    if (!locked) this.mouse = this.pageXY(e);
     if (!this.edit) return;
-    const dx = this.mouse[0] - this.last[0];
-    const dy = this.mouse[1] - this.last[1];
+    const dx = locked ? e.movementX : this.mouse[0] - this.last[0];
+    const dy = locked ? e.movementY : this.mouse[1] - this.last[1];
     this.last = this.mouse;
     if ((this.rmb || this.mmb) && this.camPos && this.look) {
       if (this.rmb) {
@@ -555,6 +583,7 @@ export class Viewport {
       else if (this.camEntity) {
         this.rmb = true;
         this.canvas.setPointerCapture(e.pointerId);
+        this.lock();
       }
       return;
     }
@@ -563,6 +592,7 @@ export class Viewport {
         e.preventDefault();
         this.mmb = true;
         this.canvas.setPointerCapture(e.pointerId);
+        this.lock();
       }
       return;
     }
@@ -583,6 +613,7 @@ export class Viewport {
     if (e.button === 2 || e.button === 1) {
       if (e.button === 2) this.rmb = false;
       else this.mmb = false;
+      if (!this.rmb && !this.mmb) this.unlock();
       try {
         this.canvas.releasePointerCapture(e.pointerId);
       } catch {

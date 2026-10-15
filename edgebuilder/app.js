@@ -152,6 +152,9 @@ var Viewport = class {
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
     window.addEventListener("blur", () => this.keys.clear());
+    document.addEventListener("pointerlockchange", () => {
+      if (!this.locked && (this.rmb || this.mmb)) this.rmb = this.mmb = false;
+    });
     canvas.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
     window.addEventListener("beforeunload", () => {
       if (this.builderAsked) this.hooks.builderStop();
@@ -193,6 +196,7 @@ var Viewport = class {
     if (!on) {
       this.cancel();
       this.rmb = this.mmb = false;
+      this.unlock();
       if (this.builderAsked) this.hooks.builderStop();
       this.builderAsked = false;
     }
@@ -482,11 +486,30 @@ var Viewport = class {
     }
     return void 0;
   }
+  /**
+   * While looking, orbiting or panning, the cursor stays where it is, hidden, and the mouse's own
+   * movement turns the view: the web's Pointer Lock, which REDnode 0.22 gives overlay pages (B2b test:
+   * the cursor otherwise crossed the screen and stopped at its edge). Without it, cursor positions.
+   */
+  lock() {
+    try {
+      const r = this.canvas.requestPointerLock?.call(this.canvas);
+      if (r instanceof Promise) r.catch(() => void 0);
+    } catch {
+    }
+  }
+  unlock() {
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+  }
+  get locked() {
+    return document.pointerLockElement === this.canvas;
+  }
   onMove(e) {
-    this.mouse = this.pageXY(e);
+    const locked = this.locked;
+    if (!locked) this.mouse = this.pageXY(e);
     if (!this.edit) return;
-    const dx = this.mouse[0] - this.last[0];
-    const dy = this.mouse[1] - this.last[1];
+    const dx = locked ? e.movementX : this.mouse[0] - this.last[0];
+    const dy = locked ? e.movementY : this.mouse[1] - this.last[1];
     this.last = this.mouse;
     if ((this.rmb || this.mmb) && this.camPos && this.look) {
       if (this.rmb) {
@@ -575,6 +598,7 @@ var Viewport = class {
       else if (this.camEntity) {
         this.rmb = true;
         this.canvas.setPointerCapture(e.pointerId);
+        this.lock();
       }
       return;
     }
@@ -583,6 +607,7 @@ var Viewport = class {
         e.preventDefault();
         this.mmb = true;
         this.canvas.setPointerCapture(e.pointerId);
+        this.lock();
       }
       return;
     }
@@ -602,6 +627,7 @@ var Viewport = class {
     if (e.button === 2 || e.button === 1) {
       if (e.button === 2) this.rmb = false;
       else this.mmb = false;
+      if (!this.rmb && !this.mmb) this.unlock();
       try {
         this.canvas.releasePointerCapture(e.pointerId);
       } catch {

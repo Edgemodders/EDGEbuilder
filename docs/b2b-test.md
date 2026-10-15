@@ -51,4 +51,9 @@ Built on 2026-10-14. Outside the game: the camera's heading and pitch math passe
 | The help line at the bottom was sometimes wider than the room left of the window | One line held the selection help and the camera keys | 0.3.1: one line each, wrapping at word breaks to the room left of the EDGEbuilder window; a drag's line puts its keys on a second line |
 | The cursor disappeared from time to time | Not found in these logs: the plugin's own log was not taken. Earlier REDnode tests traced this to interactive mode ending by itself | Next time it happens, send `red4ext/logs/rednode-<date>.log` too. Noted in REDnode #11 |
 
-Retest in 0.3.1: load a save with Edit on (the HUD should stay hidden, and come back with Edit off), and look around with the right mouse button across the EDGEbuilder window.
+**Retest in 0.3.2** (with REDnode 0.22.0 or later for the cursor lock):
+
+1. Load a save with Edit on. The HUD should stay hidden, and come back with Edit off. The log says `The game set scene tier 1; hiding the HUD again` once after the load.
+2. Hold the right mouse button and look around in big sweeps. The cursor should vanish and stay put, and the view should keep turning however far you move the mouse, including across the EDGEbuilder window. Release: the cursor is back where it was. Same for the middle mouse (orbit) and Shift with it (pan).
+3. Press Esc while holding the right button: the lock ends and looking stops, without leaving Edit.
+4. With REDnode older than 0.22, looking still works as in 0.3.1 (the cursor moves and stops at the screen edge).
