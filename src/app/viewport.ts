@@ -27,6 +27,7 @@ import {
   type GameMatrix,
   type Look,
   type Q,
+  type Ray,
   type V3,
   lookAxes,
   lookOf,
@@ -107,6 +108,8 @@ export class Viewport {
   private keys = new Set<string>();
   private speed = 6;
   private lastTick = 0;
+  /** Drop at click: what to do with the line through the next left click. */
+  private placing: ((ray: Ray) => void) | undefined;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -143,6 +146,7 @@ export class Viewport {
     this.canvas.classList.toggle("edit", on);
     if (!on) {
       this.cancel();
+      this.disarm();
       this.rmb = this.mmb = false;
       this.unlock();
       if (this.builderAsked) this.hooks.builderStop();
@@ -163,6 +167,19 @@ export class Viewport {
       // Builder mode ended without Edit going off (a save loaded, or the camera failed): ask again on the next frame.
       if (this.edit && this.builderAsked) this.builderAsked = false;
     }
+  }
+
+  /** Drop at click: the next left click in the world gives the line from the camera through it. */
+  armDrop(then: (ray: Ray) => void): void {
+    this.cancel();
+    this.placing = then;
+    this.canvas.style.cursor = "crosshair";
+    this.kick();
+  }
+
+  private disarm(): void {
+    this.placing = undefined;
+    this.canvas.style.cursor = "";
   }
 
   setScene(objects: SceneObject[], selected: string | undefined): void {
@@ -351,7 +368,8 @@ export class Viewport {
     if (this.drag) this.label(...this.dragText(this.drag).split("   "));
     else if (this.edit) {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
-      this.label(o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.", camHelp);
+      const help = this.placing ? "Click where it should go.  Esc: cancel." : o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.";
+      this.label(help, camHelp);
     }
   }
 
@@ -379,13 +397,16 @@ export class Viewport {
   }
 
   /**
-   * The help line at the bottom left. Each part starts a new line, and a part too wide for the
-   * room left of the EDGEbuilder window wraps at word breaks; lines stack upwards.
+   * The help lines, at the bottom centre of the screen (REDnode's launcher sits at the bottom left).
+   * Each part starts a new line, and a part too wide to stay clear of the EDGEbuilder window wraps
+   * at word breaks; lines stack upwards.
    */
   private label(...parts: string[]): void {
     const ctx = this.ctx;
     ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
-    const max = this.canvas.width - 24 - 448 - 48 - 24;
+    const centre = this.canvas.width / 2;
+    const windowLeft = this.canvas.width - 24 - 448;
+    const max = 2 * (windowLeft - 24 - centre) - 24;
     const lines: string[] = [];
     for (const part of parts.filter(Boolean)) {
       let line = "";
@@ -401,10 +422,11 @@ export class Viewport {
     const lineH = 24;
     const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 24;
     const top = this.canvas.height - 32 - lines.length * lineH - 8;
+    const left = centre - w / 2;
     ctx.fillStyle = "rgba(8,9,13,0.85)";
-    ctx.fillRect(24, top, w, lines.length * lineH + 8);
+    ctx.fillRect(left, top, w, lines.length * lineH + 8);
     ctx.fillStyle = "#fcee0a";
-    lines.forEach((l, i) => ctx.fillText(l, 36, top + 22 + i * lineH));
+    lines.forEach((l, i) => ctx.fillText(l, left + 12, top + 22 + i * lineH));
   }
 
   private dragText(d: Drag): string {
@@ -597,6 +619,11 @@ export class Viewport {
       return;
     }
     if (e.button !== 0) return;
+    if (this.placing) {
+      const then = this.placing;
+      this.disarm();
+      return then(rayFrom(this.cam, this.mouse[0], this.mouse[1]));
+    }
     if (this.drag?.modal) return this.confirm();
     const h = this.handleAt(this.mouse);
     const o = this.current();
@@ -790,6 +817,10 @@ export class Viewport {
     if (el && (el.tagName === "INPUT" || el.tagName === "RN-INPUT" || el.isContentEditable)) return;
     const key = e.key.toLowerCase();
     if (this.rmb && "wasdqe".includes(key)) return; // flying
+    if (key === "escape" && this.placing) {
+      this.disarm();
+      return this.hooks.status("Drop at click cancelled.");
+    }
     if (key === "f" && !this.drag) return this.frameSelected();
     const d = this.drag;
     if (d) {

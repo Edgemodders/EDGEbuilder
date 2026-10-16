@@ -61,13 +61,16 @@ export interface Snapshot {
   /** The last thing worth telling the player. */
   message?: { text: string; tone: "info" | "ok" | "warn" | "error" };
   settings: { bridgePath?: string; gameDir?: string; hideHud?: boolean; editorCamera?: boolean; settingsFile: string };
+  /** What is in use when a setting is left empty: the REDbridge found or shared, and the game folder found. */
+  inUse: { bridge?: string; gameDir?: string };
 }
 
 export type PageMessage =
   | { type: "hello" }
   | { type: "search"; text: string; kind: AssetKind | "all" }
   | { type: "look"; path: string }
-  | { type: "drop"; path: string; appearance?: string }
+  /** `at`: a line from the camera through where the player clicked (Drop at click); else where the camera looks. */
+  | { type: "drop"; path: string; appearance?: string; at?: { origin: [number, number, number]; dir: [number, number, number] } }
   | { type: "select"; id?: string }
   | { type: "delete"; id: string }
   | { type: "rebuild" }

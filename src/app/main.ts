@@ -42,7 +42,7 @@ function render(s: Snapshot): void {
   list.innerHTML = s.results
     .map((r) => `<rn-item value="${esc(r.path)}" title="${esc(r.path)}"${r.path === keep ? " selected" : ""}>${esc(shortName(r.path))}<span slot="end">${r.path.toLowerCase().startsWith("ep1\\") ? "PL " : ""}${r.kind}</span></rn-item>`)
     .join("");
-  $("count").textContent = s.index.status === "ready" ? (s.query.text ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} of ${s.index.count.toLocaleString()}` : `Type to search ${s.index.count.toLocaleString()} assets`) : "";
+  $("count").textContent = s.index.status === "ready" ? (s.query.text ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} of ${s.index.count.toLocaleString()}` : `${s.index.count.toLocaleString()} assets: type a name to search`) : "";
   const looked = s.looked;
   if (looked && looked.path === lookedAt) {
     const info = looked.info;
@@ -60,11 +60,13 @@ function render(s: Snapshot): void {
       appList.hidden = true;
     }
     $("drop").removeAttribute("disabled");
+    $("dropClick").removeAttribute("disabled");
   } else if (!lookedAt) {
     $("lookedPath").textContent = "Pick an asset";
     $("lookedSize").textContent = "";
     $("appearances").hidden = true;
     $("drop").setAttribute("disabled", "");
+    $("dropClick").setAttribute("disabled", "");
   }
 
   // Scene.
@@ -86,6 +88,9 @@ function render(s: Snapshot): void {
   // Settings.
   if (document.activeElement?.id !== "bridgePath") ($("bridgePath") as HTMLInputElement & { value: string }).value = s.settings.bridgePath ?? "";
   if (document.activeElement?.id !== "gameDir") ($("gameDir") as HTMLInputElement & { value: string }).value = s.settings.gameDir ?? "";
+  // Empty means found automatically: the field shows what was found.
+  $("bridgePath").setAttribute("placeholder", s.inUse.bridge ? `Automatic: ${s.inUse.bridge}` : "Empty: the copy REDdeck fetched");
+  $("gameDir").setAttribute("placeholder", s.inUse.gameDir ? `Automatic: ${s.inUse.gameDir}` : "Empty: found from where REDnode runs");
   ($("editorCamera") as HTMLElement & { checked: boolean }).checked = s.settings.editorCamera !== false;
   ($("hideHud") as HTMLElement & { checked: boolean }).checked = s.settings.hideHud !== false;
   $("settingsFile").textContent = s.settings.settingsFile;
@@ -135,6 +140,28 @@ function search(): void {
 }
 
 $("search").addEventListener("input", search);
+
+// Typing on the Assets tab searches, wherever the focus is in the window. A key pressed after a
+// click in the world is the viewport's (G, R, S and the camera keys).
+let lastDownInWorld = false;
+window.addEventListener("pointerdown", (e) => (lastDownInWorld = e.target === $("view")), true);
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) return;
+    const tag = document.activeElement?.tagName;
+    if (tag === "INPUT" || tag === "RN-INPUT") return;
+    if (lastDownInWorld && ($("edit") as HTMLElement & { checked: boolean }).checked) return;
+    if (!document.querySelector("#mainTabs > rn-tab")?.hasAttribute("active")) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const box = $("search") as HTMLElement & { value: string; focus(): void };
+    box.focus();
+    box.value = (box.value ?? "") + e.key;
+    search();
+  },
+  true,
+);
 $("kinds").addEventListener("change", (e) => {
   kind = (["all", "mesh", "entity"] as const)[(e as CustomEvent<{ index: number }>).detail.index] ?? "all";
   search();
@@ -150,6 +177,20 @@ $("appearances").addEventListener("select", (e) => {
 });
 $("drop").addEventListener("click", () => {
   if (lookedAt) post({ type: "drop", path: lookedAt, appearance });
+});
+// Drop at click: Edit goes on if it is off, and the next click in the world says where.
+$("dropClick").addEventListener("click", () => {
+  const path = lookedAt;
+  const looks = appearance;
+  if (!path) return;
+  const edit = $("edit") as HTMLElement & { checked: boolean };
+  if (!edit.checked) {
+    edit.checked = true;
+    viewport.setEdit(true);
+  }
+  viewport.armDrop((ray) => post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } }));
+  $("message").textContent = `Click where ${shortName(path)} should go; Esc cancels.`;
+  $("message").className = "message";
 });
 $("objects").addEventListener("select", (e) => post({ type: "select", id: (e as CustomEvent<{ value: string }>).detail.value }));
 $("delete").addEventListener("click", () => state?.selected && post({ type: "delete", id: state.selected }));

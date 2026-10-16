@@ -190,11 +190,14 @@ var Viewport = class {
   keys = /* @__PURE__ */ new Set();
   speed = 6;
   lastTick = 0;
+  /** Drop at click: what to do with the line through the next left click. */
+  placing;
   setEdit(on) {
     this.edit = on;
     this.canvas.classList.toggle("edit", on);
     if (!on) {
       this.cancel();
+      this.disarm();
       this.rmb = this.mmb = false;
       this.unlock();
       if (this.builderAsked) this.hooks.builderStop();
@@ -213,6 +216,17 @@ var Viewport = class {
       this.look = void 0;
       if (this.edit && this.builderAsked) this.builderAsked = false;
     }
+  }
+  /** Drop at click: the next left click in the world gives the line from the camera through it. */
+  armDrop(then) {
+    this.cancel();
+    this.placing = then;
+    this.canvas.style.cursor = "crosshair";
+    this.kick();
+  }
+  disarm() {
+    this.placing = void 0;
+    this.canvas.style.cursor = "";
   }
   setScene(objects, selected) {
     this.objects = objects;
@@ -385,7 +399,8 @@ var Viewport = class {
     if (this.drag) this.label(...this.dragText(this.drag).split("   "));
     else if (this.edit) {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
-      this.label(o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.", camHelp);
+      const help = this.placing ? "Click where it should go.  Esc: cancel." : o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.";
+      this.label(help, camHelp);
     }
   }
   drawBox(o) {
@@ -411,13 +426,16 @@ var Viewport = class {
     this.ctx.stroke();
   }
   /**
-   * The help line at the bottom left. Each part starts a new line, and a part too wide for the
-   * room left of the EDGEbuilder window wraps at word breaks; lines stack upwards.
+   * The help lines, at the bottom centre of the screen (REDnode's launcher sits at the bottom left).
+   * Each part starts a new line, and a part too wide to stay clear of the EDGEbuilder window wraps
+   * at word breaks; lines stack upwards.
    */
   label(...parts) {
     const ctx = this.ctx;
     ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
-    const max = this.canvas.width - 24 - 448 - 48 - 24;
+    const centre = this.canvas.width / 2;
+    const windowLeft = this.canvas.width - 24 - 448;
+    const max = 2 * (windowLeft - 24 - centre) - 24;
     const lines = [];
     for (const part of parts.filter(Boolean)) {
       let line = "";
@@ -433,10 +451,11 @@ var Viewport = class {
     const lineH = 24;
     const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 24;
     const top = this.canvas.height - 32 - lines.length * lineH - 8;
+    const left = centre - w / 2;
     ctx.fillStyle = "rgba(8,9,13,0.85)";
-    ctx.fillRect(24, top, w, lines.length * lineH + 8);
+    ctx.fillRect(left, top, w, lines.length * lineH + 8);
     ctx.fillStyle = "#fcee0a";
-    lines.forEach((l, i) => ctx.fillText(l, 36, top + 22 + i * lineH));
+    lines.forEach((l, i) => ctx.fillText(l, left + 12, top + 22 + i * lineH));
   }
   dragText(d) {
     const t = d.now;
@@ -612,6 +631,11 @@ var Viewport = class {
       return;
     }
     if (e.button !== 0) return;
+    if (this.placing) {
+      const then = this.placing;
+      this.disarm();
+      return then(rayFrom(this.cam, this.mouse[0], this.mouse[1]));
+    }
     if (this.drag?.modal) return this.confirm();
     const h = this.handleAt(this.mouse);
     const o = this.current();
@@ -789,6 +813,10 @@ var Viewport = class {
     if (el && (el.tagName === "INPUT" || el.tagName === "RN-INPUT" || el.isContentEditable)) return;
     const key = e.key.toLowerCase();
     if (this.rmb && "wasdqe".includes(key)) return;
+    if (key === "escape" && this.placing) {
+      this.disarm();
+      return this.hooks.status("Drop at click cancelled.");
+    }
     if (key === "f" && !this.drag) return this.frameSelected();
     const d = this.drag;
     if (d) {
@@ -854,7 +882,7 @@ function render(s) {
   const list = $("results");
   const keep = lookedAt;
   list.innerHTML = s.results.map((r) => `<rn-item value="${esc(r.path)}" title="${esc(r.path)}"${r.path === keep ? " selected" : ""}>${esc(shortName(r.path))}<span slot="end">${r.path.toLowerCase().startsWith("ep1\\") ? "PL " : ""}${r.kind}</span></rn-item>`).join("");
-  $("count").textContent = s.index.status === "ready" ? s.query.text ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} of ${s.index.count.toLocaleString()}` : `Type to search ${s.index.count.toLocaleString()} assets` : "";
+  $("count").textContent = s.index.status === "ready" ? s.query.text ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} of ${s.index.count.toLocaleString()}` : `${s.index.count.toLocaleString()} assets: type a name to search` : "";
   const looked = s.looked;
   if (looked && looked.path === lookedAt) {
     const info = looked.info;
@@ -872,11 +900,13 @@ function render(s) {
       appList.hidden = true;
     }
     $("drop").removeAttribute("disabled");
+    $("dropClick").removeAttribute("disabled");
   } else if (!lookedAt) {
     $("lookedPath").textContent = "Pick an asset";
     $("lookedSize").textContent = "";
     $("appearances").hidden = true;
     $("drop").setAttribute("disabled", "");
+    $("dropClick").setAttribute("disabled", "");
   }
   const objects = $("objects");
   objects.innerHTML = s.scene.objects.map((o) => `<rn-item value="${esc(o.id)}"${o.id === s.selected ? " selected" : ""}>${esc(o.id)}<span slot="end">${o.entityId ? o.kind : "not in world"}</span></rn-item>`).join("");
@@ -892,6 +922,8 @@ function render(s) {
   $("rebuild").toggleAttribute("disabled", !missing);
   if (document.activeElement?.id !== "bridgePath") $("bridgePath").value = s.settings.bridgePath ?? "";
   if (document.activeElement?.id !== "gameDir") $("gameDir").value = s.settings.gameDir ?? "";
+  $("bridgePath").setAttribute("placeholder", s.inUse.bridge ? `Automatic: ${s.inUse.bridge}` : "Empty: the copy REDdeck fetched");
+  $("gameDir").setAttribute("placeholder", s.inUse.gameDir ? `Automatic: ${s.inUse.gameDir}` : "Empty: found from where REDnode runs");
   $("editorCamera").checked = s.settings.editorCamera !== false;
   $("hideHud").checked = s.settings.hideHud !== false;
   $("settingsFile").textContent = s.settings.settingsFile;
@@ -936,6 +968,25 @@ function search() {
   searchTimer = setTimeout(() => post({ type: "search", text: $("search").value ?? "", kind }), 120);
 }
 $("search").addEventListener("input", search);
+var lastDownInWorld = false;
+window.addEventListener("pointerdown", (e) => lastDownInWorld = e.target === $("view"), true);
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) return;
+    const tag = document.activeElement?.tagName;
+    if (tag === "INPUT" || tag === "RN-INPUT") return;
+    if (lastDownInWorld && $("edit").checked) return;
+    if (!document.querySelector("#mainTabs > rn-tab")?.hasAttribute("active")) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const box = $("search");
+    box.focus();
+    box.value = (box.value ?? "") + e.key;
+    search();
+  },
+  true
+);
 $("kinds").addEventListener("change", (e) => {
   kind = ["all", "mesh", "entity"][e.detail.index] ?? "all";
   search();
@@ -951,6 +1002,19 @@ $("appearances").addEventListener("select", (e) => {
 });
 $("drop").addEventListener("click", () => {
   if (lookedAt) post({ type: "drop", path: lookedAt, appearance });
+});
+$("dropClick").addEventListener("click", () => {
+  const path = lookedAt;
+  const looks = appearance;
+  if (!path) return;
+  const edit = $("edit");
+  if (!edit.checked) {
+    edit.checked = true;
+    viewport.setEdit(true);
+  }
+  viewport.armDrop((ray) => post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } }));
+  $("message").textContent = `Click where ${shortName(path)} should go; Esc cancels.`;
+  $("message").className = "message";
 });
 $("objects").addEventListener("select", (e) => post({ type: "select", id: e.detail.value }));
 $("delete").addEventListener("click", () => state?.selected && post({ type: "delete", id: state.selected }));

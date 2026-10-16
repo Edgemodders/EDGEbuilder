@@ -1,8 +1,11 @@
 // Bundles the two halves of the package into edgebuilder/: the Node mod (mod.mjs) and the
 // editor page's script (app.js). `rednode` stays external: the REDnode host provides it to both.
 import * as esbuild from "esbuild";
+import * as fs from "node:fs";
 
 const watch = process.argv.includes("--watch");
+// The version players see in the log comes from the package manifest.
+const version = JSON.parse(fs.readFileSync("edgebuilder/rednode-app.json", "utf8")).version;
 
 const mod = {
   entryPoints: ["src/mod.ts"],
@@ -12,6 +15,7 @@ const mod = {
   format: "esm",
   target: "node20",
   external: ["rednode"],
+  define: { __VERSION__: JSON.stringify(version) },
   legalComments: "none",
   banner: { js: "// Built from src/ by build.mjs; edit the TypeScript, not this file." },
 };

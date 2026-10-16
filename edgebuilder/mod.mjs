@@ -378,9 +378,31 @@ var norm = (a) => {
   const l = len(a);
   return l > 1e-9 ? mul(a, 1 / l) : [0, 0, 0];
 };
+function qMul(a, b) {
+  const [ax, ay, az, aw] = a;
+  const [bx, by, bz, bw] = b;
+  return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx, aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz];
+}
+function qNorm(q) {
+  const l = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+  return [q[0] / l, q[1] / l, q[2] / l, q[3] / l];
+}
+function qAxisAngle(axis, degrees) {
+  const n = norm(axis);
+  const h = degrees * Math.PI / 360;
+  const s = Math.sin(h);
+  return [n[0] * s, n[1] * s, n[2] * s, Math.cos(h)];
+}
 var v = (r) => [r.X, r.Y, r.Z];
 function basisFromMatrix(m) {
   return { pos: v(m.W), right: norm(v(m.X)), fwd: norm(v(m.Y)), up: norm(v(m.Z)) };
+}
+function qLook(l) {
+  return qNorm(qMul(qAxisAngle([0, 0, 1], l.yaw), qAxisAngle([1, 0, 0], l.pitch)));
+}
+function lookOf(fwd) {
+  const f = norm(fwd);
+  return { yaw: Math.atan2(-f[0], f[1]) * 180 / Math.PI, pitch: Math.asin(Math.max(-1, Math.min(1, f[2]))) * 180 / Math.PI };
 }
 
 // src/mod.ts
@@ -407,11 +429,13 @@ var state = {
   results: [],
   query: { text: "", kind: "all" },
   scene: { name: scene.name, objects: scene.objects, file: scene.file },
-  settings: { ...settings, settingsFile }
+  settings: { ...settings, settingsFile },
+  inUse: {}
 };
 function publish() {
   state.scene = { name: scene.name, objects: scene.objects, file: scene.file };
   state.settings = { ...settings, settingsFile };
+  state.inUse.gameDir = gameDir();
   channel.post({ type: "state", state });
 }
 function say(text, tone = "info") {
@@ -441,6 +465,7 @@ async function startBridge() {
     return;
   }
   const dir = gameDir();
+  state.inUse.bridge = exe;
   state.bridge = { status: "starting", path: exe, detail: dir ? void 0 : "The game folder was not found; set gameDir in the settings" };
   publish();
   const b = new BridgeClient(exe, dir);
@@ -467,6 +492,7 @@ async function startKernelBridge(get) {
   publish();
   try {
     const handle = await get();
+    state.inUse.bridge = `Shared by REDnode${handle.source ? `: the copy from ${handle.source}` : ""}${handle.version ? `, ${handle.version}` : ""}`;
     const b = new KernelBridge(handle);
     bridge = b;
     const info = await b.info();
@@ -559,7 +585,12 @@ async function inFrontOfPlayer() {
   const yaw = Math.atan2(f.X, -f.Y) * 180 / Math.PI;
   return { position: [p.X + f.X * SpawnDistance, p.Y + f.Y * SpawnDistance, p.Z], yaw };
 }
-async function dropPlace() {
+async function dropPlace(at) {
+  if (at) {
+    const { hit } = await raycast(at.origin, add(at.origin, mul(at.dir, 200)));
+    if (!hit) console.log("Drop at click: nothing there within 200 m; dropping 8 m along the line");
+    return { position: hit ?? add(at.origin, mul(at.dir, 8)), yaw: Math.atan2(at.dir[0], -at.dir[1]) * 180 / Math.PI };
+  }
   if (editorCam) {
     try {
       const b = basisFromMatrix(await editorCam.component.GetLocalToWorld());
@@ -750,42 +781,33 @@ async function playerCameraBack() {
     console.log(`V's camera: ${err.message}`);
   }
 }
-async function builderStart(pose) {
-  if (editorCam) return;
-  if (state.world !== "ready") return say(worldBlocker(), "warn");
-  const record = {};
-  let hudHidden = false;
-  try {
-    if (settings.editorCamera !== false) {
-      const component = await api.$new("gameCameraComponent", { name: CameraName });
-      const { id, entity } = await world.spawn({ template: EmptyEntity, position: toPoint(pose.position), orientation: toQuat(pose.rotation), components: [component], tags: ["edgebuilder", CameraName] });
-      record.entityId = id.hash;
-      writeBuilderRecord(record);
-      const attached = entity ? await entity.FindComponentByName(CameraName) : null;
-      const cam = attached ?? component;
-      if (pose.fov > 1) await cam.SetFOV(pose.fov);
-      await cam.Activate(0, false);
-      editorCam = { id: id.hash, component: cam };
-    }
-    if (settings.hideHud !== false) {
-      const before = await setSceneTier(HudHiddenTier);
-      if (before !== void 0) {
-        record.sceneTier = before === HudHiddenTier || before === 0 ? 1 : before;
-        writeBuilderRecord(record);
-        hudHidden = true;
-        watchTier();
-      }
-    }
-    state.camera = editorCam ? { entityId: editorCam.id, hudHidden } : void 0;
-    console.log(`Builder mode on: ${editorCam ? `editor camera ${editorCam.id}` : "V's camera"}${hudHidden ? ", HUD hidden" : ""}`);
-    publish();
-  } catch (err) {
-    say(`The editor camera could not start (${err.message}); editing with V's camera.`, "warn");
-    await builderStop();
-  }
+var builderOn = false;
+var builderQueue = Promise.resolve();
+function queued(op) {
+  builderQueue = builderQueue.then(op, op);
+  return builderQueue;
 }
-async function builderStop() {
-  stopTierWatch();
+async function playerPose() {
+  const player = await api.GetPlayer(game.instance);
+  const fpp = player ? await player.GetFPPCameraComponent() : null;
+  if (!fpp) throw new Error("V's camera is not available");
+  const b = basisFromMatrix(await fpp.GetLocalToWorld());
+  const camSys = await api.GameInstance.GetCameraSystem(game.instance);
+  const fov = camSys ? await camSys.GetActiveCameraFOV() : 0;
+  return { position: b.pos, rotation: qLook(lookOf(b.fwd)), fov };
+}
+async function cameraOn(pose) {
+  if (editorCam) return;
+  const component = await api.$new("gameCameraComponent", { name: CameraName });
+  const { id, entity } = await world.spawn({ template: EmptyEntity, position: toPoint(pose.position), orientation: toQuat(pose.rotation), components: [component], tags: ["edgebuilder", CameraName] });
+  writeBuilderRecord({ ...readBuilderRecord(), entityId: id.hash });
+  const attached = entity ? await entity.FindComponentByName(CameraName) : null;
+  const cam = attached ?? component;
+  if (pose.fov > 1) await cam.SetFOV(pose.fov);
+  await cam.Activate(0, false);
+  editorCam = { id: id.hash, component: cam };
+}
+async function cameraOff() {
   const record = readBuilderRecord();
   const camId = editorCam?.id ?? record?.entityId;
   if (editorCam) {
@@ -801,29 +823,99 @@ async function builderStop() {
     }
   }
   if (camId || editorCam) await playerCameraBack();
-  if (record?.sceneTier !== void 0) await setSceneTier(record.sceneTier);
   editorCam = void 0;
+  if (record?.entityId) {
+    delete record.entityId;
+    writeBuilderRecord(record);
+  }
+}
+async function hudOff() {
+  if (tierWatch) return true;
+  const before = await setSceneTier(HudHiddenTier);
+  if (before === void 0) return false;
+  writeBuilderRecord({ ...readBuilderRecord(), sceneTier: before === HudHiddenTier || before === 0 ? 1 : before });
+  watchTier();
+  return true;
+}
+async function hudOn() {
+  stopTierWatch();
+  const record = readBuilderRecord();
+  if (record?.sceneTier === void 0) return;
+  await setSceneTier(record.sceneTier);
+  delete record.sceneTier;
+  writeBuilderRecord(record);
+}
+function publishCamera() {
+  state.camera = editorCam ? { entityId: editorCam.id, hudHidden: !!tierWatch } : void 0;
+  publish();
+}
+function switchesNote() {
+  const off = [settings.editorCamera === false ? "EDGEbuilder's own camera" : "", settings.hideHud === false ? "hiding the game's HUD" : ""].filter(Boolean);
+  if (!off.length) return void 0;
+  return `${settings.editorCamera === false ? "Editing from V's camera" : "Editing"}: ${off.join(" and ")} ${off.length === 1 ? "is" : "are"} off in Settings.`;
+}
+async function builderStart(pose) {
+  if (builderOn) return;
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  builderOn = true;
+  try {
+    if (settings.editorCamera !== false) await cameraOn(pose);
+  } catch (err) {
+    say(`The editor camera could not start (${err.message}); editing with V's camera.`, "warn");
+    await cameraOff();
+  }
+  const hidden = settings.hideHud !== false && await hudOff();
+  console.log(`Builder mode on: ${editorCam ? `editor camera ${editorCam.id}` : "V's camera"}${hidden ? ", HUD hidden" : ""}`);
+  const note = switchesNote();
+  if (note) say(note, "info");
+  publishCamera();
+}
+async function builderSwitches() {
+  if (!builderOn) return;
+  try {
+    if (settings.editorCamera === false && editorCam) {
+      await cameraOff();
+      console.log("Editor camera off from Settings");
+    } else if (settings.editorCamera !== false && !editorCam) {
+      await cameraOn(await playerPose());
+      console.log(`Editor camera ${editorCam.id} on from Settings`);
+    }
+  } catch (err) {
+    say(`The editor camera could not start (${err.message}); editing with V's camera.`, "warn");
+    await cameraOff();
+  }
+  if (settings.hideHud === false && tierWatch) await hudOn();
+  else if (settings.hideHud !== false && !tierWatch) await hudOff();
+  publishCamera();
+}
+async function builderStop() {
+  const record = readBuilderRecord();
+  const wasOn = builderOn || !!record;
+  builderOn = false;
+  await cameraOff();
+  await hudOn();
+  stopTierWatch();
   state.camera = void 0;
   try {
     fs4.rmSync(builderFile, { force: true });
   } catch {
   }
-  if (record || camId) console.log("Builder mode off");
+  if (wasOn) console.log("Builder mode off");
   publish();
 }
 function runSearch() {
   state.results = index.entries.length ? index.search(state.query.text, state.query.kind, ResultLimit) : [];
   publish();
 }
-async function drop(assetPath, appearance) {
+async function drop(assetPath, appearance, at) {
   const kind = kindOf(assetPath);
   if (!kind) return say(`${assetPath} is not a mesh or an entity template.`, "warn");
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
   let added;
   try {
-    const at = await dropPlace();
-    const o = scene.add(kind, assetPath, { position: at.position, rotation: yawToQuaternion(at.yaw), scale: [1, 1, 1] }, appearance);
+    const place = await dropPlace(at);
+    const o = scene.add(kind, assetPath, { position: place.position, rotation: yawToQuaternion(place.yaw), scale: [1, 1, 1] }, appearance);
     added = o;
     if (bridge?.running) {
       try {
@@ -911,7 +1003,7 @@ channel.on((m) => {
         }
         break;
       case "drop":
-        await drop(m.path, m.appearance);
+        await drop(m.path, m.appearance, m.at);
         break;
       case "select":
         await select(m.id);
@@ -932,10 +1024,10 @@ channel.on((m) => {
         await startBridge();
         break;
       case "builder.start":
-        await builderStart(m.pose);
+        await queued(() => builderStart(m.pose));
         break;
       case "builder.stop":
-        await builderStop();
+        await queued(() => builderStop());
         break;
       case "transform":
         await setTransform(m.id, m.transform);
@@ -953,6 +1045,7 @@ channel.on((m) => {
           for (const k of ["bridgePath", "gameDir", "hideHud", "editorCamera"]) if (k in m) next[k] = m[k];
           saveSettings(next);
           say(bridgeChanged ? "Settings saved; restarting REDbridge." : "Settings saved.", "info");
+          if ("hideHud" in m || "editorCamera" in m) await queued(() => builderSwitches());
           if (bridgeChanged) await startBridge();
         }
         break;
@@ -971,6 +1064,7 @@ game.onState((s) => {
 });
 game.on("PlayerPuppet.OnGameAttached", () => {
   stopTierWatch();
+  builderOn = false;
   if (editorCam || readBuilderRecord()) {
     editorCam = void 0;
     state.camera = void 0;
@@ -993,7 +1087,7 @@ world.on("Entity/Detach", (e) => {
     publish();
   }
 });
-console.log(`EDGEbuilder starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+console.log(`EDGEbuilder ${"0.3.3"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
 if (scene.loadError) {
   state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path4.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);
