@@ -15,7 +15,7 @@ EDGEbuilder is a world builder for Cyberpunk 2077 that runs inside the game on R
 
 ## Roadmap status
 
-As of B2b passed in game (2026-10-14); 0.3.1 fixes what the test found. Next: B3, its plan to be agreed first. The scene format is pinned and REDbridge can already bake one.
+As of B2b passed in game (2026-10-14; the 0.3.2 retest on 2026-10-16); 0.3.3 adds Drop at click and fixes what the retest found. Next: B3, its plan to be agreed first. The scene format is pinned and REDbridge can already bake one.
 
 | Phase | Status |
 |---|---|

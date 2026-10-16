@@ -57,3 +57,22 @@ Built on 2026-10-14. Outside the game: the camera's heading and pitch math passe
 2. Hold the right mouse button and look around in big sweeps. The cursor should vanish and stay put, and the view should keep turning however far you move the mouse, including across the EDGEbuilder window. Release: the cursor is back where it was. Same for the middle mouse (orbit) and Shift with it (pan).
 3. Press Esc while holding the right button: the lock ends and looking stops, without leaving Edit.
 4. With REDnode older than 0.22, looking still works as in 0.3.1 (the cursor moves and stops at the screen edge).
+
+**The 0.3.2 retest passed in game on 2026-10-16** (EDGEbuilder 0.3.2, REDnode 0.24.0): the HUD stays hidden after a save loads, the cursor stays put while looking, orbiting and panning, and Esc ends the lock without leaving Edit.
+
+| Found | Cause | Done |
+|---|---|---|
+| The first try showed the HUD and right mouse did nothing | Both Settings switches were still off from step 8 of the first test; the log said `Builder mode on: V's camera` | 0.3.3 says so on screen when Edit goes on with a switch off, and the log's start line names the version |
+| Switching **Hide the game's HUD** on while Edit was on did nothing | The switches were read only as Edit went on | 0.3.3: both switches apply at once while Edit is on |
+| The help line sat under REDnode's launcher at the bottom left | The launcher's default place | 0.3.3: the help lines are at the bottom centre |
+| "Type to search" did not search when typing | It meant the search box | 0.3.3: typing on the Assets tab goes to the search box |
+| Settings showed empty REDbridge and game folder fields | Empty means automatic, but what was found was not shown | 0.3.3: an empty field shows `Automatic: ...` with what is in use |
+| Asked for: drop where the next click lands | | 0.3.3: **Drop at click** |
+
+## 0.3.3 check
+
+1. Settings: the REDbridge and game folder fields read `Automatic: ...`.
+2. With Edit on, switch **Hide the game's HUD** off and on: the HUD comes and goes at once. Switch **Use EDGEbuilder's own camera** off: the view goes to V's eyes; on: the camera starts where V looks. Switching Edit on with a switch off says so in the message line.
+3. Click the Assets tab's list and type `crate`: it lands in the search box and searches.
+4. Pick a crate, **Drop at click** (it switches Edit on), click a spot on the ground: the crate lands there, facing the camera. Again, then Esc: nothing is dropped.
+5. The help lines are at the bottom centre, clear of the launcher and the EDGEbuilder window.
