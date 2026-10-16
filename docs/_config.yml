@@ -27,6 +27,8 @@ nav:
     url: /design.html
   - title: Scene format
     url: /scene.html
+  - title: Tests
+    url: /testing.html
   - title: B1 test
     url: /b1-test.html
   - title: B2a test
