@@ -41,6 +41,8 @@ scene.load();
 const index = new AssetIndex(path.join(pkg.dataDir, "index"));
 let bridge: Bridge | undefined;
 let blockedRetry: ReturnType<typeof setTimeout> | undefined;
+/** REDnode found no REDbridge, but EDGEbuilder's own lookup did: run that one. */
+let ownBridge: string | undefined;
 let gameKey = "";
 
 const state: Snapshot = {
@@ -87,8 +89,8 @@ async function startBridge(): Promise<void> {
   // REDnode 0.17 and later share one REDbridge between packages, behind the "bridge" permission the
   // player grants in the Mod Manager. A REDbridge named in the settings, or an older REDnode, means
   // EDGEbuilder runs its own.
-  if (!settings.bridgePath && typeof kernel?.bridge === "function") return startKernelBridge(kernel.bridge);
-  const exe = findBridge(settings.bridgePath);
+  if (!settings.bridgePath && !ownBridge && typeof kernel?.bridge === "function") return startKernelBridge(kernel.bridge);
+  const exe = findBridge(settings.bridgePath) ?? ownBridge;
   if (!exe) {
     state.bridge = { status: "missing", detail: `No REDbridge found. Install it with EDGEdeck (Get REDbridge), or put its path in ${settingsFile} as "bridgePath".` };
     state.index = { status: "none", count: 0 };
@@ -139,6 +141,12 @@ async function startKernelBridge(get: () => Promise<{ version: string | null; so
       publish();
       blockedRetry = setTimeout(() => void startBridge(), 5000);
     } else if (/not installed/i.test(why)) {
+      // REDnode releases before EDGEdeck look only where REDdeck and REDcode kept REDbridge.
+      ownBridge = findBridge();
+      if (ownBridge) {
+        console.log(`REDnode found no REDbridge; running the one EDGEdeck fetched: ${ownBridge}`);
+        return startBridge();
+      }
       state.bridge = { status: "missing", detail: why };
       publish();
     } else {

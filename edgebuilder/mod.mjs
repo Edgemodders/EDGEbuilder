@@ -420,6 +420,7 @@ scene.load();
 var index = new AssetIndex(path4.join(pkg.dataDir, "index"));
 var bridge;
 var blockedRetry;
+var ownBridge;
 var gameKey = "";
 var state = {
   ready: true,
@@ -456,8 +457,8 @@ async function startBridge() {
   bridge?.stop();
   bridge = void 0;
   clearTimeout(blockedRetry);
-  if (!settings.bridgePath && typeof kernel?.bridge === "function") return startKernelBridge(kernel.bridge);
-  const exe = findBridge(settings.bridgePath);
+  if (!settings.bridgePath && !ownBridge && typeof kernel?.bridge === "function") return startKernelBridge(kernel.bridge);
+  const exe = findBridge(settings.bridgePath) ?? ownBridge;
   if (!exe) {
     state.bridge = { status: "missing", detail: `No REDbridge found. Install it with EDGEdeck (Get REDbridge), or put its path in ${settingsFile} as "bridgePath".` };
     state.index = { status: "none", count: 0 };
@@ -506,6 +507,11 @@ async function startKernelBridge(get) {
       publish();
       blockedRetry = setTimeout(() => void startBridge(), 5e3);
     } else if (/not installed/i.test(why)) {
+      ownBridge = findBridge();
+      if (ownBridge) {
+        console.log(`REDnode found no REDbridge; running the one EDGEdeck fetched: ${ownBridge}`);
+        return startBridge();
+      }
       state.bridge = { status: "missing", detail: why };
       publish();
     } else {
