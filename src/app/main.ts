@@ -89,7 +89,7 @@ function render(s: Snapshot): void {
   if (document.activeElement?.id !== "bridgePath") ($("bridgePath") as HTMLInputElement & { value: string }).value = s.settings.bridgePath ?? "";
   if (document.activeElement?.id !== "gameDir") ($("gameDir") as HTMLInputElement & { value: string }).value = s.settings.gameDir ?? "";
   // Empty means found automatically: the field shows what was found.
-  $("bridgePath").setAttribute("placeholder", s.inUse.bridge ? `Automatic: ${s.inUse.bridge}` : "Empty: the copy REDdeck fetched");
+  $("bridgePath").setAttribute("placeholder", s.inUse.bridge ? `Automatic: ${s.inUse.bridge}` : "Empty: the copy EDGEdeck fetched");
   $("gameDir").setAttribute("placeholder", s.inUse.gameDir ? `Automatic: ${s.inUse.gameDir}` : "Empty: found from where REDnode runs");
   ($("editorCamera") as HTMLElement & { checked: boolean }).checked = s.settings.editorCamera !== false;
   ($("hideHud") as HTMLElement & { checked: boolean }).checked = s.settings.hideHud !== false;

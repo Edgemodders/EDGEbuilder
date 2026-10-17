@@ -12,7 +12,7 @@ Built on 2026-10-14. Outside the game: the camera's heading and pitch math passe
 
 | Need | Why |
 |---|---|
-| EDGEbuilder 0.3.0 | With REDdeck 0.21.1 it takes 0.2.x's place in the same row. Deploy |
+| EDGEbuilder 0.3.0 | With EDGEdeck 0.21.1 it takes 0.2.x's place in the same row. Deploy |
 | REDnode 0.17 or later, Codeware, REDbridge allowed | As for B2a |
 
 **About the Test timer:** while Edit is on, EDGEbuilder's layer covers it ([REDnode #10](https://github.com/Edgemodders/REDnode/issues/10)), and switching Edit off to press Mark would end builder mode. So skip the marks this time: the log has the times.
@@ -69,9 +69,11 @@ Built on 2026-10-14. Outside the game: the camera's heading and pitch math passe
 | Settings showed empty REDbridge and game folder fields | Empty means automatic, but what was found was not shown | 0.3.3: an empty field shows `Automatic: ...` with what is in use |
 | Asked for: drop where the next click lands | | 0.3.3: **Drop at click** |
 
-## 0.3.3 check
+## 0.3.4 check
 
-1. Settings: the REDbridge and game folder fields read `Automatic: ...`.
+EDGEbuilder 0.3.4 is 0.3.3 plus one change: it finds the REDbridge that EDGEdeck (REDdeck's new name) fetched. Install it with EDGEdeck 0.27.0 and run EDGEdeck's Get REDbridge first.
+
+1. Settings: the REDbridge and game folder fields read `Automatic: ...`, the REDbridge one under `globalStorage\edgemodders.edgedeck`.
 2. With Edit on, switch **Hide the game's HUD** off and on: the HUD comes and goes at once. Switch **Use EDGEbuilder's own camera** off: the view goes to V's eyes; on: the camera starts where V looks. Switching Edit on with a switch off says so in the message line.
 3. Click the Assets tab's list and type `crate`: it lands in the search box and searches.
 4. Pick a crate, **Drop at click** (it switches Edit on), click a spot on the ground: the crate lands there, facing the camera. Again, then Esc: nothing is dropped.

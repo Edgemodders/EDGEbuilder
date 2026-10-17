@@ -12,8 +12,8 @@ What B1 built: the asset index read from your game through REDbridge, an Assets 
 |---|---|
 | REDnode 0.15.1 or later deployed | `api.$new`, `world.spawn` and the entity events (W1) |
 | Codeware 1.14 or later | REDnode's world support compiles only with it |
-| REDbridge 0.6.0 | `mesh.infoMany` for the asset details. REDdeck's Get REDbridge or Update REDbridge fetches it; EDGEbuilder finds that copy by itself |
-| EDGEbuilder 0.1.1 installed | With REDdeck 0.20.0 or later: Add mod, pick `edgebuilder-0.1.1.zip` from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases), turn it on, Deploy. Or `tools\deploy.ps1` from the repo |
+| REDbridge 0.6.0 | `mesh.infoMany` for the asset details. EDGEdeck's Get REDbridge or Update REDbridge fetches it; EDGEbuilder finds that copy by itself |
+| EDGEbuilder 0.1.1 installed | With EDGEdeck 0.20.0 or later: Add mod, pick `edgebuilder-0.1.1.zip` from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases), turn it on, Deploy. Or `tools\deploy.ps1` from the repo |
 
 Use REDnode's **Test timer**: Start, then Mark after each step, so the log lines line up with what you did.
 
@@ -62,7 +62,7 @@ Fixed before the in-game test, in 0.1.1:
 
 ### In the game, 2026-10-13: passed
 
-On the owner's PC, EDGEbuilder 0.1.1 installed with REDdeck 0.20.1 after Vortex was purged and RED4ext, redscript and Codeware were added to REDdeck; REDnode 0.15.1; REDbridge 0.6.0. All ten steps behaved as expected, as the owner reported them.
+On the owner's PC, EDGEbuilder 0.1.1 installed with EDGEdeck 0.20.1 after Vortex was purged and RED4ext, redscript and Codeware were added to EDGEdeck; REDnode 0.15.1; REDbridge 0.6.0. All ten steps behaved as expected, as the owner reported them.
 
 | Step | Result |
 |---|---|

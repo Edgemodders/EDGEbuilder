@@ -149,7 +149,7 @@ function findBridge(setting) {
   if (setting && fs.existsSync(setting)) return setting;
   const appData = process.env.APPDATA ?? "";
   for (const code of ["Code", "Code - Insiders", "VSCodium"]) {
-    const dir = path.join(appData, code, "User", "globalStorage", "edgemodders.reddeck", "bridge");
+    const dir = path.join(appData, code, "User", "globalStorage", "edgemodders.edgedeck", "bridge");
     try {
       const tags = fs.readdirSync(dir).filter((t) => fs.existsSync(path.join(dir, t, "REDbridge.exe")));
       tags.sort(compareTags);
@@ -459,7 +459,7 @@ async function startBridge() {
   if (!settings.bridgePath && typeof kernel?.bridge === "function") return startKernelBridge(kernel.bridge);
   const exe = findBridge(settings.bridgePath);
   if (!exe) {
-    state.bridge = { status: "missing", detail: `No REDbridge found. Install it with REDdeck (Get REDbridge), or put its path in ${settingsFile} as "bridgePath".` };
+    state.bridge = { status: "missing", detail: `No REDbridge found. Install it with EDGEdeck (Get REDbridge), or put its path in ${settingsFile} as "bridgePath".` };
     state.index = { status: "none", count: 0 };
     publish();
     return;
@@ -1087,7 +1087,7 @@ world.on("Entity/Detach", (e) => {
     publish();
   }
 });
-console.log(`EDGEbuilder ${"0.3.3"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+console.log(`EDGEbuilder ${"0.3.4"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
 if (scene.loadError) {
   state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path4.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);

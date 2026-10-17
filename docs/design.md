@@ -6,7 +6,7 @@ title: Design
 
 Draft 1, 2026-10-13. Status: **B0, deciding.** Nothing is built yet; this page is what to build and in what order.
 
-EDGEbuilder is a world builder for Cyberpunk 2077: pick an asset from the game's own files, drop it into the live game, move it into place, arrange a scene, and bake the scene into a streaming sector that loads like any other mod. It runs as a [REDnode](https://github.com/Edgemodders/REDnode) package, so the editor is a web page over the game and the logic is Node. [REDbridge](https://github.com/Edgemodders/REDbridge) supplies the asset list and does the baking, [REDcode](https://github.com/Edgemodders/REDcode) holds the project the bake lands in, and [REDdeck](https://github.com/Edgemodders/REDdeck) installs both EDGEbuilder and what it bakes.
+EDGEbuilder is a world builder for Cyberpunk 2077: pick an asset from the game's own files, drop it into the live game, move it into place, arrange a scene, and bake the scene into a streaming sector that loads like any other mod. It runs as a [REDnode](https://github.com/Edgemodders/REDnode) package, so the editor is a web page over the game and the logic is Node. [REDbridge](https://github.com/Edgemodders/REDbridge) supplies the asset list and does the baking, [REDcode](https://github.com/Edgemodders/REDcode) holds the project the bake lands in, and [EDGEdeck](https://github.com/Edgemodders/EDGEdeck) installs both EDGEbuilder and what it bakes.
 
 ## Where the idea comes from
 
@@ -30,7 +30,7 @@ EDGEbuilder is six behaviours. Each is described by what the player does and wha
 | **Drop** | Picks an asset and it appears in front of the camera, or on the surface under the cursor | A preview entity spawns through the game API with a component for the kind. Entities from the game's templates spawn as they are | REDnode `api`, Codeware |
 | **Position** | Moves, rotates and scales with a gizmo or the keys G, R and S; types numbers; drops to the floor; snaps | The overlay draws the gizmo over the game from projected positions. Each change sets the preview's world transform. Drop to floor is a physics raycast | Overlay app, REDnode `api` |
 | **Arrange** | Groups, duplicates, hides, renames; selects many; undoes and redoes | The Node mod owns the scene tree and the history. Saved as a scene file | Node mod |
-| **Bake** | Names the scene and presses Bake; after a restart the objects are part of the world | REDbridge writes a streaming sector, a streaming block and an ArchiveXL file into a REDcode project. REDdeck installs it | REDbridge, REDcode, REDdeck |
+| **Bake** | Names the scene and presses Bake; after a restart the objects are part of the world | REDbridge writes a streaming sector, a streaming block and an ArchiveXL file into a REDcode project. EDGEdeck installs it | REDbridge, REDcode, EDGEdeck |
 | **Return** | Loads a scene, keeps working, bakes again | Scene files are the truth; the preview is rebuilt from them | Node mod |
 
 Everything else, favourites, prefabs, scattering, splines, areas, AI, is a later behaviour built on these.
@@ -71,7 +71,7 @@ The runtime half is v1. The project half starts with what costs little and pays 
        ▼
    REDcode project ──── source/archive/<scene>.streamingsector, .xl
        ▼
-   REDdeck ──── packs and deploys it; next start, it is the world
+   EDGEdeck ──── packs and deploys it; next start, it is the world
 ```
 
 | Piece | Role in EDGEbuilder | Exists today |
@@ -82,7 +82,7 @@ The runtime half is v1. The project half starts with what costs little and pays 
 | Codeware | The static entity system that spawns a preview entity at a transform and reports when it is assembled, so components can be attached | A dependency the player installs, as for most mods |
 | REDbridge | `archive.search` for the asset list, CR2W reads for mesh bounds, and a new `sector.build` for the bake | Search and CR2W: yes. `sector.build`: **no** |
 | REDcode | The project the bake lands in; packs it | Projects and REDbridge integration: yes. Pack: in progress |
-| REDdeck | Installs EDGEbuilder as a `rednode` package, and installs the baked mod from the REDcode project | Add from REDcode project: yes. The `rednode` kind: **no**, small |
+| EDGEdeck | Installs EDGEbuilder as a `rednode` package, and installs the baked mod from the REDcode project | Add from REDcode project: yes. The `rednode` kind: **no**, small |
 | ArchiveXL | Loads the baked streaming block into the world | A dependency of the baked mod, as for every custom sector |
 
 EDGEbuilder is a **combined** package: a manifest with both `entry` and `main`. The page is the face, the mod is the brain, and they talk over `channel`. The page never touches files or the bridge; the mod never draws.
@@ -178,7 +178,7 @@ Rotation is a quaternion in the file and Euler angles in the panel. Streaming ra
 
 Validation before the bake: every object has a resource that exists in the game, a unique reference, and finite streaming ranges; the scene is not empty; the target project exists. The bake is repeatable: the same scene bakes to the same files.
 
-After the bake, REDdeck's Add from REDcode project puts the packed mod in the library, deploy links it into the game, and the next game start shows the objects for real, with the preview entities gone.
+After the bake, EDGEdeck's Add from REDcode project puts the packed mod in the library, deploy links it into the game, and the next game start shows the objects for real, with the preview entities gone.
 
 ## What EDGEbuilder needs from the other repos
 
@@ -197,7 +197,7 @@ For REDbridge: `sector.build` as above ([REDbridge #1](https://github.com/Edgemo
 
 For REDcode, later: the scene file as a project file, Bake from the command palette, validation ([REDcode #2](https://github.com/Edgemodders/REDcode/issues/2)).
 
-For REDdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` deploys to `red4ext/plugins/REDnode/apps/<id>/`. Done in REDdeck 0.20.0.
+For EDGEdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` deploys to `red4ext/plugins/REDnode/apps/<id>/`. Done in EDGEdeck 0.20.0.
 
 ## Risks
 
@@ -219,7 +219,7 @@ For REDdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` depl
 | **B2a Position** | The viewport layer and Edit switch, the gizmo, picking in the world, G R S with axis locks and typed numbers, the Selected panel's numbers, drop to floor, mesh scale | A crate goes where it is put |
 | **B2b Camera** | The editor camera (split from B2 on 2026-10-13: it moves V every frame, the riskiest part), and builder mode: the game's HUD and other overlay windows hidden while Edit is on | A crate can be placed from any angle, with nothing else on screen |
 | **B3 Arrange and save** | Groups, multi-select, duplicate, undo and redo, scene files, return to a scene | A scene survives a restart |
-| **B4 Bake** | `sector.build` in REDbridge, the bake panel, the scene file in the REDcode project, Bake from REDcode's command palette, install through REDdeck | A baked crate stands in Night City with EDGEbuilder off, baked once from the game and once from REDcode |
+| **B4 Bake** | `sector.build` in REDbridge, the bake panel, the scene file in the REDcode project, Bake from REDcode's command palette, install through EDGEdeck | A baked crate stands in Night City with EDGEbuilder off, baked once from the game and once from REDcode |
 | **B5 Lights and more kinds** | Lights, decals, particles, effects, sounds, colliders | Each kind bakes and loads |
 | **B6 Comfort** | Favourites, prefabs, scatter, snapping, templates | Daily use |
 | **B7 Project builder** | The scene tree and properties in REDcode, "Open in game", then a 3D view from meshes REDbridge exports | A scene edited with the game closed bakes the same |

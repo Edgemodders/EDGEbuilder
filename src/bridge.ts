@@ -198,7 +198,7 @@ function compareTags(a: string, b: string): number {
 }
 
 /**
- * The REDbridge to run: the setting, else the newest copy REDdeck fetched (REDdeck keeps them under
+ * The REDbridge to run: the setting, else the newest copy EDGEdeck fetched (EDGEdeck keeps them under
  * VS Code's storage for its extension), else none. REDnode may hand one out itself one day
  * (kernel.bridge, REDnode issue #4); until then this is the lookup.
  */
@@ -206,7 +206,7 @@ export function findBridge(setting?: string): string | undefined {
   if (setting && fs.existsSync(setting)) return setting;
   const appData = process.env.APPDATA ?? "";
   for (const code of ["Code", "Code - Insiders", "VSCodium"]) {
-    const dir = path.join(appData, code, "User", "globalStorage", "edgemodders.reddeck", "bridge");
+    const dir = path.join(appData, code, "User", "globalStorage", "edgemodders.edgedeck", "bridge");
     try {
       const tags = fs.readdirSync(dir).filter((t) => fs.existsSync(path.join(dir, t, "REDbridge.exe")));
       tags.sort(compareTags);

@@ -14,7 +14,7 @@
 <body>
 
 <div class="bar"><div class="wrap">
-  <a class="home" href="{{ '/' | relative_url }}"><span class="dot"></span><b>REDDECK</b> / DOCS</a>
+  <a class="home" href="{{ '/' | relative_url }}"><span class="dot"></span><b>EDGEBUILDER</b> / DOCS</a>
   <nav>
     {% for item in site.nav %}<a href="{{ item.url | relative_url }}"{% if page.url == item.url %} aria-current="page"{% endif %}>{{ item.title }}</a>{% endfor %}
   </nav>
@@ -26,7 +26,7 @@
 
 <footer class="wrap">
   <span>SOURCE: <a href="{{ site.repo }}/blob/main/docs/{{ page.path }}">docs/{{ page.path }}</a></span>
-  <span>REDDECK &middot; MIT</span>
+  <span>EDGEBUILDER &middot; MIT</span>
 </footer>
 
 </body>

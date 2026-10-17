@@ -90,7 +90,7 @@ async function startBridge(): Promise<void> {
   if (!settings.bridgePath && typeof kernel?.bridge === "function") return startKernelBridge(kernel.bridge);
   const exe = findBridge(settings.bridgePath);
   if (!exe) {
-    state.bridge = { status: "missing", detail: `No REDbridge found. Install it with REDdeck (Get REDbridge), or put its path in ${settingsFile} as "bridgePath".` };
+    state.bridge = { status: "missing", detail: `No REDbridge found. Install it with EDGEdeck (Get REDbridge), or put its path in ${settingsFile} as "bridgePath".` };
     state.index = { status: "none", count: 0 };
     publish();
     return;

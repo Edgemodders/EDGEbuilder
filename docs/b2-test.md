@@ -14,7 +14,7 @@ Built on 2026-10-13. Outside the game: the geometry (camera projection learned f
 |---|---|
 | REDnode 0.17.0 or later deployed | `kernel.bridge()` and `requires`. With an older REDnode, EDGEbuilder starts its own REDbridge as before |
 | Codeware 1.14 or later, REDbridge 0.6.0 | As for B1 |
-| EDGEbuilder 0.2.0 installed | With REDdeck: Add mod, pick `edgebuilder-0.2.0.zip` from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases); With REDdeck 0.21.1 or later, 0.2.0 takes 0.1.1's place in the same row and 0.1.1 goes off; with an older REDdeck, turn the old EDGEbuilder off yourself, or both deploy the same files and conflict. Deploy |
+| EDGEbuilder 0.2.0 installed | With EDGEdeck: Add mod, pick `edgebuilder-0.2.0.zip` from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases); With EDGEdeck 0.21.1 or later, 0.2.0 takes 0.1.1's place in the same row and 0.1.1 goes off; with an older EDGEdeck, turn the old EDGEbuilder off yourself, or both deploy the same files and conflict. Deploy |
 | REDbridge allowed | **New in 0.2.0, do this first.** The second pill says **Allow REDbridge** until you allow it: F10, open the **Mod Manager** from the REDNODE launcher tab, select **EDGEbuilder**, and under **Permissions** switch **Allowed** on. Within about five seconds the pill turns green and the third shows about 31,500 assets. (From 0.2.1 the index from last time loads at once, so search works even before this) |
 
 If the EDGEbuilder window sits in the wrong place (it is full-screen now; a position saved from dragging the B1 window would move it), close the game and remove the `"edgebuilder"` entry from `%APPDATA%\@rednode\overlay\window-positions.json`. REDnode is asked to stop applying a saved position after a window's size changes ([REDnode #8](https://github.com/Edgemodders/REDnode/issues/8)).
@@ -67,7 +67,7 @@ On the owner's PC with EDGEbuilder 0.2.0, REDnode host 0.17.0, Codeware 1.20.3 a
 | What | Result |
 |---|---|
 | The projection | Calibrated from three `ProjectPoint` calls: FOV 51 (the game's FOV is vertical: `ky` 2.096 = 1 / tan(25.5°), and `kx` / `ky` = 16:9), `ProjectPoint` answers in -1..1 with y up. The check point landed **0.0 px** from where the game projects it, and the owner saw the box and gizmo sit on the crate |
-| REDbridge through REDnode | "Allow REDbridge" until the owner allowed it in the Mod Manager; EDGEbuilder picked it up by itself within five seconds, from REDdeck's copy |
+| REDbridge through REDnode | "Allow REDbridge" until the owner allowed it in the Mod Manager; EDGEbuilder picked it up by itself within five seconds, from EDGEdeck's copy |
 | Drags | 14 to 28 moves a second on arrows and the ring, at about 38 fps. The object and its outline trailed the cursor "a little bit, but it wasn't too bad": each move waited for the game's answer before the next was sent |
 | Frame rate | The same 38 to 39 fps in interactive mode with and without dragging, and 68 to 73 in passive mode. Game calls went from 33 a second without EDGEbuilder to about 72 with Edit on (the camera each frame) and up to 105 while dragging; their cost peaked at 1.6 ms a frame. Dragging does not lower the frame rate |
 | Drop to floor | Static and PlayerBlocker hit at z 119.08, Terrain missed; the crate went down 1.00 m onto the ground |
@@ -81,6 +81,6 @@ On the owner's PC with EDGEbuilder 0.2.0, REDnode host 0.17.0, Codeware 1.20.3 a
 | The gizmo stayed on the selected object after Edit was switched off | **0.2.2**: nothing is drawn and the camera is not read with Edit off; the game's outline still marks the selection |
 | The object trailed the cursor while dragging | **0.2.2**: the newest position is sent once a frame without waiting for the answer, as REDnode measured calls batch per frame. To confirm in B2b's test |
 | An object the owner did not remember placing was in the scene | The log shows a drop at 03:49:49 in an earlier session; the scene file kept it, as designed. 0.2.1 now says so when the game is ready, and a drop that fails no longer leaves an object behind |
-| Two EDGEbuilder versions on in REDdeck after installing 0.2.0 | REDdeck 0.21.1: a new version takes the old one's place |
+| Two EDGEbuilder versions on in EDGEdeck after installing 0.2.0 | EDGEdeck 0.21.1: a new version takes the old one's place |
 
 **B2a passed.** Next: B2b, the editor camera and builder mode.

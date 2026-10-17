@@ -5,7 +5,7 @@
 .DESCRIPTION
   Mirrors edgebuilder/ into <game>\red4ext\plugins\REDnode\apps\edgebuilder.
   Deploy REDnode first, with its own tools\deploy-native.ps1. Close the game first.
-  Players will install EDGEbuilder with REDdeck instead; this script is for development.
+  Players will install EDGEbuilder with EDGEdeck instead; this script is for development.
 
 .EXAMPLE
   .\tools\deploy.ps1 -GameDir 'E:\SteamLibrary\steamapps\common\Cyberpunk 2077'

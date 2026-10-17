@@ -6,7 +6,9 @@ title: Tests
 
 Every test run on EDGEbuilder so far: how to run it again, what to expect, and what it showed. Each phase ends with the owner's in-game test on the dev PC. The phase pages ([B1](b1-test.md), [B2a](b2-test.md), [B2b](b2b-test.md)) keep the full steps and every log reading; this page gathers them in one place. New tests are added here when they are first run.
 
-Last updated 2026-10-16.
+EDGEdeck was called REDdeck up to 0.26.6; this page uses the new name throughout.
+
+Last updated 2026-10-17.
 
 ## At a glance
 
@@ -19,7 +21,7 @@ Last updated 2026-10-16.
 | [B2a Position](#b2a-position) | In the game | B2a | 2026-10-14 (0.2.0) | Pass |
 | [B2b Camera](#b2b-camera) | In the game | B2b | 2026-10-14 (0.3.0) | Pass |
 | [B2b retest](#b2b-retest-in-032) | In the game | B2b | 2026-10-16 (0.3.2) | Pass |
-| [0.3.3 check](#033-check) | In the game | B2b | Not run yet | |
+| [0.3.4 check](#034-check) | In the game | B2b | Not run yet | |
 
 ## Automated
 
@@ -76,7 +78,7 @@ Drive the page by evaluating scripts through the DevTools protocol on 127.0.0.1:
 
 ## In the game
 
-All on the owner's PC (game on `E:`, installed with REDdeck, Vortex purged). Logs to send after each: `red4ext/logs/rednode-mods.log` (the `[edgebuilder]` lines) and `red4ext/logs/rednode-overlay.log`; from 0.3.2 also `red4ext/logs/rednode-<date>.log` when the cursor misbehaves.
+All on the owner's PC (game on `E:`, installed with EDGEdeck, Vortex purged). Logs to send after each: `red4ext/logs/rednode-mods.log` (the `[edgebuilder]` lines) and `red4ext/logs/rednode-overlay.log`; from 0.3.2 also `red4ext/logs/rednode-<date>.log` when the cursor misbehaves.
 
 ### Before any in-game test
 
@@ -84,9 +86,9 @@ All on the owner's PC (game on `E:`, installed with REDdeck, Vortex purged). Log
 |---|---|
 | REDnode deployed: 0.15.1+ for B1, 0.17+ from B2a, 0.22+ for the cursor lock in 0.3.2 | The world API, `kernel.bridge()` and `requires`, pointer lock |
 | Codeware 1.14 or later | REDnode's world support |
-| REDbridge 0.6.0 or later, fetched by REDdeck | The asset index and details |
+| REDbridge 0.6.0 or later, fetched by EDGEdeck | The asset index and details |
 | **REDbridge allowed** for EDGEbuilder (from 0.2.0) | F10, Mod Manager, EDGEbuilder, Permissions, Allowed on. Until then the pill says "Allow REDbridge" |
-| EDGEbuilder from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases), added in REDdeck and deployed with the game closed | REDdeck 0.21.1 and later put a new version in the old one's row |
+| EDGEbuilder from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases), added in EDGEdeck and deployed with the game closed | EDGEdeck 0.21.1 and later put a new version in the old one's row |
 | Both Settings switches on, unless a step says otherwise | They persist: a test that turns them off leaves them off (this cost a retest on 2026-10-16) |
 | A save outdoors, in an open spot | Room to drop and fly |
 
@@ -94,7 +96,7 @@ The Test timer cannot be pressed while Edit is on: REDnode has a tool layer for 
 
 ### B1 Browse and drop
 
-Full steps: [B1 test](b1-test.md). **Passed 2026-10-13** with EDGEbuilder 0.1.1, REDdeck 0.20.1, REDnode 0.15.1, REDbridge 0.6.0.
+Full steps: [B1 test](b1-test.md). **Passed 2026-10-13** with EDGEbuilder 0.1.1, EDGEdeck 0.20.1, REDnode 0.15.1, REDbridge 0.6.0.
 
 | Step | Expected | Result |
 |---|---|---|
@@ -128,7 +130,7 @@ Full steps: [B2a test](b2-test.md). **Passed 2026-10-14** with EDGEbuilder 0.2.0
 | The gizmo stayed after Edit off | 0.2.2 |
 | The object trailed the cursor | 0.2.2: moves sent once a frame without waiting |
 | A forgotten object from an earlier session | 0.2.1 says so; a failed drop leaves nothing |
-| Two EDGEbuilder versions on | REDdeck 0.21.1 |
+| Two EDGEbuilder versions on | EDGEdeck 0.21.1 |
 | Other windows unclickable under Edit | REDnode #7, #10 (since done in REDnode) |
 
 ### B2b Camera
@@ -172,16 +174,16 @@ Full steps: [B2b test](b2b-test.md). **Passed 2026-10-14** with EDGEbuilder 0.3.
 | Empty REDbridge and game folder fields in Settings | 0.3.3 shows `Automatic: ...` |
 | Asked for: drop where the next click lands | 0.3.3: Drop at click |
 
-### 0.3.3 check
+### 0.3.4 check
 
-Not run yet. EDGEbuilder 0.3.3, REDnode 0.22 or later.
+Not run yet. EDGEbuilder 0.3.4 (0.3.3's changes, and it finds the REDbridge EDGEdeck fetched), EDGEdeck 0.27.0 with Get REDbridge done, REDnode 0.22 or later.
 
 | # | Check | Expected |
 |---|---|---|
-| 1 | Settings | The REDbridge and game folder fields read `Automatic: ...` |
+| 1 | Settings | The REDbridge and game folder fields read `Automatic: ...`; the REDbridge one is under `globalStorage\edgemodders.edgedeck` |
 | 2 | With Edit on, Hide the game's HUD off and on; Use EDGEbuilder's own camera off and on; Edit on with a switch off | The HUD comes and goes at once; the view goes to V's eyes, then the camera starts where V looks; the message line says which switch is off |
 | 3 | Click the Assets list, type `crate` | It lands in the search box and searches |
 | 4 | Pick a crate, Drop at click, click the ground; again, then Esc | The crate lands on the spot, facing the camera; Esc drops nothing |
 | 5 | The help lines | Bottom centre, clear of the launcher and the window |
 | 6 | The B2b basics: look, fly, orbit, Edit off and on | As in B2b (the camera code was reorganised for the live switches) |
-| 7 | The log's start line | `EDGEbuilder 0.3.3 starting` |
+| 7 | The log's start line | `EDGEbuilder 0.3.4 starting` |

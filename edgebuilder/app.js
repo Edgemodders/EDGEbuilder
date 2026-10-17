@@ -922,7 +922,7 @@ function render(s) {
   $("rebuild").toggleAttribute("disabled", !missing);
   if (document.activeElement?.id !== "bridgePath") $("bridgePath").value = s.settings.bridgePath ?? "";
   if (document.activeElement?.id !== "gameDir") $("gameDir").value = s.settings.gameDir ?? "";
-  $("bridgePath").setAttribute("placeholder", s.inUse.bridge ? `Automatic: ${s.inUse.bridge}` : "Empty: the copy REDdeck fetched");
+  $("bridgePath").setAttribute("placeholder", s.inUse.bridge ? `Automatic: ${s.inUse.bridge}` : "Empty: the copy EDGEdeck fetched");
   $("gameDir").setAttribute("placeholder", s.inUse.gameDir ? `Automatic: ${s.inUse.gameDir}` : "Empty: found from where REDnode runs");
   $("editorCamera").checked = s.settings.editorCamera !== false;
   $("hideHud").checked = s.settings.hideHud !== false;

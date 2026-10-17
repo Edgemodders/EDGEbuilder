@@ -3,7 +3,7 @@
   Zips the EDGEbuilder package for players: dist\edgebuilder-<version>.zip.
 
 .DESCRIPTION
-  The zip holds the edgebuilder\ folder with rednode-app.json inside, which REDdeck (0.20.0 and
+  The zip holds the edgebuilder\ folder with rednode-app.json inside, which EDGEdeck (0.20.0 and
   later) recognises as a REDnode package and deploys into the game's REDnode apps folder.
   Run npm run build first; npm run package does both.
 #>
