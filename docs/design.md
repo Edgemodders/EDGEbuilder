@@ -4,7 +4,7 @@ title: Design
 
 # EDGEbuilder design
 
-Draft 1, 2026-10-13. Status: **B0, deciding.** Nothing is built yet; this page is what to build and in what order.
+Draft 2, 2026-10-18 (draft 1 2026-10-13). Status: **B0 to B2b passed in game**; the roadmap below adds B2c and the release stages.
 
 EDGEbuilder is a world builder for Cyberpunk 2077: pick an asset from the game's own files, drop it into the live game, move it into place, arrange a scene, and bake the scene into a streaming sector that loads like any other mod. It runs as a [REDnode](https://github.com/Edgemodders/REDnode) package, so the editor is a web page over the game and the logic is Node. [REDbridge](https://github.com/Edgemodders/REDbridge) supplies the asset list and does the baking, [REDcode](https://github.com/Edgemodders/REDcode) holds the project the bake lands in, and [EDGEdeck](https://github.com/Edgemodders/EDGEdeck) installs both EDGEbuilder and what it bakes.
 
@@ -218,6 +218,7 @@ For EDGEdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` dep
 | **B1 Browse and drop** | The asset index from REDbridge; drop a mesh and an entity in front of the camera; select, delete | A crate spawns and despawns in game |
 | **B2a Position** | The viewport layer and Edit switch, the gizmo, picking in the world, G R S with axis locks and typed numbers, the Selected panel's numbers, drop to floor, mesh scale | A crate goes where it is put |
 | **B2b Camera** | The editor camera (split from B2 on 2026-10-13: it moves V every frame, the riskiest part), and builder mode: the game's HUD and other overlay windows hidden while Edit is on | A crate can be placed from any angle, with nothing else on screen |
+| **B2c Mod assets** | Browse also indexes mod archives (`archive\pc\mod`) and the open REDcode project's `source\archive`, marked with the mod's name; appearances from a mod's mesh; the bake names the mods a scene needs ([issue #1](https://github.com/Edgemodders/EDGEbuilder/issues/1), from EDGEfab and EDGEmat) | A custom object from EDGEfab is placed in game |
 | **B3 Arrange and save** | Groups, multi-select, duplicate, undo and redo, scene files, return to a scene | A scene survives a restart |
 | **B4 Bake** | `sector.build` in REDbridge, the bake panel, the scene file in the REDcode project, Bake from REDcode's command palette, install through EDGEdeck | A baked crate stands in Night City with EDGEbuilder off, baked once from the game and once from REDcode |
 | **B5 Lights and more kinds** | Lights, decals, particles, effects, sounds, colliders | Each kind bakes and loads |
@@ -225,6 +226,29 @@ For EDGEdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` dep
 | **B7 Project builder** | The scene tree and properties in REDcode, "Open in game", then a 3D view from meshes REDbridge exports | A scene edited with the game closed bakes the same |
 
 Each phase ends with an in-game test on the owner's PC, with the steps written down in a results page, as REDnode does.
+
+## Release stages
+
+Agreed with the owner on 2026-10-18. Before the bake, nothing EDGEbuilder places outlasts the session, so there is nothing worth offering players; the first public release follows B4.
+
+| Stage | After | Where | What it promises |
+|---|---|---|---|
+| **Test builds** (0.1 to 0.x) | Every phase up to B4 | The owner's PC; a GitHub release per tested version | Nothing: each build is for one in-game test |
+| **Public preview** (0.x, marked PREVIEW) | B4 Bake | GitHub release and a Nexus page, installed with EDGEdeck | Place game and mod meshes and entities, arrange and save scenes, bake them into a sector that loads with EDGEbuilder off. Scene files may still change between previews; a preview that changes them says so and converts older ones |
+| **1.0** | B5's lights | As the preview, without the PREVIEW mark | Every v1 kind (mesh, entity, light) places and bakes. The scene format is frozen: every later version opens 1.0 scenes |
+| **1.x** | The rest of B5, then B6 and B7 | As 1.0 | Each phase is a minor version; nothing in a 1.x breaks a 1.0 scene or a baked mod |
+
+**Gates for every public release** (the preview, 1.0 and each 1.x):
+
+| Gate | How it is checked |
+|---|---|
+| The phase's in-game test passed | Its results page, on the owner's PC |
+| A baked mod loads with EDGEbuilder uninstalled | Bake a scene, remove EDGEbuilder through EDGEdeck, load a save: the objects are there |
+| EDGEdeck installs it from the release zip | Add the zip as a mod, deploy, open it from REDnode's launcher |
+| Older scenes open | From 1.0 on: the previous release's scene files open and bake the same. In previews: they open, or are converted, as the release notes say |
+| Requirements are declared | The manifest's `requires` (REDnode, Codeware, and any other minimum), and the same list on the Nexus page |
+| The clean-room review | Nothing in the release drifts into World Builder's shapes (see the notes for Claude sessions); done at each phase, confirmed before a release |
+| Docs | A player guide on the docs site, the changelog, and the Nexus description in the repo, as EDGEdeck keeps its own |
 
 ## Not in v1
 
