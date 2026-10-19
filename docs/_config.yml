@@ -25,6 +25,8 @@ nav:
     url: /
   - title: Design
     url: /design.html
+  - title: World objects
+    url: /world-objects.html
   - title: Scene format
     url: /scene.html
   - title: Tests

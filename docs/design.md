@@ -220,7 +220,9 @@ For EDGEdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` dep
 | **B2b Camera** | The editor camera (split from B2 on 2026-10-13: it moves V every frame, the riskiest part), and builder mode: the game's HUD and other overlay windows hidden while Edit is on | A crate can be placed from any angle, with nothing else on screen |
 | **B2c Mod assets** | Browse also indexes mod archives (`archive\pc\mod`) and the open REDcode project's `source\archive`, marked with the mod's name; appearances from a mod's mesh; the bake names the mods a scene needs ([issue #1](https://github.com/Edgemodders/EDGEbuilder/issues/1), from EDGEfab and EDGEmat) | A custom object from EDGEfab is placed in game |
 | **B3 Arrange and save** | Groups, multi-select, duplicate, undo and redo, scene files, return to a scene | A scene survives a restart |
+| **B3b World objects** | Pick anything the game placed with the cursor, inspect it, add a copy to the scene; try an entity's appearances live. A sector index from REDbridge for static nodes. See [World objects](world-objects.md) | A vending machine is picked, inspected and copied into a scene with its appearance |
 | **B4 Bake** | `sector.build` in REDbridge, the bake panel, the scene file in the REDcode project, Bake from REDcode's command palette, install through EDGEdeck | A baked crate stands in Night City with EDGEbuilder off, baked once from the game and once from REDcode |
+| **B4b Edit the world** | Hide, replace, move or rescale the game's own objects, kept in the scene (format 2) and baked as ArchiveXL sector edits. See [World objects](world-objects.md) | A vending machine removed in the editor stays gone with EDGEbuilder off |
 | **B5 Lights and more kinds** | Lights, decals, particles, effects, sounds, colliders | Each kind bakes and loads |
 | **B6 Comfort** | Favourites, prefabs, scatter, snapping, templates | Daily use |
 | **B7 Project builder** | The scene tree and properties in REDcode, "Open in game", then a 3D view from meshes REDbridge exports | A scene edited with the game closed bakes the same |
@@ -229,13 +231,13 @@ Each phase ends with an in-game test on the owner's PC, with the steps written d
 
 ## Release stages
 
-Agreed with the owner on 2026-10-18. Before the bake, nothing EDGEbuilder places outlasts the session, so there is nothing worth offering players; the first public release follows B4.
+Agreed with the owner on 2026-10-18 (B3b and B4b added the same day). Before the bake, nothing EDGEbuilder places outlasts the session, so there is nothing worth offering players; the first public release follows B4.
 
 | Stage | After | Where | What it promises |
 |---|---|---|---|
 | **Test builds** (0.1 to 0.x) | Every phase up to B4 | The owner's PC; a GitHub release per tested version | Nothing: each build is for one in-game test |
-| **Public preview** (0.x, marked PREVIEW) | B4 Bake | GitHub release and a Nexus page, installed with EDGEdeck | Place game and mod meshes and entities, arrange and save scenes, bake them into a sector that loads with EDGEbuilder off. Scene files may still change between previews; a preview that changes them says so and converts older ones |
-| **1.0** | B5's lights | As the preview, without the PREVIEW mark | Every v1 kind (mesh, entity, light) places and bakes. The scene format is frozen: every later version opens 1.0 scenes |
+| **Public preview** (0.x, marked PREVIEW) | B4 Bake | GitHub release and a Nexus page, installed with EDGEdeck | Place game and mod meshes and entities, pick and copy the game's own objects, arrange and save scenes, bake them into a sector that loads with EDGEbuilder off. Scene files may still change between previews; a preview that changes them says so and converts older ones |
+| **1.0** | B4b and B5's lights | As the preview, without the PREVIEW mark | Every v1 kind (mesh, entity, light) places and bakes, and the game's own objects can be hidden or changed. The scene format is frozen: every later version opens 1.0 scenes |
 | **1.x** | The rest of B5, then B6 and B7 | As 1.0 | Each phase is a minor version; nothing in a 1.x breaks a 1.0 scene or a baked mod |
 
 **Gates for every public release** (the preview, 1.0 and each 1.x):
