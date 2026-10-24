@@ -27,6 +27,7 @@ As of B2b passed in game (2026-10-14; the 0.3.2 retest on 2026-10-16); 0.3.3 add
 | B2b Camera | **Passed in game on 2026-10-14** (EDGEbuilder 0.3.0; 0.3.1 fixes what it found): a camera of EDGEbuilder's own while Edit is on (V stays put), look and fly, orbit, pan, dolly, frame; builder mode hides the game's HUD through V's scene tier; drops land where the camera looks; the world stays loaded far from V. Results in [B2b test](b2b-test.md) |
 | B2c Mod assets | Planned ([issue #1](https://github.com/Edgemodders/EDGEbuilder/issues/1)): Browse indexes mod archives and the open project, for EDGEfab's custom objects. Plan to be agreed first |
 | B3 Arrange and save | Not started |
+| B3c NPCs and scenes through REDnode | Agreed 2026-10-23 with REDnode's H2c: an `npc` kind ([format 2 draft](scene.md#format-2-draft-npcs)) and previews through REDnode's `world.load`. Waits for REDnode's H2c-b |
 | B3b World objects | Proposed: [World objects](world-objects.md), to be agreed. Starts with probes |
 | B4 Bake | REDbridge side done (0.6.0): `sector.build` bakes a scene into a sector, a block and an `.xl`, verified by the probe but not yet loaded in the game. EDGEdeck 0.20.0 installs REDnode packages. Left: the bake panel in EDGEbuilder, and the in-game test |
 | B4b Edit the world | Proposed with B3b: the game's own objects hidden or changed, baked as ArchiveXL sector edits |

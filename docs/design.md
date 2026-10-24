@@ -4,7 +4,7 @@ title: Design
 
 # EDGEbuilder design
 
-Draft 2, 2026-10-18 (draft 1 2026-10-13). Status: **B0 to B2b passed in game**; the roadmap below adds B2c and the release stages.
+Draft 3, 2026-10-23 (draft 2 2026-10-18, draft 1 2026-10-13). Status: **B0 to B2b passed in game**; draft 2 added B2c and the release stages, draft 3 adds B3c, NPCs and scenes through REDnode.
 
 EDGEbuilder is a world builder for Cyberpunk 2077: pick an asset from the game's own files, drop it into the live game, move it into place, arrange a scene, and bake the scene into a streaming sector that loads like any other mod. It runs as a [REDnode](https://github.com/Edgemodders/REDnode) package, so the editor is a web page over the game and the logic is Node. [REDbridge](https://github.com/Edgemodders/REDbridge) supplies the asset list and does the baking, [REDcode](https://github.com/Edgemodders/REDcode) holds the project the bake lands in, and [EDGEdeck](https://github.com/Edgemodders/EDGEdeck) installs both EDGEbuilder and what it bakes.
 
@@ -96,6 +96,7 @@ Every placed object is a preview entity. For the game's own entity templates the
 | Mesh | `worldMeshNode` | `entMeshComponent` with the mesh, an appearance and a scale | yes |
 | Entity | `worldEntityNode` | The `.ent` itself, with an appearance | yes |
 | Light | `worldStaticLightNode` | `gameLightComponent`: type, colour, intensity, radius, angles | yes |
+| NPC | Open: the game uses community and population spawner nodes; skipped by the bake until planned | The character itself, from a `Character` record or a template, spawned through REDnode, standing and friendly | B3c, in game only |
 | Decal | `worldStaticDecalNode` | `entDecalComponent` from a material instance | later |
 | Particles | `worldStaticParticleNode` | `entParticlesComponent` | later |
 | Effect | `worldEffectNode` | `entEffectSpawnerComponent` | later |
@@ -191,6 +192,7 @@ For REDnode, the design's assumptions that are not in the SDK today, in the orde
 | Resource references as arguments ([REDnode #3](https://github.com/Edgemodders/REDnode/issues/3)) | The mesh component's `mesh` is a resource reference, which the bridge refuses today | Accept a path string where a `ResRef`, `raRef` or `rRef` is expected |
 | Known per-frame budget | Dragging sets one transform per frame; the gizmo projects a few points per frame | A measured number for round trips per frame, and a batched `api.$batch([...])` if one call per frame is tight |
 | A REDbridge the host can hand out ([REDnode #4](https://github.com/Edgemodders/REDnode/issues/4)) | The asset index and the bake need the bridge | Shipped in REDnode 0.17.0 as `kernel.bridge()` behind the `bridge` permission; EDGEbuilder uses it from 0.2.0, and starts its own REDbridge only with an older REDnode or a path in its settings |
+| Scenes, NPCs and refreshes (REDnode's H2c, agreed 2026-10-23) | B3c: NPC previews, scenes other packages can load, previews that show a swapped archive | REDnode reads the scene file with `world.load(scene)` and `world.unload(name)`, spawns NPCs standing and friendly, and refreshes what it spawned after each `archives.reload`. Planned in [REDnode's World API page](https://edgemodders.github.io/REDnode/world.html#h2c-world-objects-plan); its spike runs first |
 | Dependencies in the manifest ([REDnode #5](https://github.com/Edgemodders/REDnode/issues/5)) | EDGEbuilder needs Codeware at a minimum version | Shipped in REDnode 0.17.0; EDGEbuilder 0.2.0 declares `"requires": { "codeware": ">=1.14" }` |
 
 For REDbridge: `sector.build` as above ([REDbridge #1](https://github.com/Edgemodders/REDbridge/issues/1), done in 0.6.0), a read of a mesh file's bounds and appearances ([REDbridge #2](https://github.com/Edgemodders/REDbridge/issues/2), done in 0.6.0 as `mesh.info`), and building EDGEbuilder's support archive from JSON, which is `project.pack` on a one-file project. The scene file is pinned on the [scene format](scene.md) page.
@@ -220,6 +222,7 @@ For EDGEdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` dep
 | **B2b Camera** | The editor camera (split from B2 on 2026-10-13: it moves V every frame, the riskiest part), and builder mode: the game's HUD and other overlay windows hidden while Edit is on | A crate can be placed from any angle, with nothing else on screen |
 | **B2c Mod assets** | Browse also indexes mod archives (`archive\pc\mod`) and the open REDcode project's `source\archive`, marked with the mod's name; appearances from a mod's mesh; the bake names the mods a scene needs ([issue #1](https://github.com/Edgemodders/EDGEbuilder/issues/1), from EDGEfab and EDGEmat) | A custom object from EDGEfab is placed in game |
 | **B3 Arrange and save** | Groups, multi-select, duplicate, undo and redo, scene files, return to a scene | A scene survives a restart |
+| **B3c NPCs and scenes through REDnode** | NPCs as a scene kind ([format 2 draft](scene.md#format-2-draft-npcs)), picked from the game's `Character` records and dropped like an entity; previews spawned and rebuilt through REDnode's `world.load`, which also refreshes them after an archive swap (REDnode's H2c). The bake skips NPCs with a warning until baking them is planned | A scene with a crate and a standing NPC returns after a restart, and loads from another package with EDGEbuilder off |
 | **B3b World objects** | Pick anything the game placed with the cursor, inspect it, add a copy to the scene; try an entity's appearances live. A sector index from REDbridge for static nodes. See [World objects](world-objects.md) | A vending machine is picked, inspected and copied into a scene with its appearance |
 | **B4 Bake** | `sector.build` in REDbridge, the bake panel, the scene file in the REDcode project, Bake from REDcode's command palette, install through EDGEdeck | A baked crate stands in Night City with EDGEbuilder off, baked once from the game and once from REDcode |
 | **B4b Edit the world** | Hide, replace, move or rescale the game's own objects, kept in the scene (format 2) and baked as ArchiveXL sector edits. See [World objects](world-objects.md) | A vending machine removed in the editor stays gone with EDGEbuilder off |
@@ -254,4 +257,4 @@ Agreed with the owner on 2026-10-18 (B3b and B4b added the same day). Before the
 
 ## Not in v1
 
-Communities and AI spots, devices and persistent state, splines, areas, variants, imports from other editors, and anything that needs an engine hook rather than the game API.
+Baking NPCs (B3c places them in the running game only), communities and AI spots, devices and persistent state, splines, areas, variants, imports from other editors, and anything that needs an engine hook rather than the game API.

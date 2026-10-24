@@ -59,3 +59,33 @@ Positions are the game's world coordinates in metres: X east, Y north, Z up. A r
 ## What the bake makes of it
 
 REDbridge's `sector.build` turns the objects into one `worldStreamingSector` with a node per object (`worldMeshNode`, `worldEntityNode`, `worldStaticLightNode`), one `worldStreamingBlock` whose descriptor holds a streaming box around every node, and an ArchiveXL file that patches the block into the world. The files land in the REDcode project under `source/archive/edgebuilder/<name>/` and `source/resources/archive/pc/mod/<name>.xl`. Every node's reference goes into its node data, so the game can find it by name.
+
+## Format 2 draft: NPCs
+
+Draft, 2026-10-23, for phase B3c. **Not pinned:** format 1 above stays what EDGEbuilder writes and REDbridge bakes until B3c is built and passes in game. Agreed with the owner the same day, with REDnode's H2c ([World API, H2c](https://edgemodders.github.io/REDnode/world.html#h2c-world-objects-plan)): REDnode reads scene files itself (`world.load`), so EDGEquest and other packages can load a scene without EDGEbuilder running, and the format stays EDGEbuilder's to pin.
+
+Format 2 adds one kind and changes nothing else. A format 1 file is a valid format 2 file once its `format` says 2.
+
+```json
+{
+  "id": "wakako_spot",
+  "kind": "npc",
+  "record": "Character.CitizenRichFemale",
+  "appearance": "default",
+  "transform": { "position": [-1200.0, 1502.0, 20.0], "rotation": [0, 0, 1, 0], "scale": [1, 1, 1] },
+  "ref": "edgebuilder/my_alley/wakako_spot",
+  "props": { "behaviour": "idle" }
+}
+```
+
+| Field | For `npc` |
+|---|---|
+| `record` | The character's TweakDB record (`Character.*`). One of `record` and `resource` |
+| `resource` | An entity template (`.ent`) instead of a record |
+| `appearance` | The appearance name; the record's own when missing |
+| `transform` | As for every kind. `scale` is ignored |
+| `props.behaviour` | `idle` (the default): stands where it was placed and stays friendly to V. Other behaviours (walk, talk, fight) are a later phase |
+
+What H2c's spike finds may change these fields before they are pinned: whether a spawned character holds its place, whether a save keeps it, and which of `record` and `resource` spawns reliably.
+
+**Baking NPCs is open.** The game places people through community and population spawner nodes, not `worldEntityNode`, and nothing here has been tried. Until a bake is planned, an `npc` object loads in the running game (EDGEbuilder's previews, REDnode's `world.load`) and the bake skips it with a warning.
