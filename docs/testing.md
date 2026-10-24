@@ -86,7 +86,7 @@ All on the owner's PC (game on `E:`, installed with EDGEdeck, Vortex purged). Lo
 |---|---|
 | REDnode deployed: 0.15.1+ for B1, 0.17+ from B2a, 0.22+ for the cursor lock in 0.3.2 | The world API, `kernel.bridge()` and `requires`, pointer lock |
 | Codeware 1.14 or later | REDnode's world support |
-| REDbridge 0.6.0 or later, fetched by EDGEdeck | The asset index and details |
+| REDbridge 0.6.0 or later, fetched by EDGEdeck or by REDnode's Mod Manager (**Get REDbridge**, REDnode 0.25.0 and later) | The asset index and details |
 | **REDbridge allowed** for EDGEbuilder (from 0.2.0) | F10, Mod Manager, EDGEbuilder, Permissions, Allowed on. Until then the pill says "Allow REDbridge" |
 | EDGEbuilder from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases), added in EDGEdeck and deployed with the game closed | EDGEdeck 0.21.1 and later put a new version in the old one's row |
 | Both Settings switches on, unless a step says otherwise | They persist: a test that turns them off leaves them off (this cost a retest on 2026-10-16) |

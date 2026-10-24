@@ -16,9 +16,9 @@ EDGEbuilder is a REDnode package. To work on it you need REDnode deployed in the
 | Package | `npm run package` writes `dist\edgebuilder-<version>.zip` for EDGEdeck |
 | Deploy for development | `.\tools\deploy.ps1 -GameDir '<game folder>'` mirrors `edgebuilder/` into `<game>\red4ext\plugins\REDnode\apps\edgebuilder`. Close the game first; REDnode's apps folder must exist |
 | Run from the repo instead | From `<REDnode>\packages\overlay`: `node start.js --render=cpu "--apps-dir=<REDnode>\packages\overlay\apps;<this repo>" --apps=edgebuilder` runs the host with EDGEbuilder beside REDnode's own apps. `--apps-dir` names folders whose subfolders are packages: this repo's root, not `edgebuilder\`. Without the game the page works for browsing; the kernel MCP server's `window_image` tool shows it (not in `--window` mode) |
-| See it | In game, F10, the REDNODE launcher tab, Mod Manager, switch EDGEbuilder on |
+| See it | In game, F10, the REDNODE launcher tab, Mod Manager, switch EDGEbuilder on. Allow REDbridge for it there too: Permissions, Allowed on |
 | Logs | `red4ext/logs/rednode-mods.log` for the Node mod, tagged `[edgebuilder]`; the Mod log app shows it live |
 
-Dependencies in the game, from B1 on: Codeware 1.16 or later, and ArchiveXL for the baked sectors. REDbridge for the asset index and the bake: EDGEbuilder starts the copy EDGEdeck or REDcode fetched, or one named in its settings.
+Dependencies in the game, from B1 on: Codeware 1.14 or later (the manifest's `requires`), and ArchiveXL for the baked sectors (from B4). REDbridge for the asset index and the bake: REDnode 0.17 and later share the copy they find (REDnode's own from its Mod Manager's **Get REDbridge**, since REDnode 0.25.0, or the one EDGEdeck or REDcode fetched) once the player allows the `bridge` permission; EDGEbuilder starts its own only with an older REDnode or a `bridgePath` in its settings.
 
 Record every tool you install or step you change here, with versions and commands.
