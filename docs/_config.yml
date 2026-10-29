@@ -39,5 +39,7 @@ nav:
     url: /b2b-test.html
   - title: Study
     url: /study.html
+  - title: Changelog
+    url: /changelog.html
   - title: Dev setup
     url: /dev-setup.html

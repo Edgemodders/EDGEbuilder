@@ -12,6 +12,7 @@ EDGEbuilder is a world builder for Cyberpunk 2077 that runs inside the game on R
 | [B2a test](b2-test.md) | The in-game test for positioning: the Edit switch, the gizmo, keys, floor, scale; what to install and what the result decides |
 | [B2b test](b2b-test.md) | The in-game test for the editor camera and builder mode |
 | [World Builder study](study.md) | What a world builder does and which game systems it touches, learned from World Builder; behaviours only, nothing copied |
+| [Changelog](changelog.md) | What changed in each release, newest first; the release notes come from it |
 | [Dev setup](dev-setup.md) | How to build the package and put it in the game for development |
 | Source | [github.com/Edgemodders/EDGEbuilder](https://github.com/Edgemodders/EDGEbuilder) |
 

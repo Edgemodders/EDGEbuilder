@@ -1,0 +1,96 @@
+# Releases EDGEbuilder: the package zip (tools/package.ps1) and a GitHub release. The same workflow as
+# REDnode's, EDGEmat's and EDGEchat's release.yml, so every EDGE tool releases the same way.
+#
+#   Run workflow (Actions tab)                  builds the zip and keeps it as the run's artifact,
+#                                               to install with EDGEdeck and test before a release
+#   Run workflow, "Make a release" ticked       also tags the commit v<version> and makes the GitHub
+#                                               release with the zip. Stops first if that tag exists
+#                                               (raise "version" in edgebuilder/rednode-app.json and
+#                                               package.json), if it is not run on main, or if
+#                                               docs/changelog.md has no section for the version
+#                                               (tools/release/notes.mjs)
+#
+# No Nexus Mods step yet: EDGEbuilder's builds are test builds until the public preview after B4
+# (docs/design.md, "Release stages"). The preview adds nexus/ and the "Update Nexus Mods" input,
+# with tools/nexus/ copied from REDnode, as the other EDGE tools have them.
+#
+# Release gate: make a release only after every in-game test of the builds since the last release
+# has passed (docs/testing.md). Untested or failed means no release.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Make a release (tags this commit v<version>). Only after every in-game test has passed
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # Windows: the zip is written by PowerShell's Compress-Archive, as on the dev PC.
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: The package's version
+        run: |
+          version=$(node -p "require('./edgebuilder/rednode-app.json').version")
+          npm_version=$(node -p "require('./package.json').version")
+          if [ "${version}" != "${npm_version}" ]; then
+            echo "::error::edgebuilder/rednode-app.json says ${version}, package.json says ${npm_version}. Raise both."
+            exit 1
+          fi
+          {
+            echo "VERSION=${version}"
+            echo "ZIP=${GITHUB_WORKSPACE}/dist/edgebuilder-${version}.zip"
+          } >> "$GITHUB_ENV"
+
+      - name: The version is not released yet
+        if: inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Make a release from main, not ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v${VERSION}" --silent 2>/dev/null; then
+            echo "::error::v${VERSION} is already released. Raise \"version\" in edgebuilder/rednode-app.json and package.json."
+            exit 1
+          fi
+
+      - name: Release notes from docs/changelog.md
+        if: inputs.release
+        run: node tools/release/notes.mjs "${VERSION}" --out "${RUNNER_TEMP}/notes.md"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and package
+        id: package
+        run: npm run package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: edgebuilder-build
+          path: dist/edgebuilder-*.zip
+          if-no-files-found: error
+
+      - name: GitHub release
+        if: ${{ inputs.release && !cancelled() && steps.package.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${VERSION}" "${ZIP}" --target "${GITHUB_SHA}" --title "EDGEbuilder ${VERSION}" --notes-file "${RUNNER_TEMP}/notes.md"
