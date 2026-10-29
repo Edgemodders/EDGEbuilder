@@ -18,7 +18,7 @@ EDGEbuilder is a world builder for Cyberpunk 2077 that runs inside the game on R
 
 ## Roadmap status
 
-As of B2b passed in game (2026-10-14; the 0.3.2 retest on 2026-10-16); 0.3.3 adds Drop at click and fixes what the retest found; 0.3.4 finds the REDbridge EDGEdeck (REDdeck's new name) fetched. Next: the 0.3.4 check, then B2c, its plan to be agreed first. The scene format is pinned and REDbridge can already bake one. The first public release (a preview) follows B4 and 1.0 follows B4b and B5's lights: see [Release stages](design.md#release-stages).
+As of 2026-10-29 (design draft 4): B2b passed in game on 2.31; the game is now 2.5. Next: the 0.3.4 check on game 2.5, a bake probe (one crate baked, packed, deployed and loaded), then B2c. After it: B3, B4, B3c, B3b, B4b, B4c. The scene format is pinned and REDbridge can already bake one (not yet loaded in game). The first public release (a preview) follows B4 and 1.0 follows B4b and B5's lights: see [Release stages](design.md#release-stages).
 
 | Phase | Status |
 |---|---|
@@ -26,12 +26,14 @@ As of B2b passed in game (2026-10-14; the 0.3.2 retest on 2026-10-16); 0.3.3 add
 | B1 Browse and drop | Built (EDGEbuilder 0.1.1): the asset index from the player's game through REDbridge (31,571 meshes and entities in 4 s), search, Drop in front of me through REDnode's world API with a base-game empty entity and a mesh component, select, delete, rebuild after a save loads, settings. The index, the search, the bridge client and the scene file pass the smoke test on real game files, and the page passed a check in REDnode's host without the game (three fixes in 0.1.1). **Passed in game on 2026-10-13**: drops land quickly, the game's outline shows on the selected preview, Rebuild restores the scene after a save loads. Results in [B1 test](b1-test.md) |
 | B2a Position | Built (EDGEbuilder 0.2.0): the full-screen viewport with an Edit switch, the gizmo (arrows and a turn ring), picking in the world, drags, G R S with axis locks and typed numbers, the Selected panel's numbers, drop to floor, mesh scale; REDbridge through REDnode's `kernel.bridge()`, Codeware declared in `requires`. **Passed in game on 2026-10-14**: the projection lands 0.0 px from the game's, drags follow at the game's frame rate without lowering it, drop to floor and scale work. 0.2.2 hides the gizmo with Edit off and sends moves once a frame without waiting. Results in [B2a test](b2-test.md) |
 | B2b Camera | **Passed in game on 2026-10-14** (EDGEbuilder 0.3.0; 0.3.1 fixes what it found): a camera of EDGEbuilder's own while Edit is on (V stays put), look and fly, orbit, pan, dolly, frame; builder mode hides the game's HUD through V's scene tier; drops land where the camera looks; the world stays loaded far from V. Results in [B2b test](b2b-test.md) |
-| B2c Mod assets | Planned ([issue #1](https://github.com/Edgemodders/EDGEbuilder/issues/1)): Browse indexes mod archives and the open project, for EDGEfab's custom objects. Plan to be agreed first |
+| Bake probe | Next after the 0.3.4 check: one crate through REDbridge's `sector.build` (0.11.0 writes 2.5 sectors), packed, deployed, loaded with EDGEbuilder off |
+| B2c Mod assets | Agreed 2026-10-29 ([issue #1](https://github.com/Edgemodders/EDGEbuilder/issues/1)): Browse indexes mod archives and the open REDcode project, for EDGEfab's custom objects; the project through REDcode's `redcode` service ([REDcode #18](https://github.com/Edgemodders/REDcode/issues/18)) |
 | B3 Arrange and save | Not started |
-| B3c NPCs and scenes through REDnode | Agreed 2026-10-23 with REDnode's H2c: an `npc` kind ([format 2 draft](scene.md#format-2-draft-npcs)) and previews through REDnode's `world.load`. Waits for REDnode's H2c-b |
-| B3b World objects | Proposed: [World objects](world-objects.md), to be agreed. Starts with probes |
-| B4 Bake | REDbridge side done (0.6.0): `sector.build` bakes a scene into a sector, a block and an `.xl`, verified by the probe but not yet loaded in the game. EDGEdeck 0.20.0 installs REDnode packages. Left: the bake panel in EDGEbuilder, and the in-game test |
-| B4b Edit the world | Proposed with B3b: the game's own objects hidden or changed, baked as ArchiveXL sector edits |
+| B4 Bake | REDbridge side done (0.6.0; 2.5 sectors from 0.11.0): `sector.build` bakes a scene into a sector, a block and an `.xl`, not yet loaded in the game. EDGEdeck 0.20.0 installs REDnode packages. Left: the bake panel in EDGEbuilder, and the in-game test |
+| B3c NPCs and scenes through REDnode | Agreed 2026-10-23 with REDnode's H2c: an `npc` kind ([format 2 draft](scene.md#format-2-draft-npcs)). REDnode's side passed in game on 2026-10-26 (0.40.1): `world.load` reads our scenes and the draft |
+| B3b World objects | Agreed 2026-10-29: [World objects](world-objects.md). Starts with probes; probe 1 answered by REDnode's `world.near` |
+| B4b Edit the world | Agreed with B3b: the game's own objects hidden or changed, baked as ArchiveXL sector edits |
+| B4c Quest places | Planned for EDGEquest's Q4 ([issue #3](https://github.com/Edgemodders/EDGEbuilder/issues/3)): spots, trigger areas, map markers and NPC spawns with refs, listed through EDGEbuilder's service |
 | B5 Lights and more kinds | Not started |
 | B6 Comfort | Not started |
 | B7 Project builder | Not started |

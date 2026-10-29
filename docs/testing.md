@@ -8,7 +8,7 @@ Every test run on EDGEbuilder so far: how to run it again, what to expect, and w
 
 EDGEdeck was called REDdeck up to 0.26.6; this page uses the new name throughout.
 
-Last updated 2026-10-17.
+Last updated 2026-10-29.
 
 ## At a glance
 
@@ -21,7 +21,7 @@ Last updated 2026-10-17.
 | [B2a Position](#b2a-position) | In the game | B2a | 2026-10-14 (0.2.0) | Pass |
 | [B2b Camera](#b2b-camera) | In the game | B2b | 2026-10-14 (0.3.0) | Pass |
 | [B2b retest](#b2b-retest-in-032) | In the game | B2b | 2026-10-16 (0.3.2) | Pass |
-| [0.3.4 check](#034-check) | In the game | B2b | Not run yet | |
+| [0.3.4 check on game 2.5](#034-check-on-game-25) | In the game | B2b | Not run yet | |
 
 ## Automated
 
@@ -88,7 +88,7 @@ All on the owner's PC (game on `E:`, installed with EDGEdeck, Vortex purged). Lo
 | Codeware 1.14 or later | REDnode's world support |
 | REDbridge 0.6.0 or later, fetched by EDGEdeck or by REDnode's Mod Manager (**Get REDbridge**, REDnode 0.25.0 and later) | The asset index and details |
 | **REDbridge allowed** for EDGEbuilder (from 0.2.0) | F10, Mod Manager, EDGEbuilder, Permissions, Allowed on. Until then the pill says "Allow REDbridge" |
-| EDGEbuilder from the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases), added in EDGEdeck and deployed with the game closed | EDGEdeck 0.21.1 and later put a new version in the old one's row |
+| EDGEbuilder's zip, added in EDGEdeck and deployed with the game closed | EDGEdeck 0.21.1 and later put a new version in the old one's row. A version under test comes from the release workflow's artifact (Actions, Release, the run, `edgebuilder-build`) or `npm run package`; it gets a GitHub release on the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases) once its test passed |
 | Both Settings switches on, unless a step says otherwise | They persist: a test that turns them off leaves them off (this cost a retest on 2026-10-16) |
 | A save outdoors, in an open spot | Room to drop and fly |
 
@@ -174,9 +174,9 @@ Full steps: [B2b test](b2b-test.md). **Passed 2026-10-14** with EDGEbuilder 0.3.
 | Empty REDbridge and game folder fields in Settings | 0.3.3 shows `Automatic: ...` |
 | Asked for: drop where the next click lands | 0.3.3: Drop at click |
 
-### 0.3.4 check
+### 0.3.4 check on game 2.5
 
-Not run yet. EDGEbuilder 0.3.4 (0.3.3's changes, and it finds the REDbridge EDGEdeck fetched), EDGEdeck 0.27.0 with Get REDbridge done, REDnode 0.22 or later.
+Not run yet. EDGEbuilder 0.3.4 (0.3.3's changes, and it finds the REDbridge EDGEdeck fetched), EDGEdeck 0.27.0 or later with Get REDbridge done (REDbridge 0.10.0 or later; 0.11.0 for 2.5's sectors), **REDnode 0.41.0 on game 2.5** (REDnode 0.38.1 and later load only on 2.5). Every earlier test ran on 2.31, so steps 8 to 11 repeat the basics on 2.5. EDGEbuilder 0.3.4 comes from the release workflow's artifact; its GitHub release follows a pass.
 
 | # | Check | Expected |
 |---|---|---|
@@ -187,3 +187,7 @@ Not run yet. EDGEbuilder 0.3.4 (0.3.3's changes, and it finds the REDbridge EDGE
 | 5 | The help lines | Bottom centre, clear of the launcher and the window |
 | 6 | The B2b basics: look, fly, orbit, Edit off and on | As in B2b (the camera code was reorganised for the live switches) |
 | 7 | The log's start line | `EDGEbuilder 0.3.4 starting` |
+| 8 | 2.5: Drop in front of me, a crate (`cargo_crate_a.mesh`) and an entity (a vending machine) | Both appear within about half a second; the crate is EDGEbuilder's empty entity with a mesh, so this checks that entity on 2.5 |
+| 9 | 2.5: select the crate, drag an arrow and the ring, S 2 | The gizmo stays on the crate; it follows; it is rebuilt at twice the size |
+| 10 | 2.5: Ctrl+E on a crate lifted off the ground | It drops to the ground; the log's `Drop to floor` line says which collision groups hit |
+| 11 | 2.5: fly 200 m away and back | The world stays loaded, the previews are still there |

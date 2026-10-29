@@ -62,7 +62,7 @@ REDbridge's `sector.build` turns the objects into one `worldStreamingSector` wit
 
 ## Format 2 draft: NPCs
 
-Draft, 2026-10-23, for phase B3c. **Not pinned:** format 1 above stays what EDGEbuilder writes and REDbridge bakes until B3c is built and passes in game. Agreed with the owner the same day, with REDnode's H2c ([World API, H2c](https://edgemodders.github.io/REDnode/world.html#h2c-world-objects-plan)): REDnode reads scene files itself (`world.load`), so EDGEquest and other packages can load a scene without EDGEbuilder running, and the format stays EDGEbuilder's to pin.
+Draft, 2026-10-23, for phase B3c. **Not pinned:** format 1 above stays what EDGEbuilder writes and REDbridge bakes until B3c is built and passes in game. REDnode 0.40.1 already reads this draft in `world.load` (H2c-b passed in game on 2026-10-26): it takes `format` up to 2, an `npc` with exactly one of `record` and `resource`, and notes any `props.behaviour` other than `idle`; it ignores `ref`, `groups`, `streaming`, `bounds` and an entity's scale. A change to these fields goes to REDnode's reader in step. Agreed with the owner the same day, with REDnode's H2c ([World API, H2c](https://edgemodders.github.io/REDnode/world.html#h2c-world-objects-plan)): REDnode reads scene files itself (`world.load`), so EDGEquest and other packages can load a scene without EDGEbuilder running, and the format stays EDGEbuilder's to pin.
 
 Format 2 adds one kind and changes nothing else. A format 1 file is a valid format 2 file once its `format` says 2.
 
@@ -85,7 +85,5 @@ Format 2 adds one kind and changes nothing else. A format 1 file is a valid form
 | `appearance` | The appearance name; the record's own when missing |
 | `transform` | As for every kind. `scale` is ignored |
 | `props.behaviour` | `idle` (the default): stands where it was placed and stays friendly to V. Other behaviours (walk, talk, fight) are a later phase |
-
-What H2c's spike finds may change these fields before they are pinned: whether a spawned character holds its place, whether a save keeps it, and which of `record` and `resource` spawns reliably.
 
 **Baking NPCs is open.** The game places people through community and population spawner nodes, not `worldEntityNode`, and nothing here has been tried. Until a bake is planned, an `npc` object loads in the running game (EDGEbuilder's previews, REDnode's `world.load`) and the bake skips it with a warning.

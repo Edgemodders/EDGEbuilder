@@ -17,7 +17,7 @@ EDGEbuilder is the first mod built on the EDGE platform end to end: the editor i
 **[Read the design](https://edgemodders.github.io/EDGEbuilder/design.html)** &middot; [REDnode](https://github.com/Edgemodders/REDnode) &middot; [REDbridge](https://github.com/Edgemodders/REDbridge) &middot; [REDcode](https://github.com/Edgemodders/REDcode) &middot; [EDGEdeck](https://github.com/Edgemodders/EDGEdeck)
 
 > [!NOTE]
-> **Status: B1, B2a and B2b passed in game; test builds only.** EDGEbuilder reads an index of your game's meshes and entities through REDbridge, searches it, and drops a picked asset into the world through REDnode's world API. With **Edit** on it flies a camera of its own, hides the game's HUD, and moves, turns and scales objects with a gizmo or the keys G, R and S. Nothing it places outlasts the session yet: saving scenes (B3) and baking them into the world (B4) come next, and the first public release follows B4. Results: [Tests](https://edgemodders.github.io/EDGEbuilder/testing.html). Test builds are on the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases); install them with EDGEdeck. Game 2.31 only, like REDnode. The [design](https://edgemodders.github.io/EDGEbuilder/design.html) says where it goes.
+> **Status: B1, B2a and B2b passed in game; test builds only.** EDGEbuilder reads an index of your game's meshes and entities through REDbridge, searches it, and drops a picked asset into the world through REDnode's world API. With **Edit** on it flies a camera of its own, hides the game's HUD, and moves, turns and scales objects with a gizmo or the keys G, R and S. Nothing it places outlasts the session yet: saving scenes (B3) and baking them into the world (B4) come next, and the first public release follows B4. Results: [Tests](https://edgemodders.github.io/EDGEbuilder/testing.html). Test builds are on the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases) once their in-game test passed; install them with EDGEdeck. Tested on game 2.31; the 2.5 check (REDnode 0.38.1 and later need 2.5) is next. The [design](https://edgemodders.github.io/EDGEbuilder/design.html) says where it goes.
 
 ## How it works
 
@@ -55,12 +55,14 @@ Two halves share the scene file: the **runtime builder** in the game, where what
 - **B1 Browse and drop.** The asset index from REDbridge; drop a mesh and an entity; select, delete. Passed in game 2026-10-13.
 - **B2a Position.** The Edit switch, the gizmo, picking in the world, G R S, numbers, drop to floor, mesh scale. Passed in game 2026-10-14.
 - **B2b Camera.** EDGEbuilder's own camera while Edit is on, builder mode without the game's HUD, drops where the camera looks. Passed in game 2026-10-14.
-- **B2c Mod assets.** Browse also lists mod archives and the open REDcode project. Planned.
-- **B3 Arrange and save.** Groups, multi-select, duplicate, undo and redo, scene files.
-- **B3c NPCs and scenes through REDnode.** NPCs as a scene kind, and scenes REDnode loads for any package. Waits for REDnode's H2c.
-- **B3b World objects.** Pick, inspect and copy what the game already placed. Proposed.
+- **Bake probe.** One crate baked, packed, deployed and loaded on game 2.5, before anything is built on the bake. Next.
+- **B2c Mod assets.** Browse also lists mod archives and the open REDcode project. Agreed.
+- **B3 Arrange and save.** Groups, multi-select, duplicate, undo and redo, scene files, a service other packages can ask for scenes.
 - **B4 Bake.** `sector.build` in REDbridge, the bake panel, the scene in the REDcode project, install through EDGEdeck. The first public release (a preview) follows.
-- **B4b Edit the world.** Hide or change the game's own objects, baked as ArchiveXL sector edits. Proposed.
+- **B3c NPCs and scenes through REDnode.** NPCs as a scene kind, and scenes REDnode loads for any package (REDnode's side passed in game).
+- **B3b World objects.** Pick, inspect and copy what the game already placed. Agreed.
+- **B4b Edit the world.** Hide or change the game's own objects, baked as ArchiveXL sector edits. Agreed.
+- **B4c Quest places.** Spots, trigger areas, map markers and NPC spawns for EDGEquest's quests.
 - **B5 Lights and more kinds.** Lights, decals, particles, effects, sounds, colliders.
 - **B6 Comfort.** Favourites, prefabs, scatter, snapping, templates.
 - **B7 Project builder.** The scene in REDcode with the game closed, then a 3D view.

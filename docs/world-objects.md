@@ -4,7 +4,7 @@ title: World objects
 
 # World objects: picking what the game already placed
 
-Draft 1, 2026-10-18. Status: **proposed**, for phases B3b and B4b of the [roadmap](design.md#roadmap). Agree this page before B3b is built; its first step is the probes at the end.
+Draft 2, 2026-10-29 (draft 1 2026-10-18). Status: **agreed with the owner on 2026-10-29**, for phases B3b and B4b of the [roadmap](design.md#roadmap). B3b's first step is the probes at the end. Draft 2: probe 1 is answered by REDnode's `world.near`, and the sector index is for game 2.5, whose sectors REDbridge 0.11.0 reads with node paths stored only as hashes.
 
 Until now EDGEbuilder picks only what it placed itself: a click is tested against the boxes of its own previews. A modder also wants to point at something the game put there, a vending machine, a bench, a building's sign, and ask what it is, take a copy into the scene, or change the original. This page is how.
 
@@ -32,7 +32,7 @@ Appearance Menu Mod and similar mods pick what V's crosshair looks at. That work
 1. **The ray.** From the click through the camera: already built for Drop at click (`math.ts`, the page's `armDrop`).
 2. **Where it stops.** The game's physics raycast along the ray, across the collision groups: already built for drops (`raycast()` in `mod.ts`), widened to the groups devices, vehicles and NPCs are in (probe 2). The hit says where the ray stops, not what it hit; anything further along is behind a wall and does not count.
 3. **What is there.** Candidates near the ray up to that point:
-   - **entities** the game has near the hit (probe 1), each with its bounds;
+   - **entities** the game has near the hit, each with its bounds: REDnode's `world.near(radius)` lists them, with `world.files(entity)` for their files, read in the plugin in one call (probe 1);
    - **static nodes** from a **sector index**: REDbridge reads the game's streaming blocks and the sectors around the camera, and lists each node's kind, resource, appearance, transform and bounds (mesh bounds from `mesh.info`, as the asset index does). Read once per game version per sector, and cached, like the asset index.
 4. **Which one.** The ray is tested against each candidate's oriented box, as EDGEbuilder's own picking does. A candidate whose box holds the physics hit point is preferred; then the nearest. Nodes without collision, such as decals, lights and small props, have no physics hit of their own but still have a box, so they can be picked.
 5. **The outline.** An entity is outlined with the game's render highlight; a static node with its box, drawn by the page as for EDGEbuilder's objects.
@@ -41,7 +41,7 @@ The sector index also tells which mod placed a node, when ArchiveXL streams that
 
 ## Keeping a reference to the original
 
-A world edit has to find its object again after a restart or a game patch. It is stored in the scene file by the sector's path and the node's index, **with a fingerprint**: the node's kind, resource path and transform. Patches can renumber nodes; when the index no longer matches the fingerprint, EDGEbuilder looks for the fingerprint in the same sector and, failing that, says which edits lost their object instead of changing the wrong one. Entities placed by sectors are the same: a node with an entity template. Entities spawned at run time (NPCs from crowds, traffic) have no node and cannot be edited, only copied.
+A world edit has to find its object again after a restart or a game patch. It is stored in the scene file by the sector's path and the node's index, and on 2.5 the node's `globalNodeId.hash` (FNV-1a 64 of the node path with `#` removed; 2.5 sectors keep only the hash), **with a fingerprint**: the node's kind, resource path and transform. Patches can renumber nodes; when the index no longer matches the fingerprint, EDGEbuilder looks for the fingerprint in the same sector and, failing that, says which edits lost their object instead of changing the wrong one. Entities placed by sectors are the same: a node with an entity template. Entities spawned at run time (NPCs from crowds, traffic) have no node and cannot be edited, only copied.
 
 The scene format gets a `worldEdits` list for B4b. That is a format change: it goes into the [scene format](scene.md) page as format 2 when B4b is planned, and B3b's copies need no change.
 
@@ -54,7 +54,7 @@ The bake writes the scene's own objects into a new sector, as B4 does, and the w
 | From | Need | When |
 |---|---|---|
 | REDbridge | **`sector.near`**: the nodes of the sectors around a position, with kind, resource, appearance, transform, bounds and the sector's source (game or mod); from the streaming blocks and sector files, cached per game version | B3b. A `request` issue once this page is agreed |
-| REDnode | Nothing expected. If probe 1 finds no way to list entities near a point through the game API, an ask goes to REDnode then | B3b |
+| REDnode | Nothing new: `world.near` and `world.files` (REDnode 0.4x) answer probe 1 | B3b |
 | ArchiveXL | Sector node removal and mutation, at a known minimum version | B4b |
 | Scene format | Format 2 with `worldEdits` | B4b |
 
@@ -64,7 +64,7 @@ B3b starts with these, in the game and in REDbridge, and records the answers on 
 
 | # | Question | Decides |
 |---|---|---|
-| 1 | Which game API call lists the entities near a point or along a ray, from a free camera rather than V's crosshair | How entities become candidates, or whether REDnode is asked for help |
+| 1 | Which game API call lists the entities near a point or along a ray, from a free camera rather than V's crosshair | **Answered 2026-10-29:** REDnode's `world.near(radius)`. Left to check: whether it takes a point other than V's, for a camera far from V |
 | 2 | Which collision groups devices, doors, vehicles and NPCs answer in | Which groups the pick's raycast asks |
 | 3 | How many nodes the sectors around a typical street hold, and how long REDbridge takes to read them | Whether the sector index is read on demand or built ahead per area |
 | 4 | Whether a node's sector path and index are stable between two game versions, on a sample | How much the fingerprint matters |
