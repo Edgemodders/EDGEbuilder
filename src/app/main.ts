@@ -48,7 +48,7 @@ function render(s: Snapshot): void {
   $("count").textContent =
     s.index.status === "ready" || s.results.length
       ? s.query.text || listsAll
-        ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} found`
+        ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} found${foundIn(s)}`
         : `${total.toLocaleString()} assets: type a name to search`
       : "";
   const mods = s.sources.mods;
@@ -120,6 +120,16 @@ function render(s: Snapshot): void {
     $("message").className = `message ${s.message.tone}`;
     if (s.message.tone === "error" && typeof RednodeUI !== "undefined") RednodeUI.notify(s.message.text, { title: "EDGEbuilder", type: "error" });
   }
+}
+
+/** What the results are filtered by, so an empty list says why: `for "crate", entities only, in the project`. */
+function foundIn(s: Snapshot): string {
+  const q = s.query;
+  return [
+    q.text ? ` for "${q.text}"` : "",
+    q.kind === "mesh" ? ", meshes only" : q.kind === "entity" ? ", entities only" : "",
+    q.from === "game" ? ", in the game" : q.from === "mods" ? ", in mods" : q.from === "project" ? ", in the project" : "",
+  ].join("");
 }
 
 /** The tag at a result's end: the mod or project it comes from, and its kind. */

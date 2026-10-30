@@ -885,7 +885,7 @@ function render(s) {
   list.innerHTML = s.results.map((r) => `<rn-item value="${esc(r.path)}" title="${esc(rowTitle(r))}"${r.path === keep ? " selected" : ""}>${esc(shortName(r.path))}<span slot="end">${esc(rowTag(r))}</span></rn-item>`).join("");
   const total = s.index.count + s.sources.mods.assets + (s.sources.project?.assets ?? 0);
   const listsAll = s.query.from === "mods" || s.query.from === "project";
-  $("count").textContent = s.index.status === "ready" || s.results.length ? s.query.text || listsAll ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} found` : `${total.toLocaleString()} assets: type a name to search` : "";
+  $("count").textContent = s.index.status === "ready" || s.results.length ? s.query.text || listsAll ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} found${foundIn(s)}` : `${total.toLocaleString()} assets: type a name to search` : "";
   const mods = s.sources.mods;
   const project2 = s.sources.project;
   $("sources").textContent = [
@@ -946,6 +946,14 @@ function render(s) {
     $("message").className = `message ${s.message.tone}`;
     if (s.message.tone === "error" && typeof RednodeUI !== "undefined") RednodeUI.notify(s.message.text, { title: "EDGEbuilder", type: "error" });
   }
+}
+function foundIn(s) {
+  const q = s.query;
+  return [
+    q.text ? ` for "${q.text}"` : "",
+    q.kind === "mesh" ? ", meshes only" : q.kind === "entity" ? ", entities only" : "",
+    q.from === "game" ? ", in the game" : q.from === "mods" ? ", in mods" : q.from === "project" ? ", in the project" : ""
+  ].join("");
 }
 function rowTag(r) {
   const where = r.source ? r.source.kind === "project" ? `project ${r.source.name}` : r.source.name : r.path.toLowerCase().startsWith("ep1\\") ? "PL" : "";
