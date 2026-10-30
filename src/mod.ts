@@ -1035,8 +1035,12 @@ if (typeof world.onRespawn === "function") {
     if (!o) return;
     o.entityId = after.hash;
     console.log(`${o.id} spawned again after an archive swap (${after.hash})`);
-    if (was?.selected) void select(o.id);
-    else publish();
+    // REDnode spawns it again with the options it was first spawned with, so a preview moved since
+    // comes back where it was dropped (B2c test, 2026-10-30): put it where the scene has it.
+    void world
+      .move(after.hash, toPoint(o.transform.position), toQuat(o.transform.rotation))
+      .catch((err) => console.log(`${o.id} not moved back after the swap: ${(err as Error).message}`))
+      .then(() => (was?.selected ? select(o.id) : publish()));
   });
 }
 

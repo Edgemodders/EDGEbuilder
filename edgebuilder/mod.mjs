@@ -1458,8 +1458,7 @@ if (typeof world.onRespawn === "function") {
     if (!o) return;
     o.entityId = after.hash;
     console.log(`${o.id} spawned again after an archive swap (${after.hash})`);
-    if (was?.selected) void select(o.id);
-    else publish();
+    void world.move(after.hash, toPoint(o.transform.position), toQuat(o.transform.rotation)).catch((err) => console.log(`${o.id} not moved back after the swap: ${err.message}`)).then(() => was?.selected ? select(o.id) : publish());
   });
 }
 if (typeof ui?.onSolo === "function") {
@@ -1468,7 +1467,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.4.0"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+console.log(`EDGEbuilder ${"0.4.1"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
 if (scene.loadError) {
   state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path5.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);

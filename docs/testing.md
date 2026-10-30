@@ -23,7 +23,7 @@ Last updated 2026-10-30.
 | [B2b retest](#b2b-retest-in-032) | In the game | B2b | 2026-10-16 (0.3.2) | Pass |
 | [0.3.4 check on game 2.5](#034-check-on-game-25) | In the game | B2b | 2026-10-29 (0.3.4) | Pass |
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
-| [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | Built 2026-10-30 (0.4.0) | Waiting for the owner |
+| [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.0) | Steps 1 to 8 pass; step 9 found a fix, retest in 0.4.1 |
 
 ## Automated
 
@@ -253,7 +253,7 @@ streaming:
 
 ### B2c Mod assets
 
-**Built on 2026-10-30, waiting for the owner's test.** EDGEbuilder 0.4.0, from `npm run package`, added in EDGEdeck (it goes into the old row). REDnode 0.41.0 or later; **REDbridge with #12** (0.12.0, or the build from REDbridge's main the REDnode session deployed on 2026-10-30) for sizes and appearances; REDcode 0.10.5 or later for the Project steps. The smoke test passed with both REDbridge 0.11.0 (sizes skipped, the "needs 0.12.0" answer) and the main build (EvilClown's meshes read from its archive). Browse lists installed mods' and the open REDcode project's meshes and entities; mesh previews are now REDnode's mesh props, so steps 1 and 2 repeat the basics.
+**Run on 2026-10-30 with 0.4.0: steps 1 to 8 as expected, step 9 found a fix** (results below the steps); 0.4.1 has the fixes and waits for the retest. EDGEbuilder 0.4.0, from `npm run package`, added in EDGEdeck (it goes into the old row). REDnode 0.41.0 or later; **REDbridge with #12** (0.12.0, or the build from REDbridge's main the REDnode session deployed on 2026-10-30) for sizes and appearances; REDcode 0.10.5 or later for the Project steps. The smoke test passed with both REDbridge 0.11.0 (sizes skipped, the "needs 0.12.0" answer) and the main build (EvilClown's meshes read from its archive). Browse lists installed mods' and the open REDcode project's meshes and entities; mesh previews are now REDnode's mesh props, so steps 1 and 2 repeat the basics.
 
 | # | Check | Expected |
 |---|---|---|
@@ -266,4 +266,14 @@ streaming:
 | 7 | Edit on with another package's window open (the coords app, for example); Edit off | The other window goes while Edit is on and comes back; the Test timer and the launcher stay. Without Solo allowed: they stay and the message line says how to allow it |
 | 8 | With REDcode open on a project that has a mesh or entity under `source\archive` (EDGEfab's first prop when it exists): the Project tab, pick a mesh | Its files, tagged `project <name>`; the picked mesh's size and appearances. Save a new mesh into it: it appears within a few seconds. Close the project in REDcode: "No REDcode project open" |
 | 9 | Drop the project's file before packing; then REDcode's Pack and Play | Before: the message says the game shows it once packed and loaded. After Pack and Play: it shows; the log has `<id> spawned again after an archive swap` for a preview that uses a swapped file, and a selected one stays selected |
+
+**Results with 0.4.0 (2026-10-30, the owner's report):**
+
+| # | Result |
+|---|---|
+| 1 to 7 | As expected: the mods indexed, the rubber chicken found, sized and dropped, "This scene needs: EvilClown", solo mode with Edit |
+| 8 | As expected, with REDcode on the project `EDGEwave_Katana` (a copy of the game's `w_katana__common__grip1_02.mesh` at its game path). At first "0 found" on the Project tab: the Entities tab was on and the project has only a mesh. **0.4.1:** the count names its filters (`0 found, entities only, in the project`) |
+| 9 | The grip dropped before packing showed at once: the game has a file at that path. **0.4.1:** the message says so for a project file at a game file's path (asked of REDbridge, since the index does not cover weapons). After Pack and Play the grip came back and stayed selected, but at its drop spot and heading: it had been moved and turned since, and REDnode spawns again with the first spawn's options ([REDnode #27](https://github.com/Edgemodders/REDnode/issues/27)). **0.4.1:** EDGEbuilder moves a respawned preview to its scene transform |
+
+**Retest in 0.4.1:** step 9 again (drop the grip, move and turn it, select it, Pack and Play: it stays where it was, selected, and the log has `spawned again after an archive swap`), and the two messages: the Project tab with Entities on, and the drop message for the grip.
 

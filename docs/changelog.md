@@ -17,7 +17,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - The Scene tab says which mods and which REDcode project the scene needs.
 - The found count says what it is filtered by (the search text, meshes or entities only, the game, mods or the project), so an empty list says why.
 - While Edit is on, other packages' windows are hidden (REDnode's solo mode). Allow Solo for EDGEbuilder in REDnode's Mod Manager; without it they stay, and EDGEbuilder says so once.
-- After an archive swap (REDcode's Pack and Play), previews that use a swapped file come back showing the new version, and stay selected.
+- After an archive swap (REDcode's Pack and Play), previews that use a swapped file come back showing the new version, where the scene has them, and stay selected.
 - A mod's or project's mesh or entity shows its size and appearances in Picked, and drops with its own box for the gizmo. Needs REDbridge 0.12.0 or later (EDGEdeck: Get REDbridge); with an older one it drops with a 1 m box and says so.
 
 **Changed**
