@@ -4,7 +4,7 @@ title: Library and world view
 
 # The Library and EDGEbuilder for VS Code
 
-Draft 1, 2026-10-29. Status: **proposed**, written from the owner's idea and answers of 2026-10-29; to be agreed before B3, which would build the Library's first part. It changes where scenes and bakes live (B3, B4) and turns B7, the project builder, into an EDGEbuilder extension for VS Code with a map of the whole world.
+Draft 2, 2026-10-29. Status: **proposed**, written from the owner's idea and answers of 2026-10-29 (draft 2: the root's default and Relocate, who keeps the rules); to be agreed before B3, which would build the Library's first part. It changes where scenes and bakes live (B3, B4) and turns B7, the project builder, into an EDGEbuilder extension for VS Code with a map of the whole world.
 
 ## The idea
 
@@ -23,7 +23,7 @@ The name stays **Library**, as a real library holds books and tapes on every sub
 
 ## The Library
 
-**One root folder for the EDGE platform**, a setting shared by every tool that uses it (for example `C:\Users\<you>\EDGE Library`). Any tool whose work belongs there offers a Library view: EDGEbuilder for scenes and bakes, EDGEfab for made and imported assets, EDGEmat for materials and appearances, perhaps others later. Each tool owns its own kinds of item; the root and the few rules below are shared.
+**One root folder for the EDGE platform**, shared by every tool that uses it. The first tool to need it asks where to put it, offering `Documents\EDGE Library`. Its place is kept in one small file every tool reads, `%APPDATA%\EDGE\library.json` (`{ "root": ... }`), since the in-game Node mod cannot read VS Code's settings. **Relocate** moves the whole Library, to a bigger drive for example: it copies the root, checks the copy, updates `library.json` so every tool follows, and only then removes the old folder. A project's "came from" notes are relative to the root, so they survive the move. Any tool whose work belongs there offers a Library view: EDGEbuilder for scenes and bakes, EDGEfab for made and imported assets, EDGEmat for materials and appearances, perhaps others later. Each tool owns its own kinds of item; the root and the few rules below are shared.
 
 | Rule | Why |
 |---|---|
@@ -120,6 +120,6 @@ E0 can run early, beside B2c or B3, since it touches only REDbridge and a script
 
 ## Open
 
-- **EDGEscene**, the empty repo (2026-10-27): the home of this extension, of the Library, or something else?
-- **Who keeps the shared Library rules** (the root setting, self-describing items, the "came from" note): a page in this repo first, then the platform's wiki once a second tool uses it?
-- **The Library root's default folder.**
+- **The rules' home** (agreed): this page keeps the shared Library rules (the root and `library.json`, self-describing items, the "came from" note) until a second tool uses the Library; then they move to the platform's wiki.
+- **The default folder**: `Documents\EDGE Library` as offered above, unless the owner prefers another; Relocate makes the first choice cheap to change.
+- EDGEscene, an empty repo of 2026-10-27, was deleted by the owner: residue of early ideas, not a home for this.

@@ -29,6 +29,8 @@ nav:
     url: /world-objects.html
   - title: Library
     url: /library.html
+  - title: Inspector
+    url: /world-inspector.html
   - title: Scene format
     url: /scene.html
   - title: Tests
