@@ -8,7 +8,7 @@ Every test run on EDGEbuilder so far: how to run it again, what to expect, and w
 
 EDGEdeck was called REDdeck up to 0.26.6; this page uses the new name throughout.
 
-Last updated 2026-10-29.
+Last updated 2026-10-30.
 
 ## At a glance
 
@@ -22,6 +22,7 @@ Last updated 2026-10-29.
 | [B2b Camera](#b2b-camera) | In the game | B2b | 2026-10-14 (0.3.0) | Pass |
 | [B2b retest](#b2b-retest-in-032) | In the game | B2b | 2026-10-16 (0.3.2) | Pass |
 | [0.3.4 check on game 2.5](#034-check-on-game-25) | In the game | B2b | 2026-10-29 (0.3.4) | Pass |
+| [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Waiting for the owner |
 
 ## Automated
 
@@ -191,3 +192,28 @@ Full steps: [B2b test](b2b-test.md). **Passed 2026-10-14** with EDGEbuilder 0.3.
 | 9 | 2.5: select the crate, drag an arrow and the ring, S 2 | The gizmo stays on the crate; it follows; it is rebuilt at twice the size |
 | 10 | 2.5: Ctrl+E on a crate lifted off the ground | It drops to the ground; the log's `Drop to floor` line says which collision groups hit |
 | 11 | 2.5: fly 200 m away and back | The world stays loaded, the previews are still there |
+
+### Bake probe
+
+**Built on 2026-10-30, waiting for the owner's test.** The first baked sector in the game: one crate, baked by REDbridge's `sector.build` from a script, packed by REDbridge's `project.pack`, deployed by EDGEdeck. EDGEbuilder is not involved, so it stays off for the whole test.
+
+How it was made: `npm run build`, then `node scripts/bake-probe.mjs <out folder>` with REDbridge 0.11.0 (the one built in the REDbridge checkout; EDGEdeck had fetched 0.10.0, which writes 2.31 sectors). It writes `<out>/project`, the REDcode project the bake goes into, and `<out>/mod` with `archive\pc\mod\edgebuilder_bake_probe.archive` and `edgebuilder_bake_probe.archive.xl`. The crate is `cargo_crate_a.mesh` at (-1439.15, 1214.04, 23.07), not turned, scale 1: 2 m east of a crate dropped on a Watson street in B2b's test. The streaming box reaches 100 m around it.
+
+One change by hand: REDbridge 0.11.0 writes the `.xl` as a resource patch of the world's streaming block. ArchiveXL 1.28 adds blocks to the world under `streaming: blocks:` (its WorldStreaming part), so the script writes that instead:
+
+```yaml
+streaming:
+  blocks:
+    - edgebuilder\edgebuilder_bake_probe\edgebuilder_bake_probe.streamingblock
+```
+
+| # | Check | Expected |
+|---|---|---|
+| 1 | Game closed; in EDGEdeck, `EDGEbuilder bake probe` on, deploy | Two files in `archive\pc\mod` |
+| 2 | Turn EDGEbuilder off in REDnode's Mod Manager (or leave the game's REDnode overlay closed), start the game, load a save | Loads as usual |
+| 3 | Go to (-1439, 1214, 23): beside the spot of the Watson street crate from B2b's test | One cargo crate stands there, on the ground, not turned |
+| 4 | Walk 150 m away and come back | It goes and comes back with the street |
+| 5 | Walk into it, shoot it | Whether it has collision (a mesh node may not: this is to learn, not a fail) |
+| 6 | `red4ext/plugins/ArchiveXL/ArchiveXL-<date>.log` | `[WorldStreaming] Merging streaming block "edgebuilder\...\edgebuilder_bake_probe.streamingblock"...` and `All streaming blocks merged`, no errors |
+| 7 | Afterwards: the mod off in EDGEdeck and deploy, or leave it for the next bakes | |
+
