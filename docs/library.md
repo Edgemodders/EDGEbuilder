@@ -59,7 +59,7 @@ The name stays **Library**, as a real library holds books and tapes on every sub
 | **Bakes may collide** | Two bakes in one project, or deployed together, whose streaming boxes overlap and that share objects (same scene, or objects at the same spot). Shown in the Library, in a project's Include list, and in game when a deployed bake overlaps scenes that are on |
 | **Baked and on** | A scene that is in a deployed bake also has its previews on in game: everything shows twice. The in-game page leaves such previews off unless asked |
 | **Stale bake** | Made for an older game version, or its scenes changed since |
-| **Not in the game yet** | A Library asset (an imported mesh, a new appearance) that is in no deployed archive. It can be placed in game only after it is packed and swapped in (REDcode's "Pack and try", REDnode's `archives.reload`) |
+| **Not in the game yet** | A Library asset (an imported mesh, a new appearance) that is in no deployed archive. It can be placed in game only after it is packed and swapped in (REDcode's "Pack and Play", REDnode's `archives.reload`) |
 
 ## EDGEbuilder for VS Code
 

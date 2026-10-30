@@ -822,7 +822,7 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
     const from = sourceOf(assetPath)?.source;
     const note =
       from?.kind === "project"
-        ? ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and try).`
+        ? ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).`
         : from?.kind === "mod"
           ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}`
           : "";
@@ -1008,7 +1008,7 @@ world.on("Entity/Detach", (e) => {
   }
 });
 
-// After an archive swap (REDcode's Pack and try, REDnode's archives.reload), REDnode spawns again the
+// After an archive swap (REDcode's Pack and Play, REDnode's archives.reload), REDnode spawns again the
 // previews that use a swapped file: they show the new version and keep their place in the scene.
 if (typeof world.onRespawn === "function") {
   world.onRespawn((before, after) => {

@@ -1276,7 +1276,7 @@ async function drop(assetPath, appearance, at) {
     scene.save();
     await select(o.id);
     const from = sourceOf(assetPath)?.source;
-    const note = from?.kind === "project" ? ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and try).` : from?.kind === "mod" ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}` : "";
+    const note = from?.kind === "project" ? ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).` : from?.kind === "mod" ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}` : "";
     say(`Dropped ${path5.basename(assetPath)} in ${Date.now() - started} ms.${note}`, "ok");
   } catch (err) {
     if (added) {

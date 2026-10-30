@@ -265,5 +265,5 @@ streaming:
 | 6 | The Scene tab | "This scene needs: EvilClown" |
 | 7 | Edit on with another package's window open (the coords app, for example); Edit off | The other window goes while Edit is on and comes back; the Test timer and the launcher stay. Without Solo allowed: they stay and the message line says how to allow it |
 | 8 | With REDcode open on a project that has a mesh or entity under `source\archive` (EDGEfab's first prop when it exists): the Project tab, pick a mesh | Its files, tagged `project <name>`; the picked mesh's size and appearances. Save a new mesh into it: it appears within a few seconds. Close the project in REDcode: "No REDcode project open" |
-| 9 | Drop the project's file before packing; then REDcode's Pack and try | Before: the message says the game shows it once packed and loaded. After Pack and try: it shows; the log has `<id> spawned again after an archive swap` for a preview that uses a swapped file, and a selected one stays selected |
+| 9 | Drop the project's file before packing; then REDcode's Pack and Play | Before: the message says the game shows it once packed and loaded. After Pack and Play: it shows; the log has `<id> spawned again after an archive swap` for a preview that uses a swapped file, and a selected one stays selected |
 
