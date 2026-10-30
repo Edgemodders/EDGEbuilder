@@ -873,6 +873,16 @@ function sourceOf(assetPath) {
   const lower = assetPath.toLowerCase();
   return index.extra.find((e) => !e.replaces && e.path.toLowerCase() === lower);
 }
+async function inGameArchives(assetPath) {
+  if (index.isGamePath(assetPath)) return true;
+  if (!bridge?.running) return false;
+  try {
+    const page = await bridge.list(assetPath.replace(/\//g, "\\"), 0, 1);
+    return page.items.some((f) => f.name.toLowerCase() === assetPath.replace(/\//g, "\\").toLowerCase());
+  } catch {
+    return false;
+  }
+}
 function assetInfo(b, assetPath) {
   const entry = sourceOf(assetPath);
   return entry ? sources.lookAt(b, entry) : index.lookAt(b, assetPath);
@@ -1276,7 +1286,7 @@ async function drop(assetPath, appearance, at) {
     scene.save();
     await select(o.id);
     const from = sourceOf(assetPath)?.source;
-    const note = from?.kind === "project" ? ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).` : from?.kind === "mod" ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}` : "";
+    const note = from?.kind === "project" ? await inGameArchives(assetPath) ? ` From the REDcode project ${from.name}, at a game file's path: the game shows its own version until the project is packed and loaded (REDcode's Pack and Play).` : ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).` : from?.kind === "mod" ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}` : "";
     say(`Dropped ${path5.basename(assetPath)} in ${Date.now() - started} ms.${note}`, "ok");
   } catch (err) {
     if (added) {

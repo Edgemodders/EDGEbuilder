@@ -311,6 +311,21 @@ function sourceOf(assetPath: string): AssetEntry | undefined {
   return index.extra.find((e) => !e.replaces && e.path.toLowerCase() === lower);
 }
 
+/**
+ * Whether the game's own archives have this path, beyond the folders the index covers (a project's
+ * copy of a weapon mesh, say). Asked of REDbridge; false when it cannot answer.
+ */
+async function inGameArchives(assetPath: string): Promise<boolean> {
+  if (index.isGamePath(assetPath)) return true;
+  if (!bridge?.running) return false;
+  try {
+    const page = await bridge.list(assetPath.replace(/\//g, "\\"), 0, 1);
+    return page.items.some((f) => f.name.toLowerCase() === assetPath.replace(/\//g, "\\").toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 /** What REDbridge knows about an asset: from the game's archives, or from its mod's archive or the project (B2c-2). */
 function assetInfo(b: Bridge, assetPath: string): Promise<AssetInfo> {
   const entry = sourceOf(assetPath);
@@ -822,7 +837,9 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
     const from = sourceOf(assetPath)?.source;
     const note =
       from?.kind === "project"
-        ? ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).`
+        ? (await inGameArchives(assetPath))
+          ? ` From the REDcode project ${from.name}, at a game file's path: the game shows its own version until the project is packed and loaded (REDcode's Pack and Play).`
+          : ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).`
         : from?.kind === "mod"
           ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}`
           : "";
