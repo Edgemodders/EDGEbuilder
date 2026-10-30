@@ -10,6 +10,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.3.4 (2026-10-29)
+
+Tested on game 2.5 with REDnode 0.45.0.
+
 **Changed**
 
 - REDdeck is now EDGEdeck: EDGEbuilder finds the REDbridge EDGEdeck fetched, under `globalStorage\edgemodders.edgedeck`.

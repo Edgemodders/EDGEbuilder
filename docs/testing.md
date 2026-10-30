@@ -21,7 +21,7 @@ Last updated 2026-10-29.
 | [B2a Position](#b2a-position) | In the game | B2a | 2026-10-14 (0.2.0) | Pass |
 | [B2b Camera](#b2b-camera) | In the game | B2b | 2026-10-14 (0.3.0) | Pass |
 | [B2b retest](#b2b-retest-in-032) | In the game | B2b | 2026-10-16 (0.3.2) | Pass |
-| [0.3.4 check on game 2.5](#034-check-on-game-25) | In the game | B2b | Not run yet | |
+| [0.3.4 check on game 2.5](#034-check-on-game-25) | In the game | B2b | 2026-10-29 (0.3.4) | Pass |
 
 ## Automated
 
@@ -176,7 +176,7 @@ Full steps: [B2b test](b2b-test.md). **Passed 2026-10-14** with EDGEbuilder 0.3.
 
 ### 0.3.4 check on game 2.5
 
-Not run yet. EDGEbuilder 0.3.4 (0.3.3's changes, and it finds the REDbridge EDGEdeck fetched), EDGEdeck 0.27.0 or later with Get REDbridge done (REDbridge 0.10.0 or later; 0.11.0 for 2.5's sectors), **REDnode 0.41.0 on game 2.5** (REDnode 0.38.1 and later load only on 2.5). Every earlier test ran on 2.31, so steps 8 to 11 repeat the basics on 2.5. EDGEbuilder 0.3.4 comes from the release workflow's artifact; its GitHub release follows a pass.
+**Passed on 2026-10-29**, on game 2.5 with REDnode 0.45.0: every step as expected (the owner's report). The first EDGEbuilder run on 2.5. EDGEbuilder 0.3.4 (0.3.3's changes, and it finds the REDbridge EDGEdeck fetched), EDGEdeck 0.27.0 or later with Get REDbridge done (REDbridge 0.10.0 or later; 0.11.0 for 2.5's sectors), **REDnode 0.41.0 or later on game 2.5** (REDnode 0.38.1 and later load only on 2.5). Every earlier test ran on 2.31, so steps 8 to 11 repeat the basics on 2.5. EDGEbuilder 0.3.4 came from the release workflow's artifact, and is released after this pass.
 
 | # | Check | Expected |
 |---|---|---|
