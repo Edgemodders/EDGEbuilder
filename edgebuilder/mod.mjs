@@ -22,8 +22,8 @@ var KernelBridge = class {
   list(prefix, offset, limit = 5e3) {
     return this.handle.call("archive.list", { prefix, offset, limit });
   }
-  meshInfoMany(paths) {
-    return this.handle.call("mesh.infoMany", { paths });
+  meshInfoMany(paths, from) {
+    return this.handle.call("mesh.infoMany", { paths, ...from });
   }
   openMod(archivePath) {
     return this.handle.call("archive.openMod", { path: archivePath });
@@ -129,8 +129,8 @@ var BridgeClient = class {
   list(prefix, offset, limit = 5e3) {
     return this.call("archive.list", { prefix, offset, limit });
   }
-  meshInfoMany(paths) {
-    return this.call("mesh.infoMany", { paths });
+  meshInfoMany(paths, from) {
+    return this.call("mesh.infoMany", { paths, ...from });
   }
   openMod(archivePath) {
     return this.call("archive.openMod", { path: archivePath });
@@ -317,6 +317,7 @@ function kindOf(file) {
 // src/sources.ts
 import * as fs3 from "node:fs";
 import * as path3 from "node:path";
+var NeedsNewerBridge = "Its size and appearances need REDbridge 0.12.0 or later (EDGEdeck: Get REDbridge); it can still be dropped, with a 1 m box for the gizmo.";
 function modArchives(gameDir2) {
   const out = [];
   const loose = path3.join(gameDir2, "archive", "pc", "mod");
@@ -351,6 +352,10 @@ var ModSources = class {
   archives = {};
   /** The open project's loose files. */
   project = [];
+  /** The project's source\archive, where its loose files are read from. */
+  projectRoot;
+  /** What mesh.info said about the project's files, by file and its time: they change while the modder works. */
+  projectInfo = /* @__PURE__ */ new Map();
   get archiveCount() {
     return Object.keys(this.archives).length;
   }
@@ -415,6 +420,8 @@ var ModSources = class {
   /** Reads the meshes and entities among the project's loose files, as the game paths they will have once packed. */
   scanProject(project2, isGamePath) {
     this.project = [];
+    if (project2?.archive !== this.projectRoot) this.projectInfo.clear();
+    this.projectRoot = project2?.archive;
     if (!project2) return;
     const walk = (dir, rel) => {
       let names;
@@ -443,6 +450,50 @@ var ModSources = class {
     };
     walk(project2.archive, "");
     this.project.sort((a, b) => a.path.localeCompare(b.path));
+  }
+  /**
+   * The size and appearances of a mod's or the project's file, through REDbridge's mesh.info with
+   * the archive or the project folder (REDbridge 0.12.0 and later), asked once per version of the file.
+   * An older REDbridge answers with NeedsNewerBridge as the error.
+   */
+  async lookAt(bridge2, entry) {
+    const from = entry.source;
+    if (!from) throw new Error(`${entry.path} is a game file`);
+    let cache;
+    let key = entry.path;
+    if (from.kind === "mod") {
+      const archive = this.archives[from.file];
+      if (!archive) return { appearances: [], error: `${from.name} is no longer installed` };
+      cache = archive.info ??= {};
+      const known = cache[key];
+      if (known && !known.error) return known;
+    } else {
+      let mtime = 0;
+      try {
+        mtime = fs3.statSync(from.file).mtimeMs;
+      } catch {
+        return { appearances: [], error: `${entry.path} is no longer in the project` };
+      }
+      key = `${from.file}|${mtime}`;
+      cache = this.projectInfo;
+      const known = cache.get(key);
+      if (known && !known.error) return known;
+    }
+    let info;
+    try {
+      const [r] = await bridge2.meshInfoMany([entry.path], from.kind === "mod" ? { archive: from.file } : { root: this.projectRoot });
+      if (r?.error && /not in the loaded archives/i.test(r.error)) info = { appearances: [], error: NeedsNewerBridge };
+      else info = r?.error ? { appearances: [], error: r.error } : { bounds: r?.bounds ?? void 0, appearances: r?.appearances ?? [] };
+    } catch (err) {
+      const why = err.message;
+      info = { appearances: [], error: /param|argument|signature|method/i.test(why) ? NeedsNewerBridge : why };
+    }
+    if (cache instanceof Map) cache.set(key, info);
+    else {
+      cache[key] = info;
+      if (!info.error) this.save();
+    }
+    return info;
   }
   save() {
     try {
@@ -821,6 +872,10 @@ async function connectRedcode() {
 function sourceOf(assetPath) {
   const lower = assetPath.toLowerCase();
   return index.extra.find((e) => !e.replaces && e.path.toLowerCase() === lower);
+}
+function assetInfo(b, assetPath) {
+  const entry = sourceOf(assetPath);
+  return entry ? sources.lookAt(b, entry) : index.lookAt(b, assetPath);
 }
 function worldBlocker() {
   switch (state.world) {
@@ -1207,10 +1262,12 @@ async function drop(assetPath, appearance, at) {
     const place = await dropPlace(at);
     const o = scene.add(kind, assetPath, { position: place.position, rotation: yawToQuaternion(place.yaw), scale: [1, 1, 1] }, appearance);
     added = o;
-    if (bridge?.running && !sourceOf(assetPath)) {
+    let sized = true;
+    if (bridge?.running) {
       try {
-        const info = await index.lookAt(bridge, assetPath);
+        const info = await assetInfo(bridge, assetPath);
         if (info.bounds) o.bounds = info.bounds;
+        else sized = false;
       } catch {
       }
     }
@@ -1219,7 +1276,7 @@ async function drop(assetPath, appearance, at) {
     scene.save();
     await select(o.id);
     const from = sourceOf(assetPath)?.source;
-    const note = from?.kind === "project" ? ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and try).` : from?.kind === "mod" ? ` From ${from.name}; its size is not known yet, so the gizmo uses a 1 m box.` : "";
+    const note = from?.kind === "project" ? ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and try).` : from?.kind === "mod" ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}` : "";
     say(`Dropped ${path5.basename(assetPath)} in ${Date.now() - started} ms.${note}`, "ok");
   } catch (err) {
     if (added) {
@@ -1283,19 +1340,11 @@ channel.on((m) => {
         break;
       case "look":
         state.looked = { path: m.path };
-        {
-          const from = sourceOf(m.path)?.source;
-          if (from) {
-            state.looked.info = { appearances: [], error: `From ${from.kind === "project" ? `the REDcode project ${from.name}` : from.name}. Its size and appearances come in a later update; it can be dropped.` };
-            publish();
-            break;
-          }
-        }
-        if (!bridge?.running) state.looked.info = index.info[m.path] ?? { appearances: [], error: "Size and appearances need REDbridge; it can still be dropped." };
+        if (!bridge?.running) state.looked.info = (sourceOf(m.path) ? void 0 : index.info[m.path]) ?? { appearances: [], error: "Size and appearances need REDbridge; it can still be dropped." };
         publish();
         if (bridge?.running) {
           try {
-            state.looked = { path: m.path, info: await index.lookAt(bridge, m.path) };
+            state.looked = { path: m.path, info: await assetInfo(bridge, m.path) };
           } catch (err) {
             state.looked = { path: m.path, info: { appearances: [], error: err.message } };
           }

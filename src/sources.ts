@@ -7,14 +7,19 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Bridge } from "./bridge";
 import { kindOf } from "./index";
-import type { AssetEntry } from "./protocol";
+import type { AssetEntry, AssetInfo } from "./protocol";
 
 interface CachedArchive {
   mod: string;
   size: number;
   mtime: number;
   entries: AssetEntry[];
+  /** What mesh.info said about its files, by path; forgotten with the archive's old version. */
+  info?: Record<string, AssetInfo>;
 }
+
+/** Said when REDbridge is older than 0.12.0 and reads sizes from the game's archives only. */
+export const NeedsNewerBridge = "Its size and appearances need REDbridge 0.12.0 or later (EDGEdeck: Get REDbridge); it can still be dropped, with a 1 m box for the gizmo.";
 
 interface CacheFile {
   format: 1;
@@ -58,6 +63,10 @@ export class ModSources {
   private archives: Record<string, CachedArchive> = {};
   /** The open project's loose files. */
   project: AssetEntry[] = [];
+  /** The project's source\archive, where its loose files are read from. */
+  private projectRoot: string | undefined;
+  /** What mesh.info said about the project's files, by file and its time: they change while the modder works. */
+  private projectInfo = new Map<string, AssetInfo>();
 
   constructor(readonly cacheFile: string) {
     try {
@@ -136,6 +145,8 @@ export class ModSources {
   /** Reads the meshes and entities among the project's loose files, as the game paths they will have once packed. */
   scanProject(project: { name: string; archive: string } | null, isGamePath: (p: string) => boolean): void {
     this.project = [];
+    if (project?.archive !== this.projectRoot) this.projectInfo.clear();
+    this.projectRoot = project?.archive;
     if (!project) return;
     const walk = (dir: string, rel: string) => {
       let names: fs.Dirent[];
@@ -165,6 +176,52 @@ export class ModSources {
     };
     walk(project.archive, "");
     this.project.sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  /**
+   * The size and appearances of a mod's or the project's file, through REDbridge's mesh.info with
+   * the archive or the project folder (REDbridge 0.12.0 and later), asked once per version of the file.
+   * An older REDbridge answers with NeedsNewerBridge as the error.
+   */
+  async lookAt(bridge: Bridge, entry: AssetEntry): Promise<AssetInfo> {
+    const from = entry.source;
+    if (!from) throw new Error(`${entry.path} is a game file`);
+    let cache: Record<string, AssetInfo> | Map<string, AssetInfo>;
+    let key = entry.path;
+    if (from.kind === "mod") {
+      const archive = this.archives[from.file];
+      if (!archive) return { appearances: [], error: `${from.name} is no longer installed` };
+      cache = archive.info ??= {};
+      const known = cache[key];
+      if (known && !known.error) return known;
+    } else {
+      let mtime = 0;
+      try {
+        mtime = fs.statSync(from.file).mtimeMs;
+      } catch {
+        return { appearances: [], error: `${entry.path} is no longer in the project` };
+      }
+      key = `${from.file}|${mtime}`;
+      cache = this.projectInfo;
+      const known = cache.get(key);
+      if (known && !known.error) return known;
+    }
+    let info: AssetInfo;
+    try {
+      const [r] = await bridge.meshInfoMany([entry.path], from.kind === "mod" ? { archive: from.file } : { root: this.projectRoot });
+      // REDbridge before 0.12.0 ignores archive and root, and looks in the game's archives only.
+      if (r?.error && /not in the loaded archives/i.test(r.error)) info = { appearances: [], error: NeedsNewerBridge };
+      else info = r?.error ? { appearances: [], error: r.error } : { bounds: r?.bounds ?? undefined, appearances: r?.appearances ?? [] };
+    } catch (err) {
+      const why = (err as Error).message;
+      info = { appearances: [], error: /param|argument|signature|method/i.test(why) ? NeedsNewerBridge : why };
+    }
+    if (cache instanceof Map) cache.set(key, info);
+    else {
+      cache[key] = info;
+      if (!info.error) this.save();
+    }
+    return info;
   }
 
   private save(): void {

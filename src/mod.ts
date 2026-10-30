@@ -12,7 +12,7 @@ import { AssetIndex, kindOf } from "./index";
 import { ModSources, modArchives, modFolders, sceneNeeds } from "./sources";
 import { Scene, yawToQuaternion } from "./scene";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
-import type { AssetEntry, AssetFrom, AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "./protocol";
+import type { AssetEntry, AssetFrom, AssetInfo, AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "./protocol";
 
 /** A base-game entity template that is a bare entity: no components, no appearances. The editor camera is this with a camera component attached. */
 const EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
@@ -309,6 +309,12 @@ async function connectRedcode(): Promise<void> {
 function sourceOf(assetPath: string): AssetEntry | undefined {
   const lower = assetPath.toLowerCase();
   return index.extra.find((e) => !e.replaces && e.path.toLowerCase() === lower);
+}
+
+/** What REDbridge knows about an asset: from the game's archives, or from its mod's archive or the project (B2c-2). */
+function assetInfo(b: Bridge, assetPath: string): Promise<AssetInfo> {
+  const entry = sourceOf(assetPath);
+  return entry ? sources.lookAt(b, entry) : index.lookAt(b, assetPath);
 }
 
 // ---- the world --------------------------------------------------------------------------------
@@ -799,10 +805,12 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
     const place = await dropPlace(at);
     const o = scene.add(kind, assetPath, { position: place.position, rotation: yawToQuaternion(place.yaw), scale: [1, 1, 1] }, appearance);
     added = o;
-    if (bridge?.running && !sourceOf(assetPath)) {
+    let sized = true;
+    if (bridge?.running) {
       try {
-        const info = await index.lookAt(bridge, assetPath);
+        const info = await assetInfo(bridge, assetPath);
         if (info.bounds) o.bounds = info.bounds;
+        else sized = false;
       } catch {
         // Bounds are a nicety for the bake; the drop goes ahead without them.
       }
@@ -816,7 +824,7 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
       from?.kind === "project"
         ? ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and try).`
         : from?.kind === "mod"
-          ? ` From ${from.name}; its size is not known yet, so the gizmo uses a 1 m box.`
+          ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}`
           : "";
     say(`Dropped ${path.basename(assetPath)} in ${Date.now() - started} ms.${note}`, "ok");
   } catch (err) {
@@ -889,20 +897,11 @@ channel.on<PageMessage>((m) => {
         break;
       case "look":
         state.looked = { path: m.path };
-        {
-          // REDbridge reads sizes and appearances from the game's archives only, until REDbridge #12.
-          const from = sourceOf(m.path)?.source;
-          if (from) {
-            state.looked.info = { appearances: [], error: `From ${from.kind === "project" ? `the REDcode project ${from.name}` : from.name}. Its size and appearances come in a later update; it can be dropped.` };
-            publish();
-            break;
-          }
-        }
-        if (!bridge?.running) state.looked.info = index.info[m.path] ?? { appearances: [], error: "Size and appearances need REDbridge; it can still be dropped." };
+        if (!bridge?.running) state.looked.info = (sourceOf(m.path) ? undefined : index.info[m.path]) ?? { appearances: [], error: "Size and appearances need REDbridge; it can still be dropped." };
         publish();
         if (bridge?.running) {
           try {
-            state.looked = { path: m.path, info: await index.lookAt(bridge, m.path) };
+            state.looked = { path: m.path, info: await assetInfo(bridge, m.path) };
           } catch (err) {
             state.looked = { path: m.path, info: { appearances: [], error: (err as Error).message } };
           }

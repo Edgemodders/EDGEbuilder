@@ -17,11 +17,11 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - The Scene tab says which mods and which REDcode project the scene needs.
 - While Edit is on, other packages' windows are hidden (REDnode's solo mode). Allow Solo for EDGEbuilder in REDnode's Mod Manager; without it they stay, and EDGEbuilder says so once.
 - After an archive swap (REDcode's Pack and try), previews that use a swapped file come back showing the new version, and stay selected.
+- A mod's or project's mesh or entity shows its size and appearances in Picked, and drops with its own box for the gizmo. Needs REDbridge 0.12.0 or later (EDGEdeck: Get REDbridge); with an older one it drops with a 1 m box and says so.
 
 **Changed**
 
 - Mesh previews are REDnode's own mesh props (`world.spawn` with `mesh`), which REDnode can spawn again after an archive swap.
-- A mod's or project's file has no size or appearances yet (that needs a REDbridge update, https://github.com/Edgemodders/REDbridge/issues/12): it drops with a 1 m box for the gizmo and its default appearance.
 
 ## 0.3.4 (2026-10-29)
 

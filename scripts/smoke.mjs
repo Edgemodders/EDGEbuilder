@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as core from "../dist/core.mjs";
-import { AssetIndex, BridgeClient, ModSources, Scene, findBridge, isGameFolder, kindOf, modArchives, quaternionToYaw, sceneNeeds, yawToQuaternion } from "../dist/core.mjs";
+import { AssetIndex, BridgeClient, ModSources, NeedsNewerBridge, Scene, findBridge, isGameFolder, kindOf, modArchives, quaternionToYaw, sceneNeeds, yawToQuaternion } from "../dist/core.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
@@ -185,6 +185,29 @@ assert.deepEqual(yawToQuaternion(0), [0, 0, 0, 1]);
     "chickens",
     "FabChair (REDcode project)",
   ]);
+  // B2c-2: sizes and appearances of a mod's and the project's files, through mesh.info with archive or root.
+  const asked = [];
+  const answers = (from) => ({ path: "x", type: "mesh", bounds: { min: [0, 0, 0], max: [1, 2, 3] }, appearances: ["default", from.archive ? "mod" : "loose"], error: null });
+  const newer = { meshInfoMany: async (paths, from) => (asked.push(from), paths.map(() => answers(from))) };
+  const chicken = again.entries().find((e) => e.path.endsWith("rubber_chicken.mesh"));
+  let info = await again.lookAt(newer, chicken);
+  assert.deepEqual(info.appearances, ["default", "mod"]);
+  assert.equal(asked[0].archive, chicken.source.file, "a mod's file is read from its archive");
+  await again.lookAt(newer, chicken);
+  assert.equal(asked.length, 1, "asked once");
+  info = await again.lookAt(newer, again.project[1]);
+  assert.deepEqual(info.appearances, ["default", "loose"]);
+  assert.equal(asked[1].root, archive, "a project's file is read from its source\\archive");
+  fs.writeFileSync(again.project[1].source.file, "changed");
+  fs.utimesSync(again.project[1].source.file, new Date(), new Date(Date.now() + 5000));
+  await again.lookAt(newer, again.project[1]);
+  assert.equal(asked.length, 3, "a changed project file is asked again");
+  const older = { meshInfoMany: async (paths) => paths.map((p) => ({ path: p, type: "", bounds: null, appearances: [], error: `'${p}' is not in the loaded archives` })) };
+  const fresh = new ModSources(path.join(tmp, "sources-old", "mods.json"));
+  fresh.scanProject({ name: "FabChair", archive }, isGame);
+  assert.equal((await fresh.lookAt(older, fresh.project[0])).error, NeedsNewerBridge, "an older REDbridge says what is needed");
+  const refuses = { meshInfoMany: async () => { throw new Error("Unexpected parameter: archive"); } };
+  assert.equal((await fresh.lookAt(refuses, fresh.project[0])).error, NeedsNewerBridge);
   console.log("mods and project: ok");
 }
 
@@ -224,12 +247,18 @@ if (!exe || !game) {
   assert.equal(reloaded.entries.length, index.entries.length);
   assert.deepEqual(reloaded.info[crates[0].path], info1, "looked-at info is kept");
   // A real mod archive, when the game has one: names come from the archive itself.
-  const real = modArchives(game)[0];
+  const real = modArchives(game).find((a) => /evilclown/i.test(a.file)) ?? modArchives(game)[0];
   if (real) {
     const mods = new ModSources(path.join(tmp, "sources-real", "mods.json"));
     const { failed } = await mods.refreshMods(bridge, [real], (p) => index.isGamePath(p));
     assert.deepEqual(failed, []);
-    console.log(`mod archive: ok (${real.mod}: ${mods.modAssets} meshes and entities)`);
+    const first = mods.entries().find((e) => e.kind === "mesh");
+    if (first) {
+      const looked = await mods.lookAt(bridge, first);
+      if (looked.error === NeedsNewerBridge) console.log(`mod archive: sizes skipped (REDbridge before 0.12.0)`);
+      else assert.ok(looked.bounds && looked.appearances.length, JSON.stringify(looked));
+    }
+    console.log(`mod archive: ok (${real.mod}: ${mods.modAssets} meshes and entities${first ? `; ${first.path.split("\\").pop()} looked at` : ""})`);
   }
   const bad = await index.lookAt(bridge, "base\\nope.mesh");
   assert.ok(bad.error);

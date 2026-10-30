@@ -44,6 +44,12 @@ export interface ModArchive {
   items: BridgeFile[];
 }
 
+/** Where mesh.info looks before the game's archives (REDbridge 0.12.0 and later): a mod's .archive, or a folder of loose files. */
+export interface InfoFrom {
+  archive?: string;
+  root?: string;
+}
+
 export class BridgeError extends Error {}
 
 /** What the mod needs from REDbridge, whether it is REDnode's shared one or a process of its own. */
@@ -51,7 +57,7 @@ export interface Bridge {
   readonly running: boolean;
   info(): Promise<BridgeInfo>;
   list(prefix: string, offset: number, limit?: number): Promise<FileList>;
-  meshInfoMany(paths: string[]): Promise<MeshInfoResult[]>;
+  meshInfoMany(paths: string[], from?: InfoFrom): Promise<MeshInfoResult[]>;
   openMod(archivePath: string): Promise<ModArchive>;
   stop(): void;
 }
@@ -66,8 +72,8 @@ export class KernelBridge implements Bridge {
   list(prefix: string, offset: number, limit = 5000): Promise<FileList> {
     return this.handle.call<FileList>("archive.list", { prefix, offset, limit });
   }
-  meshInfoMany(paths: string[]): Promise<MeshInfoResult[]> {
-    return this.handle.call<MeshInfoResult[]>("mesh.infoMany", { paths });
+  meshInfoMany(paths: string[], from?: InfoFrom): Promise<MeshInfoResult[]> {
+    return this.handle.call<MeshInfoResult[]>("mesh.infoMany", { paths, ...from });
   }
   openMod(archivePath: string): Promise<ModArchive> {
     return this.handle.call<ModArchive>("archive.openMod", { path: archivePath });
@@ -182,8 +188,8 @@ export class BridgeClient implements Bridge {
     return this.call<FileList>("archive.list", { prefix, offset, limit });
   }
 
-  meshInfoMany(paths: string[]): Promise<MeshInfoResult[]> {
-    return this.call<MeshInfoResult[]>("mesh.infoMany", { paths });
+  meshInfoMany(paths: string[], from?: InfoFrom): Promise<MeshInfoResult[]> {
+    return this.call<MeshInfoResult[]>("mesh.infoMany", { paths, ...from });
   }
 
   openMod(archivePath: string): Promise<ModArchive> {

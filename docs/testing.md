@@ -23,7 +23,7 @@ Last updated 2026-10-30.
 | [B2b retest](#b2b-retest-in-032) | In the game | B2b | 2026-10-16 (0.3.2) | Pass |
 | [0.3.4 check on game 2.5](#034-check-on-game-25) | In the game | B2b | 2026-10-29 (0.3.4) | Pass |
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
-| [B2c-1 Mod assets](#b2c-1-mod-assets) | In the game | B2c | Built 2026-10-30 (0.4.0) | Waiting for the owner |
+| [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | Built 2026-10-30 (0.4.0) | Waiting for the owner |
 
 ## Automated
 
@@ -251,19 +251,19 @@ streaming:
 | Does `sector.build`'s entity node work? | Yes: `crate_red.ent` stands as a `worldEntityNode` |
 | Collision | Through an entity with an `entPhysicalMeshComponent`: solid. A `worldMeshNode`: none. Solid meshes need another node type; see the design's Bake section |
 
-### B2c-1 Mod assets
+### B2c Mod assets
 
-**Built on 2026-10-30, waiting for the owner's test.** EDGEbuilder 0.4.0, from `npm run package`, added in EDGEdeck (it goes into the old row). REDnode 0.41.0 or later; REDcode 0.10.5 or later for the Project steps. Browse lists installed mods' and the open REDcode project's meshes and entities; mesh previews are now REDnode's mesh props, so steps 1 and 2 repeat the basics.
+**Built on 2026-10-30, waiting for the owner's test.** EDGEbuilder 0.4.0, from `npm run package`, added in EDGEdeck (it goes into the old row). REDnode 0.41.0 or later; **REDbridge with #12** (0.12.0, or the build from REDbridge's main the REDnode session deployed on 2026-10-30) for sizes and appearances; REDcode 0.10.5 or later for the Project steps. The smoke test passed with both REDbridge 0.11.0 (sizes skipped, the "needs 0.12.0" answer) and the main build (EvilClown's meshes read from its archive). Browse lists installed mods' and the open REDcode project's meshes and entities; mesh previews are now REDnode's mesh props, so steps 1 and 2 repeat the basics.
 
 | # | Check | Expected |
 |---|---|---|
 | 1 | The log's start line, then a few seconds later | `EDGEbuilder 0.4.0 starting`; `Mods: 17 meshes and entities in 5 archives` (the dev PC's mods: EvilClown, EDGEmatA, SkippySkippy, `zzz_rednode_box`, the bake probe) |
 | 2 | The basics with the new mesh previews: drop `cargo_crate_a.mesh`, select it, drag an arrow, S 2, Ctrl+E | As in 0.3.4: it appears in about half a second with the outline, follows the gizmo, comes back twice the size, drops to the ground |
 | 3 | Assets: the Mods tab; then Everywhere and type `chicken` | Mods lists the mods' files with their mod's name; `kratoes_rubber_chicken` (mesh and entity) first, tagged EvilClown. `cardboard_box_a_closed` says `zzz_rednode_box changes a game file` |
-| 4 | Pick `kratoes_rubber_chicken.mesh` | "From EvilClown. Its size and appearances come in a later update; it can be dropped." |
-| 5 | Drop it, and the `.ent` beside it | Both appear (a rubber chicken); the message says the gizmo uses a 1 m box. The gizmo works on the 1 m box |
+| 4 | Pick `kratoes_rubber_chicken.mesh` | Its size, about 0.1 x 0.1 x 0.6 m, and its appearance `default` |
+| 5 | Drop it, and the `.ent` beside it | Both appear (a rubber chicken). The mesh's gizmo and outline box fit the chicken. The `.ent` has no size (its meshes are in its appearance file, as for many game entities): the message says the gizmo uses a 1 m box |
 | 6 | The Scene tab | "This scene needs: EvilClown" |
 | 7 | Edit on with another package's window open (the coords app, for example); Edit off | The other window goes while Edit is on and comes back; the Test timer and the launcher stay. Without Solo allowed: they stay and the message line says how to allow it |
-| 8 | With REDcode open on a project that has a mesh or entity under `source\archive` (EDGEfab's first prop when it exists): the Project tab | Its files, tagged `project <name>`. Save a new mesh into it: it appears within a few seconds. Close the project in REDcode: "No REDcode project open" |
+| 8 | With REDcode open on a project that has a mesh or entity under `source\archive` (EDGEfab's first prop when it exists): the Project tab, pick a mesh | Its files, tagged `project <name>`; the picked mesh's size and appearances. Save a new mesh into it: it appears within a few seconds. Close the project in REDcode: "No REDcode project open" |
 | 9 | Drop the project's file before packing; then REDcode's Pack and try | Before: the message says the game shows it once packed and loaded. After Pack and try: it shows; the log has `<id> spawned again after an archive swap` for a preview that uses a swapped file, and a selected one stays selected |
 
