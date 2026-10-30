@@ -22,7 +22,7 @@ Last updated 2026-10-30.
 | [B2b Camera](#b2b-camera) | In the game | B2b | 2026-10-14 (0.3.0) | Pass |
 | [B2b retest](#b2b-retest-in-032) | In the game | B2b | 2026-10-16 (0.3.2) | Pass |
 | [0.3.4 check on game 2.5](#034-check-on-game-25) | In the game | B2b | 2026-10-29 (0.3.4) | Pass |
-| [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Round 1 pass; round 2 waiting |
+| [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
 
 ## Automated
 
@@ -195,7 +195,7 @@ Full steps: [B2b test](b2b-test.md). **Passed 2026-10-14** with EDGEbuilder 0.3.
 
 ### Bake probe
 
-**Round 1 passed on 2026-10-30** (results below); round 2 waits for the owner. The first baked sector in the game: one crate, baked by REDbridge's `sector.build` from a script, packed by REDbridge's `project.pack`, deployed by EDGEdeck. EDGEbuilder is not involved, so it stays off for the whole test.
+**Passed on 2026-10-30**, both rounds (results below). The first baked sector in the game: one crate, baked by REDbridge's `sector.build` from a script, packed by REDbridge's `project.pack`, deployed by EDGEdeck. EDGEbuilder is not involved, so it stays off for the whole test.
 
 How it was made: `npm run build`, then `node scripts/bake-probe.mjs <out folder>` with REDbridge 0.11.0 (the one built in the REDbridge checkout; EDGEdeck had fetched 0.10.0, which writes 2.31 sectors). It writes `<out>/project`, the REDcode project the bake goes into, and `<out>/mod` with `archive\pc\mod\edgebuilder_bake_probe.archive` and `edgebuilder_bake_probe.archive.xl`. The crate is `cargo_crate_a.mesh` at (-1439.15, 1214.04, 23.07), not turned, scale 1: 2 m east of a crate dropped on a Watson street in B2b's test. The streaming box reaches 100 m around it.
 
@@ -224,7 +224,7 @@ streaming:
 | The crate goes when V walks away while people and cars stay, and comes back on the way in | The bake gives a node a streaming distance from its size: `max(40, 11 x size)`, so 40 m for a crate. The game's own crates in the sectors around it stream at 20 to 60 m (`delivery_crate_*` as instanced destructible meshes, `crate_small.ent` at 50 m); trash at 8 to 15 m. People and vehicles are spawned by other systems. Normal for a small prop; a scene can set a longer one per object (`streaming.primary`) |
 | No collision: V walks through it | The bake writes a mesh as `worldMeshNode`, which only draws. The mesh has collision data (`meshMeshParamPhysics`), but the game's solid props come as other node types: instanced destructible meshes (4,550 in the 12 nearest finest-level sectors), entity nodes, or separate cooked collision nodes. Only 92 plain mesh nodes there |
 
-**Round 2** (baked the same day, waiting for the owner): the same mod, three objects in a row going west, 2 m apart, all on the ground at y 1214, z 23:
+**Round 2** (baked and passed the same day): the same mod, three objects in a row going west, 2 m apart, all on the ground at y 1214, z 23:
 
 | Object | Where | Tests |
 |---|---|---|
@@ -239,4 +239,12 @@ streaming:
 | 3 | Walk into each; shoot each | The two mesh crates: no collision. The red one: solid (it may be pushed or fall over: `entPhysicalMeshComponent` can be dynamic) |
 | 4 | Walk east along the street, looking back, to about 150 m, then back | `crate` goes at about 40 m, `crate_far` stays to about 120 m, the red one goes when its entity streams out. Rough distances are enough |
 | 5 | The ArchiveXL log | As in round 1 |
+
+**Round 2 results (2026-10-30, the owner's report):** every step as written. The ArchiveXL log is as in round 1. So:
+
+| Question | Answer |
+|---|---|
+| Does a scene's `streaming` reach the game? | Yes: `crate_far` stayed to about 120 m while `crate` went at about 40 m |
+| Does `sector.build`'s entity node work? | Yes: `crate_red.ent` stands as a `worldEntityNode` |
+| Collision | Through an entity with an `entPhysicalMeshComponent`: solid. A `worldMeshNode`: none. Solid meshes need another node type; see the design's Bake section |
 
