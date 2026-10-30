@@ -232,7 +232,7 @@ For EDGEdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` dep
 | **B4c Quest places** | For EDGEquest ([issue #3](https://github.com/Edgemodders/EDGEbuilder/issues/3)): spots, trigger areas, map markers and NPC spawns as scene kinds with a `ref`, baked into the quest's sector; the prefab that holds a trigger area named for `phasePrefabs`; placing and listing them through EDGEbuilder's service and MCP tools. Planned with EDGEquest when its Q4 needs places | A quest step waits for V in a trigger area EDGEbuilder placed |
 | **B5 Lights and more kinds** | Lights, decals, particles, effects, sounds, colliders | Each kind bakes and loads |
 | **B6 Comfort** | Favourites, prefabs, scatter, snapping, templates | Daily use |
-| **B7 Project builder** | The scene tree and properties in REDcode, "Open in game", then a 3D view from meshes REDbridge exports | A scene edited with the game closed bakes the same |
+| **B7 Project builder** | The scene tree and properties in REDcode, "Open in game", then a 3D view from meshes REDbridge exports. Proposed 2026-10-29 to become EDGEbuilder for VS Code, with the Library and a map of the whole world: see [Library and world view](library.md) | A scene edited with the game closed bakes the same |
 
 Each phase ends with an in-game test on the owner's PC, with the steps written down in a results page, as REDnode does.
 
