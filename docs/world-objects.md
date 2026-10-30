@@ -4,7 +4,7 @@ title: World objects
 
 # World objects: picking what the game already placed
 
-> **Proposed addition, 2026-10-29:** the [World inspector](world-inspector.md) grows B3b into a full inspector and takes static nodes from a world node registry in REDnode (ported from RED Hot Tools), not from a REDbridge index matched by position. Until it is agreed, this page stands as agreed.
+> **Agreed addition, 2026-10-29:** the [World inspector](world-inspector.md) grows B3b into a full inspector and takes static nodes from a world node registry in REDnode ([REDnode #24](https://github.com/Edgemodders/REDnode/issues/24), ported from RED Hot Tools), not from a REDbridge index matched by position. REDbridge's `sector.near` below became `sector.nodes` ([REDbridge #11](https://github.com/Edgemodders/REDbridge/issues/11)). The rest of this page stands.
 
 Draft 2, 2026-10-29 (draft 1 2026-10-18). Status: **agreed with the owner on 2026-10-29**, for phases B3b and B4b of the [roadmap](design.md#roadmap). B3b's first step is the probes at the end. Draft 2: probe 1 is answered by REDnode's `world.near`, and the sector index is for game 2.5, whose sectors REDbridge 0.11.0 reads with node paths stored only as hashes.
 

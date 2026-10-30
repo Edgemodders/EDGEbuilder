@@ -4,7 +4,7 @@ title: Library and world view
 
 # The Library and EDGEbuilder for VS Code
 
-Draft 2, 2026-10-29. Status: **proposed**, written from the owner's idea and answers of 2026-10-29 (draft 2: the root's default and Relocate, who keeps the rules); to be agreed before B3, which would build the Library's first part. It changes where scenes and bakes live (B3, B4) and turns B7, the project builder, into an EDGEbuilder extension for VS Code with a map of the whole world.
+Draft 2, 2026-10-29. Status: **agreed with the owner on 2026-10-29**, written from their idea and answers (draft 2: the root's default and Relocate, who keeps the rules). B3 builds the Library's first part. It changes where scenes and bakes live (B3, B4) and turns B7, the project builder, into an EDGEbuilder extension for VS Code with a map of the whole world.
 
 ## The idea
 
@@ -96,13 +96,13 @@ In it the modder can:
 
 | Repo | Need | When |
 |---|---|---|
-| REDbridge | `sector.find`: the sectors from the streaming blocks, with box, kind, level and archive, Phantom Liberty's replacements resolved | The probe |
-| REDbridge | `sector.nodes`: a sector's nodes with kind, resource, appearance and world transform, instanced meshes unpacked into one transform each | The probe |
+| REDbridge, [REDbridge #11](https://github.com/Edgemodders/REDbridge/issues/11) | `sector.find`: the sectors from the streaming blocks, with box, kind, level and archive, Phantom Liberty's replacements resolved | The probe |
+| REDbridge, [REDbridge #11](https://github.com/Edgemodders/REDbridge/issues/11) | `sector.nodes`: a sector's nodes with kind, resource, appearance and world transform, instanced meshes unpacked into one transform each | The probe |
 | REDcode | Its mesh viewer usable from another extension for many meshes at once, or its three.js scene shared | The sector view |
 | EDGEfab, EDGEmat | Their items in the Library: kinds, manifests, and a Library view where their work needs one | When each tool gets there |
 | REDnode | Nothing new: Node mods have file access, `archives.reload` swaps archives in | |
 
-Requests are opened only after this page is agreed.
+Opened 2026-10-29: [REDbridge #11](https://github.com/Edgemodders/REDbridge/issues/11) for `sector.find` and `sector.nodes`.
 
 ## Roadmap
 

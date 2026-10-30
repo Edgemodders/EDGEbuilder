@@ -4,7 +4,7 @@ title: World inspector
 
 # World inspector
 
-Draft 1, 2026-10-29. Status: **proposed**, at the owner's request: a world inspector built into EDGEbuilder, like RED Hot Tools' World Inspector. It grows phase B3b ([World objects](world-objects.md)) into a full inspector, and gives B4b a way to try an edit live before baking it. To be agreed with the Library proposal.
+Draft 1, 2026-10-29. Status: **agreed with the owner on 2026-10-29**, at their request: a world inspector built into EDGEbuilder, like RED Hot Tools' World Inspector. It grows phase B3b ([World objects](world-objects.md)) into a full inspector, and gives B4b a way to try an edit live before baking it.
 
 ## What RED Hot Tools has
 
@@ -51,9 +51,9 @@ Moving or rescaling a game object is B4b's "change the original": a world edit i
 
 | From | Need | Notes |
 |---|---|---|
-| **REDnode** | A **world node registry** in its plugin: for each streamed node instance, its sector and node index, instance index, type, reference, transform and bounds; the streamed nodes within a distance or along a ray; the game's outline on a node; a node's visibility; the streaming observer at a chosen point | The native part, ported from RED Hot Tools' MIT code to 2.5 with its license, as REDswap was. It belongs in REDnode, not EDGEbuilder: native hooks are the plugin's, and other packages can use it. A `request` issue once this page is agreed |
-| REDnode | `world.near` from a point other than V's | Probe 1 of World objects |
-| REDbridge | `sector.nodes` (from the Library proposal) | Full node data from the sector file when the live node does not have it, and the same data in VS Code. It replaces World objects' `sector.near` |
+| **REDnode**, [REDnode #24](https://github.com/Edgemodders/REDnode/issues/24) | A **world node registry** in its plugin: for each streamed node instance, its sector and node index, instance index, type, reference, transform and bounds; the streamed nodes within a distance or along a ray; the game's outline on a node; a node's visibility; the streaming observer at a chosen point | The native part, ported from RED Hot Tools' MIT code to 2.5 with its license, as REDswap was. It belongs in REDnode, not EDGEbuilder: native hooks are the plugin's, and other packages can use it |
+| REDnode, [REDnode #24](https://github.com/Edgemodders/REDnode/issues/24) | `world.near` from a point other than V's | Probe 1 of World objects |
+| REDbridge, [REDbridge #11](https://github.com/Edgemodders/REDbridge/issues/11) | `sector.nodes` (from the Library proposal) | Full node data from the sector file when the live node does not have it, and the same data in VS Code. It replaces World objects' `sector.near` |
 
 With the registry, [World objects](world-objects.md)' picking step 3 changes: static nodes come from REDnode's registry of what is streamed in, exactly, rather than from a REDbridge index matched by position. Its reference rules (sector path, node index, 2.5 hash, fingerprint) stay.
 
