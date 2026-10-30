@@ -1,4 +1,4 @@
-// The bake probe (design draft 4): one crate baked by REDbridge's sector.build, packed into an
+// The bake probe (design draft 4): crates baked by REDbridge's sector.build, packed into an
 // archive with its ArchiveXL file, as a mod folder for EDGEdeck. No EDGEbuilder in the loop.
 //   npm run build
 //   node scripts/bake-probe.mjs <out folder> [--x X --y Y --z Z]
@@ -41,6 +41,8 @@ const scene = {
   name,
   game: "2.5",
   groups: [],
+  // Round 1 (2026-10-30): the first crate alone. Round 2 adds, going west 2 m apart, the same
+  // crate with a longer streaming distance and an entity crate that has collision (entPhysicalMeshComponent).
   objects: [
     {
       id: "crate",
@@ -48,6 +50,21 @@ const scene = {
       resource: "base\\environment\\decoration\\containers\\cargo\\cargo_crate\\cargo_crate_a.mesh",
       appearance: "default",
       transform: { position, rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+    },
+    {
+      id: "crate_far",
+      kind: "mesh",
+      resource: "base\\environment\\decoration\\containers\\cargo\\cargo_crate\\cargo_crate_a.mesh",
+      appearance: "default",
+      transform: { position: [position[0] - 2, position[1], position[2]], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+      streaming: { primary: 120, secondary: 96 },
+    },
+    {
+      id: "crate_entity",
+      kind: "entity",
+      resource: "base\\gameplay\\devices\\disposal\\appearances\\crate_red.ent",
+      appearance: "default",
+      transform: { position: [position[0] - 4, position[1], position[2]], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
     },
   ],
 };

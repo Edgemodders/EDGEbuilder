@@ -22,7 +22,7 @@ Last updated 2026-10-30.
 | [B2b Camera](#b2b-camera) | In the game | B2b | 2026-10-14 (0.3.0) | Pass |
 | [B2b retest](#b2b-retest-in-032) | In the game | B2b | 2026-10-16 (0.3.2) | Pass |
 | [0.3.4 check on game 2.5](#034-check-on-game-25) | In the game | B2b | 2026-10-29 (0.3.4) | Pass |
-| [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Waiting for the owner |
+| [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Round 1 pass; round 2 waiting |
 
 ## Automated
 
@@ -195,7 +195,7 @@ Full steps: [B2b test](b2b-test.md). **Passed 2026-10-14** with EDGEbuilder 0.3.
 
 ### Bake probe
 
-**Built on 2026-10-30, waiting for the owner's test.** The first baked sector in the game: one crate, baked by REDbridge's `sector.build` from a script, packed by REDbridge's `project.pack`, deployed by EDGEdeck. EDGEbuilder is not involved, so it stays off for the whole test.
+**Round 1 passed on 2026-10-30** (results below); round 2 waits for the owner. The first baked sector in the game: one crate, baked by REDbridge's `sector.build` from a script, packed by REDbridge's `project.pack`, deployed by EDGEdeck. EDGEbuilder is not involved, so it stays off for the whole test.
 
 How it was made: `npm run build`, then `node scripts/bake-probe.mjs <out folder>` with REDbridge 0.11.0 (the one built in the REDbridge checkout; EDGEdeck had fetched 0.10.0, which writes 2.31 sectors). It writes `<out>/project`, the REDcode project the bake goes into, and `<out>/mod` with `archive\pc\mod\edgebuilder_bake_probe.archive` and `edgebuilder_bake_probe.archive.xl`. The crate is `cargo_crate_a.mesh` at (-1439.15, 1214.04, 23.07), not turned, scale 1: 2 m east of a crate dropped on a Watson street in B2b's test. The streaming box reaches 100 m around it.
 
@@ -216,4 +216,27 @@ streaming:
 | 5 | Walk into it, shoot it | Whether it has collision (a mesh node may not: this is to learn, not a fail) |
 | 6 | `red4ext/plugins/ArchiveXL/ArchiveXL-<date>.log` | `[WorldStreaming] Merging streaming block "edgebuilder\...\edgebuilder_bake_probe.streamingblock"...` and `All streaming blocks merged`, no errors |
 | 7 | Afterwards: the mod off in EDGEdeck and deploy, or leave it for the next bakes | |
+
+**Round 1 results (2026-10-30, the owner's report):** steps 1 to 7 as expected. ArchiveXL 1.28.6 loaded `edgebuilder_bake_probe.archive.xl` and logged `[ResourcePatch] Merging streaming block "edgebuilder\edgebuilder_bake_probe\edgebuilder_bake_probe.streamingblock"...` and `All streaming blocks merged`, no errors: **a baked sector loads in game 2.5.**
+
+| Seen | Why |
+|---|---|
+| The crate goes when V walks away while people and cars stay, and comes back on the way in | The bake gives a node a streaming distance from its size: `max(40, 11 x size)`, so 40 m for a crate. The game's own crates in the sectors around it stream at 20 to 60 m (`delivery_crate_*` as instanced destructible meshes, `crate_small.ent` at 50 m); trash at 8 to 15 m. People and vehicles are spawned by other systems. Normal for a small prop; a scene can set a longer one per object (`streaming.primary`) |
+| No collision: V walks through it | The bake writes a mesh as `worldMeshNode`, which only draws. The mesh has collision data (`meshMeshParamPhysics`), but the game's solid props come as other node types: instanced destructible meshes (4,550 in the 12 nearest finest-level sectors), entity nodes, or separate cooked collision nodes. Only 92 plain mesh nodes there |
+
+**Round 2** (baked the same day, waiting for the owner): the same mod, three objects in a row going west, 2 m apart, all on the ground at y 1214, z 23:
+
+| Object | Where | Tests |
+|---|---|---|
+| `crate`: `cargo_crate_a.mesh`, as in round 1 | x -1439 | The reference |
+| `crate_far`: the same mesh, `streaming: { primary: 120, secondary: 96 }` | x -1441 | That a scene's own streaming distance reaches the game |
+| `crate_entity`: `base\gameplay\devices\disposal\appearances\crate_red.ent` (an `entMeshComponent` and an `entPhysicalMeshComponent`) | x -1443 | The bake's entity node, and collision through an entity |
+
+| # | Check | Expected |
+|---|---|---|
+| 1 | Game closed; deploy in EDGEdeck (the library entry was replaced with round 2) | The two files replaced |
+| 2 | Teleport as in round 1, look west | Three crates in a row: two alike, then a red one |
+| 3 | Walk into each; shoot each | The two mesh crates: no collision. The red one: solid (it may be pushed or fall over: `entPhysicalMeshComponent` can be dynamic) |
+| 4 | Walk east along the street, looking back, to about 150 m, then back | `crate` goes at about 40 m, `crate_far` stays to about 120 m, the red one goes when its entity streams out. Rough distances are enough |
+| 5 | The ArchiveXL log | As in round 1 |
 
