@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as core from "../dist/core.mjs";
-import { AssetIndex, BridgeClient, Scene, findBridge, isGameFolder, kindOf, quaternionToYaw, yawToQuaternion } from "../dist/core.mjs";
+import { AssetIndex, BridgeClient, ModSources, Scene, findBridge, isGameFolder, kindOf, modArchives, quaternionToYaw, sceneNeeds, yawToQuaternion } from "../dist/core.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
@@ -111,6 +111,83 @@ assert.equal(kindOf("a\\b.ENT"), "entity");
 assert.equal(kindOf("a\\b.xbm"), undefined);
 assert.deepEqual(yawToQuaternion(0), [0, 0, 0, 1]);
 
+// B2c: mod archives (through a stand-in for REDbridge's archive.openMod), the project's loose files,
+// the search over them, and what a scene needs.
+{
+  const game = path.join(tmp, "game");
+  const modDir = path.join(game, "archive", "pc", "mod");
+  fs.mkdirSync(modDir, { recursive: true });
+  fs.mkdirSync(path.join(game, "mods", "redmod_props", "archives"), { recursive: true });
+  fs.writeFileSync(path.join(modDir, "chickens.archive"), "1234");
+  fs.writeFileSync(path.join(modDir, "readme.txt"), "not an archive");
+  fs.writeFileSync(path.join(game, "mods", "redmod_props", "archives", "props.archive"), "12");
+  const files = modArchives(game);
+  assert.deepEqual(files.map((f) => f.mod).sort(), ["chickens", "redmod_props"]);
+  const contents = {
+    "chickens.archive": [
+      { hash: "1", name: "base\\toys\\rubber_chicken.mesh", size: 10, archive: "chickens" },
+      { hash: "2", name: "base\\toys\\rubber_chicken_d.xbm", size: 10, archive: "chickens" },
+      { hash: "3", name: "base\\environment\\box_a.mesh", size: 10, archive: "chickens" },
+    ],
+    "props.archive": [{ hash: "4", name: "redmod_props\\lamp.ent", size: 10, archive: "props" }],
+  };
+  let reads = 0;
+  const fake = { openMod: async (file) => (reads++, { path: file, name: path.basename(file), count: 0, items: contents[path.basename(file)] }) };
+  const isGame = (p) => p.toLowerCase() === "base\\environment\\box_a.mesh";
+  const sources = new ModSources(path.join(tmp, "sources", "mods.json"));
+  let r = await sources.refreshMods(fake, files, isGame);
+  assert.equal(r.changed, true);
+  assert.equal(reads, 2);
+  assert.equal(sources.modAssets, 3, "meshes and entities only");
+  const box = sources.entries().find((e) => e.path.endsWith("box_a.mesh"));
+  assert.equal(box.replaces, true, "a mod file with a game file's path changes that file");
+  assert.equal(sources.entries().find((e) => e.path.endsWith("lamp.ent")).source.name, "redmod_props");
+  r = await sources.refreshMods(fake, files, isGame);
+  assert.equal(r.changed, false);
+  assert.equal(reads, 2, "unchanged archives are not read again");
+  const again = new ModSources(sources.cacheFile);
+  assert.equal(again.modAssets, 3, "the cache survives a restart");
+  fs.writeFileSync(path.join(modDir, "chickens.archive"), "123456");
+  r = await again.refreshMods(fake, modArchives(game), isGame);
+  assert.equal(reads, 3, "a changed archive is read again, only that one");
+  fs.rmSync(path.join(game, "mods"), { recursive: true });
+  r = await again.refreshMods(fake, modArchives(game), isGame);
+  assert.equal(r.changed, true);
+  assert.equal(again.modAssets, 2, "a removed mod is forgotten");
+
+  // The project's loose files, as the game paths they get once packed.
+  const archive = path.join(tmp, "project", "source", "archive");
+  fs.mkdirSync(path.join(archive, "edgefab", "chair"), { recursive: true });
+  fs.writeFileSync(path.join(archive, "edgefab", "chair", "chair.mesh"), "m");
+  fs.writeFileSync(path.join(archive, "edgefab", "chair", "chair.ent"), "e");
+  fs.writeFileSync(path.join(archive, "edgefab", "chair", "chair_d.xbm"), "t");
+  again.scanProject({ name: "FabChair", archive }, isGame);
+  assert.deepEqual(again.project.map((e) => e.path), ["edgefab\\chair\\chair.ent", "edgefab\\chair\\chair.mesh"]);
+  assert.equal(again.project[0].source.kind, "project");
+
+  // Search: mods and the project beside the game, by source, and by the mod's name.
+  const index = new AssetIndex(path.join(tmp, "index-b2c"));
+  index.entries = [
+    { path: "base\\environment\\box_a.mesh", kind: "mesh", size: 1 },
+    { path: "base\\environment\\chair_b.mesh", kind: "mesh", size: 1 },
+  ];
+  index.extra = again.entries();
+  assert.ok(index.isGamePath("base/environment/box_a.mesh"));
+  assert.equal(index.search("chair", "all", 10)[0].source?.name, "FabChair", "mods and the project first");
+  assert.deepEqual(index.search("chair", "all", 10, "game").map((e) => e.path), ["base\\environment\\chair_b.mesh"]);
+  assert.equal(index.search("", "all", 10, "project").length, 2, "Project lists all of its files without text");
+  assert.ok(index.search("", "all", 10, "mods").every((e) => e.source?.kind === "mod"));
+  assert.deepEqual(index.search("chickens", "all", 10, "mods").map((e) => e.source.name), ["chickens", "chickens"], "a mod's name finds its files");
+  assert.equal(index.search("chickens", "entity", 10, "mods").length, 0);
+
+  // What a scene needs: mods and projects by name; a replaced game file needs nothing.
+  assert.deepEqual(sceneNeeds(["base/toys/rubber_chicken.mesh", "edgefab\\chair\\chair.ent", "base\\environment\\box_a.mesh", "base\\environment\\chair_b.mesh", undefined], index.extra), [
+    "chickens",
+    "FabChair (REDcode project)",
+  ]);
+  console.log("mods and project: ok");
+}
+
 // The bridge and the index, against the real thing when it is here.
 const exe = process.env.EDGEBUILDER_BRIDGE || findBridge() || [path.join(here, "..", "..", "REDbridge", "dist", "publish", "REDbridge.exe"), path.join(here, "..", "..", "REDbridge", "src", "REDbridge", "bin", "Release", "net10.0", "REDbridge.exe")].find((p) => fs.existsSync(p));
 const game = [process.env.EDGEBUILDER_GAME, "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Cyberpunk 2077"].find(isGameFolder);
@@ -146,6 +223,14 @@ if (!exe || !game) {
   assert.equal(reloaded.load(key), true);
   assert.equal(reloaded.entries.length, index.entries.length);
   assert.deepEqual(reloaded.info[crates[0].path], info1, "looked-at info is kept");
+  // A real mod archive, when the game has one: names come from the archive itself.
+  const real = modArchives(game)[0];
+  if (real) {
+    const mods = new ModSources(path.join(tmp, "sources-real", "mods.json"));
+    const { failed } = await mods.refreshMods(bridge, [real], (p) => index.isGamePath(p));
+    assert.deepEqual(failed, []);
+    console.log(`mod archive: ok (${real.mod}: ${mods.modAssets} meshes and entities)`);
+  }
   const bad = await index.lookAt(bridge, "base\\nope.mesh");
   assert.ok(bad.error);
   console.log(`search: ok (${crates.length} cargo crate meshes; first ${crates[0].path}, ${info1.appearances.length} appearances)`);

@@ -5,7 +5,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Bridge } from "./bridge";
-import type { AssetEntry, AssetInfo, AssetKind } from "./protocol";
+import type { AssetEntry, AssetFrom, AssetInfo, AssetKind } from "./protocol";
 
 /** The folders worth indexing for world building. Characters, weapons and UI are left out. */
 export const IndexPrefixes = ["base\\environment", "ep1\\environment", "base\\items", "ep1\\items", "base\\gameplay\\devices"];
@@ -27,6 +27,9 @@ export class AssetIndex {
   info: Record<string, AssetInfo> = {};
   game = "";
   file = "";
+  /** Mods' and the open project's assets (B2c), searched beside the game's. */
+  extra: AssetEntry[] = [];
+  private gamePaths: Set<string> | undefined;
 
   constructor(readonly dir: string) {}
 
@@ -39,6 +42,7 @@ export class AssetIndex {
       if (data.format !== 1 || !Array.isArray(data.entries)) return false;
       this.entries = unique(data.entries);
       this.info = data.info ?? {};
+      this.gamePaths = undefined;
       return true;
     } catch {
       return false;
@@ -88,33 +92,51 @@ export class AssetIndex {
     }
     entries.sort((a, b) => a.path.localeCompare(b.path));
     this.entries = unique(entries);
+    this.gamePaths = undefined;
     this.save();
   }
 
-  /** Substring search over paths, file-name matches first. */
-  search(text: string, kind: AssetKind | "all", limit = 200): AssetEntry[] {
+  /** Whether a path is one of the indexed game files. */
+  isGamePath(p: string): boolean {
+    this.gamePaths ??= new Set(this.entries.map((e) => e.path.toLowerCase()));
+    return this.gamePaths.has(p.replace(/\//g, "\\").toLowerCase());
+  }
+
+  /**
+   * Substring search over paths, file-name matches first. Mods' and the project's files come first
+   * and also match by their mod's or project's name. With no text, `from` other than game lists them all.
+   */
+  search(text: string, kind: AssetKind | "all", limit = 200, from: AssetFrom = "all"): AssetEntry[] {
     const terms = text.toLowerCase().split(/\s+/).filter(Boolean);
     const out: { e: AssetEntry; score: number }[] = [];
-    for (const e of this.entries) {
-      if (kind !== "all" && e.kind !== kind) continue;
-      const lower = e.path.toLowerCase();
-      const name = lower.slice(lower.lastIndexOf("\\") + 1);
-      let score = 0;
-      let ok = true;
-      for (const t of terms) {
-        if (name.includes(t)) score += 2;
-        else if (lower.includes(t)) score += 1;
-        else {
-          ok = false;
-          break;
-        }
+    const pools = from === "game" ? [this.entries] : from === "all" ? [this.extra, this.entries] : [this.extra];
+    for (const pool of pools) {
+      for (const e of pool) {
+        if (kind !== "all" && e.kind !== kind) continue;
+        if (from === "mods" && e.source?.kind !== "mod") continue;
+        if (from === "project" && e.source?.kind !== "project") continue;
+        const score = this.score(e, terms);
+        if (score < 0) continue;
+        out.push({ e, score: score + (e.source ? 0.5 : 0) });
+        if (out.length > limit * 20) break;
       }
-      if (!ok) continue;
-      out.push({ e, score });
-      if (out.length > limit * 20) break;
     }
     out.sort((a, b) => b.score - a.score || a.e.path.length - b.e.path.length);
     return out.slice(0, limit).map((x) => x.e);
+  }
+
+  /** How well an entry matches every term: 2 for the file name, 1 for the path or the source's name; -1 when a term misses. */
+  private score(e: AssetEntry, terms: string[]): number {
+    const lower = e.path.toLowerCase();
+    const name = lower.slice(lower.lastIndexOf("\\") + 1);
+    const source = e.source?.name.toLowerCase() ?? "";
+    let score = 0;
+    for (const t of terms) {
+      if (name.includes(t)) score += 2;
+      else if (lower.includes(t) || source.includes(t)) score += 1;
+      else return -1;
+    }
+    return score;
   }
 
   /** What the bridge knows about an asset, asked once and remembered. */

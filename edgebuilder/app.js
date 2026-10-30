@@ -861,6 +861,7 @@ var esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">":
 var shortName = (p) => p.slice(p.lastIndexOf("\\") + 1);
 var state;
 var kind = "all";
+var from = "all";
 var lookedAt;
 var appearance;
 var lastMessage = "";
@@ -881,8 +882,17 @@ function render(s) {
   $("progress").textContent = ix.status === "building" ? ix.progress ?? "" : "";
   const list = $("results");
   const keep = lookedAt;
-  list.innerHTML = s.results.map((r) => `<rn-item value="${esc(r.path)}" title="${esc(r.path)}"${r.path === keep ? " selected" : ""}>${esc(shortName(r.path))}<span slot="end">${r.path.toLowerCase().startsWith("ep1\\") ? "PL " : ""}${r.kind}</span></rn-item>`).join("");
-  $("count").textContent = s.index.status === "ready" ? s.query.text ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} of ${s.index.count.toLocaleString()}` : `${s.index.count.toLocaleString()} assets: type a name to search` : "";
+  list.innerHTML = s.results.map((r) => `<rn-item value="${esc(r.path)}" title="${esc(rowTitle(r))}"${r.path === keep ? " selected" : ""}>${esc(shortName(r.path))}<span slot="end">${esc(rowTag(r))}</span></rn-item>`).join("");
+  const total = s.index.count + s.sources.mods.assets + (s.sources.project?.assets ?? 0);
+  const listsAll = s.query.from === "mods" || s.query.from === "project";
+  $("count").textContent = s.index.status === "ready" || s.results.length ? s.query.text || listsAll ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} found` : `${total.toLocaleString()} assets: type a name to search` : "";
+  const mods = s.sources.mods;
+  const project2 = s.sources.project;
+  $("sources").textContent = [
+    mods.reading ? `Mods: ${mods.reading}` : `Mods: ${mods.assets.toLocaleString()} in ${mods.archives} archive${mods.archives === 1 ? "" : "s"}`,
+    project2 ? `Project ${project2.name}: ${project2.assets}` : "No REDcode project open"
+  ].join("  |  ");
+  $("sources").title = project2 ? project2.archive : "Open a project in REDcode (0.10.5 or later) to list its meshes and entities here.";
   const looked = s.looked;
   if (looked && looked.path === lookedAt) {
     const info = looked.info;
@@ -911,6 +921,7 @@ function render(s) {
   const objects = $("objects");
   objects.innerHTML = s.scene.objects.map((o) => `<rn-item value="${esc(o.id)}"${o.id === s.selected ? " selected" : ""}>${esc(o.id)}<span slot="end">${o.entityId ? o.kind : "not in world"}</span></rn-item>`).join("");
   $("sceneCount").textContent = `${s.scene.objects.length} object${s.scene.objects.length === 1 ? "" : "s"}`;
+  $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
   const sel = s.scene.objects.find((o) => o.id === s.selected);
   renderSelected(sel);
   $("delete").toggleAttribute("disabled", !sel);
@@ -935,6 +946,14 @@ function render(s) {
     $("message").className = `message ${s.message.tone}`;
     if (s.message.tone === "error" && typeof RednodeUI !== "undefined") RednodeUI.notify(s.message.text, { title: "EDGEbuilder", type: "error" });
   }
+}
+function rowTag(r) {
+  const where = r.source ? r.source.kind === "project" ? `project ${r.source.name}` : r.source.name : r.path.toLowerCase().startsWith("ep1\\") ? "PL" : "";
+  return [where, r.replaces ? "changes a game file" : "", r.kind].filter(Boolean).join(" ");
+}
+function rowTitle(r) {
+  return r.source ? `${r.path}
+${r.source.file}` : r.path;
 }
 var fields = ["px", "py", "pz", "yaw", "scale"];
 var field = (id) => $(id);
@@ -965,7 +984,7 @@ entity ${o.entityId}` : "\nnot in the world"}`;
 var searchTimer;
 function search() {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => post({ type: "search", text: $("search").value ?? "", kind }), 120);
+  searchTimer = setTimeout(() => post({ type: "search", text: $("search").value ?? "", kind, from }), 120);
 }
 $("search").addEventListener("input", search);
 var lastDownInWorld = false;
@@ -989,6 +1008,10 @@ window.addEventListener(
 );
 $("kinds").addEventListener("change", (e) => {
   kind = ["all", "mesh", "entity"][e.detail.index] ?? "all";
+  search();
+});
+$("from").addEventListener("change", (e) => {
+  from = ["all", "game", "mods", "project"][e.detail.index] ?? "all";
   search();
 });
 $("results").addEventListener("select", (e) => {

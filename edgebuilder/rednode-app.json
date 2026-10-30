@@ -1,9 +1,9 @@
 {
   "id": "edgebuilder",
   "name": "EDGEbuilder",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "author": "Edgemodders",
-  "description": "A world builder: browse the game's assets, drop them into the live world, move, turn and scale them with a gizmo from a camera of its own, bake them into the world. B2b: the editor camera.",
+  "description": "A world builder: browse the game's assets, drop them into the live world, move, turn and scale them with a gizmo from a camera of its own, bake them into the world. B2c: also the assets of installed mods and the open REDcode project.",
   "entry": "index.html",
   "main": "mod.mjs",
   "kind": "window",
@@ -13,7 +13,8 @@
   "x": 0,
   "y": 0,
   "permissions": [
-    "bridge"
+    "bridge",
+    "solo"
   ],
   "requires": {
     "codeware": ">=1.14"

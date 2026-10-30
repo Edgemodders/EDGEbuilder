@@ -3,12 +3,28 @@
 
 export type AssetKind = "mesh" | "entity";
 
-/** One row of the asset index: a game file an object can be made from. */
+/** Where Browse looks: everything, the game's own files, installed mods, or the open REDcode project. */
+export type AssetFrom = "all" | "game" | "mods" | "project";
+
+/** Where a file that is not the game's own comes from (B2c). */
+export interface AssetSource {
+  kind: "mod" | "project";
+  /** The mod's name (its archive's, or its REDmod folder's), or the REDcode project's. */
+  name: string;
+  /** The .archive, or the loose file in the project's sourcerchive. */
+  file: string;
+}
+
+/** One row of the asset index: a file an object can be made from. */
 export interface AssetEntry {
   /** The game path, backslashes. */
   path: string;
   kind: AssetKind;
   size: number;
+  /** Absent for the game's own files. */
+  source?: AssetSource;
+  /** A mod's file that has the path of a game file: it changes that file rather than adding one. */
+  replaces?: boolean;
 }
 
 /** What is known about an asset once looked at: from REDbridge's mesh.info. */
@@ -51,10 +67,17 @@ export interface Snapshot {
   bridge: { status: "off" | "starting" | "ready" | "blocked" | "missing" | "failed"; path?: string; version?: string; detail?: string };
   index: { status: "none" | "building" | "ready" | "failed"; count: number; progress?: string; file?: string };
   results: AssetEntry[];
-  query: { text: string; kind: AssetKind | "all" };
+  query: { text: string; kind: AssetKind | "all"; from: AssetFrom };
+  /** Mod archives and the open REDcode project, indexed beside the game (B2c). */
+  sources: {
+    mods: { archives: number; assets: number; reading?: string };
+    /** The project REDcode has open, or null: none open, or REDcode's service is not there. */
+    project: { name: string; dir: string; archive: string; assets: number } | null;
+  };
   /** The asset the page last looked at, with what the bridge said about it. */
   looked?: { path: string; info?: AssetInfo };
-  scene: { name: string; objects: SceneObject[]; file?: string };
+  /** needs: the mods and the project whose files the scene uses; the game needs them too once baked. */
+  scene: { name: string; objects: SceneObject[]; file?: string; needs: string[] };
   selected?: string;
   /** Builder mode: EDGEbuilder's own camera entity while Edit is on, and whether the game's HUD is hidden. */
   camera?: { entityId: string; hudHidden: boolean };
@@ -67,7 +90,7 @@ export interface Snapshot {
 
 export type PageMessage =
   | { type: "hello" }
-  | { type: "search"; text: string; kind: AssetKind | "all" }
+  | { type: "search"; text: string; kind: AssetKind | "all"; from?: AssetFrom }
   | { type: "look"; path: string }
   /** `at`: a line from the camera through where the player clicked (Drop at click); else where the camera looks. */
   | { type: "drop"; path: string; appearance?: string; at?: { origin: [number, number, number]; dir: [number, number, number] } }

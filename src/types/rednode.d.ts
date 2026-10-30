@@ -62,6 +62,10 @@ declare module "rednode" {
   export interface SpawnOptions {
     template?: string;
     record?: string;
+    /** A mesh's depot path: a prop with just that mesh, on a bare entity (REDnode 0.39.0 and later). */
+    mesh?: string;
+    meshAppearance?: string;
+    scale?: WorldPoint;
     appearance?: string;
     position: WorldPoint;
     orientation?: WorldRotation;
@@ -83,6 +87,25 @@ declare module "rednode" {
     watch(id: EntityId | string): Promise<boolean>;
     entity(id: EntityId | string): Promise<GameRef | null>;
     on(name: EntityEventName, handler: (event: GameEvent) => void): () => void;
+    /** After an archive swap, this package's spawns that use a swapped file are spawned again (REDnode 0.40.1 and later). */
+    onRespawn(handler: (before: EntityId, after: EntityId) => void): () => void;
+  };
+
+  /** Solo mode needs the "solo" permission (REDnode 0.18.0 and later). */
+  export const ui: {
+    solo(on: boolean): Promise<void>;
+    onSolo(handler: (on: boolean) => void): () => void;
+  };
+
+  export type ServiceHandle<T = Record<string, (...args: any[]) => any>> = {
+    [K in keyof T]: T[K] extends (...args: infer A) => infer R ? (...args: A) => Promise<Awaited<R>> : never;
+  } & {
+    $call(fn: string, ...args: unknown[]): Promise<any>;
+    $on(name: string, handler: (data: any) => void): () => void;
+  };
+  /** Services between packages (REDnode 0.34.0 and later). */
+  export const service: {
+    connect<T = Record<string, (...args: any[]) => any>>(id: string): Promise<ServiceHandle<T>>;
   };
 
   export const pkg: {

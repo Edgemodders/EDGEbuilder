@@ -1,9 +1,9 @@
 // Built from src/ by build.mjs; edit the TypeScript, not this file.
 
 // src/mod.ts
-import * as fs4 from "node:fs";
-import * as path4 from "node:path";
-import { api, channel, game, kernel, pkg, world } from "rednode";
+import * as fs5 from "node:fs";
+import * as path5 from "node:path";
+import { api, channel, game, kernel, pkg, service, ui, world } from "rednode";
 
 // src/bridge.ts
 import { spawn } from "node:child_process";
@@ -24,6 +24,9 @@ var KernelBridge = class {
   }
   meshInfoMany(paths) {
     return this.handle.call("mesh.infoMany", { paths });
+  }
+  openMod(archivePath) {
+    return this.handle.call("archive.openMod", { path: archivePath });
   }
   stop() {
   }
@@ -129,6 +132,9 @@ var BridgeClient = class {
   meshInfoMany(paths) {
     return this.call("mesh.infoMany", { paths });
   }
+  openMod(archivePath) {
+    return this.call("archive.openMod", { path: archivePath });
+  }
 };
 function defaultDotnetRoot() {
   const root = path.join(process.env.LOCALAPPDATA ?? "", "Microsoft", "dotnet");
@@ -176,6 +182,9 @@ var AssetIndex = class {
   info = {};
   game = "";
   file = "";
+  /** Mods' and the open project's assets (B2c), searched beside the game's. */
+  extra = [];
+  gamePaths;
   /** Loads the index for this game, if one was built. */
   load(game2) {
     this.game = game2;
@@ -185,6 +194,7 @@ var AssetIndex = class {
       if (data.format !== 1 || !Array.isArray(data.entries)) return false;
       this.entries = unique(data.entries);
       this.info = data.info ?? {};
+      this.gamePaths = void 0;
       return true;
     } catch {
       return false;
@@ -231,32 +241,48 @@ var AssetIndex = class {
     }
     entries.sort((a, b) => a.path.localeCompare(b.path));
     this.entries = unique(entries);
+    this.gamePaths = void 0;
     this.save();
   }
-  /** Substring search over paths, file-name matches first. */
-  search(text, kind, limit = 200) {
+  /** Whether a path is one of the indexed game files. */
+  isGamePath(p) {
+    this.gamePaths ??= new Set(this.entries.map((e) => e.path.toLowerCase()));
+    return this.gamePaths.has(p.replace(/\//g, "\\").toLowerCase());
+  }
+  /**
+   * Substring search over paths, file-name matches first. Mods' and the project's files come first
+   * and also match by their mod's or project's name. With no text, `from` other than game lists them all.
+   */
+  search(text, kind, limit = 200, from = "all") {
     const terms = text.toLowerCase().split(/\s+/).filter(Boolean);
     const out = [];
-    for (const e of this.entries) {
-      if (kind !== "all" && e.kind !== kind) continue;
-      const lower = e.path.toLowerCase();
-      const name = lower.slice(lower.lastIndexOf("\\") + 1);
-      let score = 0;
-      let ok = true;
-      for (const t of terms) {
-        if (name.includes(t)) score += 2;
-        else if (lower.includes(t)) score += 1;
-        else {
-          ok = false;
-          break;
-        }
+    const pools = from === "game" ? [this.entries] : from === "all" ? [this.extra, this.entries] : [this.extra];
+    for (const pool of pools) {
+      for (const e of pool) {
+        if (kind !== "all" && e.kind !== kind) continue;
+        if (from === "mods" && e.source?.kind !== "mod") continue;
+        if (from === "project" && e.source?.kind !== "project") continue;
+        const score = this.score(e, terms);
+        if (score < 0) continue;
+        out.push({ e, score: score + (e.source ? 0.5 : 0) });
+        if (out.length > limit * 20) break;
       }
-      if (!ok) continue;
-      out.push({ e, score });
-      if (out.length > limit * 20) break;
     }
     out.sort((a, b) => b.score - a.score || a.e.path.length - b.e.path.length);
     return out.slice(0, limit).map((x) => x.e);
+  }
+  /** How well an entry matches every term: 2 for the file name, 1 for the path or the source's name; -1 when a term misses. */
+  score(e, terms) {
+    const lower = e.path.toLowerCase();
+    const name = lower.slice(lower.lastIndexOf("\\") + 1);
+    const source = e.source?.name.toLowerCase() ?? "";
+    let score = 0;
+    for (const t of terms) {
+      if (name.includes(t)) score += 2;
+      else if (lower.includes(t) || source.includes(t)) score += 1;
+      else return -1;
+    }
+    return score;
   }
   /** What the bridge knows about an asset, asked once and remembered. */
   async lookAt(bridge2, assetPath) {
@@ -288,9 +314,160 @@ function kindOf(file) {
   return void 0;
 }
 
-// src/scene.ts
+// src/sources.ts
 import * as fs3 from "node:fs";
 import * as path3 from "node:path";
+function modArchives(gameDir2) {
+  const out = [];
+  const loose = path3.join(gameDir2, "archive", "pc", "mod");
+  for (const f of list(loose)) if (f.toLowerCase().endsWith(".archive")) out.push({ file: path3.join(loose, f), mod: f.slice(0, -".archive".length) });
+  const redmods = path3.join(gameDir2, "mods");
+  for (const m of list(redmods)) {
+    const dir = path3.join(redmods, m, "archives");
+    for (const f of list(dir)) if (f.toLowerCase().endsWith(".archive")) out.push({ file: path3.join(dir, f), mod: m });
+  }
+  return out;
+}
+function modFolders(gameDir2) {
+  return [path3.join(gameDir2, "archive", "pc", "mod"), path3.join(gameDir2, "mods")];
+}
+function list(dir) {
+  try {
+    return fs3.readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+var ModSources = class {
+  constructor(cacheFile) {
+    this.cacheFile = cacheFile;
+    try {
+      const data = JSON.parse(fs3.readFileSync(cacheFile, "utf8"));
+      if (data.format === 1 && data.archives) this.archives = data.archives;
+    } catch {
+    }
+  }
+  /** By archive path. */
+  archives = {};
+  /** The open project's loose files. */
+  project = [];
+  get archiveCount() {
+    return Object.keys(this.archives).length;
+  }
+  /** Every mod entry, then the project's. */
+  entries() {
+    const out = [];
+    for (const a of Object.values(this.archives)) out.push(...a.entries);
+    out.push(...this.project);
+    return out;
+  }
+  get modAssets() {
+    let n = 0;
+    for (const a of Object.values(this.archives)) n += a.entries.length;
+    return n;
+  }
+  /**
+   * Reads the mod archives that are new or changed since last time and forgets the ones gone.
+   * `isGamePath` says whether a path is one of the game's own files (a mod's file then replaces it).
+   * Returns whether anything changed. One unreadable archive is skipped and named in `failed`.
+   */
+  async refreshMods(bridge2, files, isGamePath, progress) {
+    let changed = false;
+    const failed = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const { file, mod } of files) {
+      seen.add(file);
+      let stat;
+      try {
+        stat = fs3.statSync(file);
+      } catch {
+        continue;
+      }
+      const known = this.archives[file];
+      if (known && known.size === stat.size && known.mtime === stat.mtimeMs && known.mod === mod) continue;
+      progress?.(`Reading ${path3.basename(file)}`);
+      try {
+        const archive = await bridge2.openMod(file);
+        const entries = [];
+        for (const item of archive.items) {
+          const kind = kindOf(item.name);
+          if (!kind) continue;
+          const entry = { path: item.name, kind, size: item.size, source: { kind: "mod", name: mod, file } };
+          if (isGamePath(item.name)) entry.replaces = true;
+          entries.push(entry);
+        }
+        entries.sort((a, b) => a.path.localeCompare(b.path));
+        this.archives[file] = { mod, size: stat.size, mtime: stat.mtimeMs, entries };
+        changed = true;
+      } catch (err) {
+        failed.push(`${path3.basename(file)}: ${err.message}`);
+      }
+    }
+    for (const file of Object.keys(this.archives)) {
+      if (!seen.has(file)) {
+        delete this.archives[file];
+        changed = true;
+      }
+    }
+    if (changed) this.save();
+    return { changed, failed };
+  }
+  /** Reads the meshes and entities among the project's loose files, as the game paths they will have once packed. */
+  scanProject(project2, isGamePath) {
+    this.project = [];
+    if (!project2) return;
+    const walk = (dir, rel) => {
+      let names;
+      try {
+        names = fs3.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const d of names) {
+        const full = path3.join(dir, d.name);
+        const gamePath = rel ? `${rel}\\${d.name}` : d.name;
+        if (d.isDirectory()) walk(full, gamePath);
+        else {
+          const kind = kindOf(d.name);
+          if (!kind) continue;
+          let size = 0;
+          try {
+            size = fs3.statSync(full).size;
+          } catch {
+          }
+          const entry = { path: gamePath, kind, size, source: { kind: "project", name: project2.name, file: full } };
+          if (isGamePath(gamePath)) entry.replaces = true;
+          this.project.push(entry);
+        }
+      }
+    };
+    walk(project2.archive, "");
+    this.project.sort((a, b) => a.path.localeCompare(b.path));
+  }
+  save() {
+    try {
+      fs3.mkdirSync(path3.dirname(this.cacheFile), { recursive: true });
+      const data = { format: 1, archives: this.archives };
+      fs3.writeFileSync(this.cacheFile, JSON.stringify(data));
+    } catch {
+    }
+  }
+};
+function sceneNeeds(resources, sources2) {
+  const byPath = /* @__PURE__ */ new Map();
+  for (const e of sources2) if (!e.replaces) byPath.set(e.path.toLowerCase(), e);
+  const needs = /* @__PURE__ */ new Set();
+  for (const r of resources) {
+    if (!r) continue;
+    const e = byPath.get(r.replace(/\//g, "\\").toLowerCase());
+    if (e?.source) needs.add(e.source.kind === "project" ? `${e.source.name} (REDcode project)` : e.source.name);
+  }
+  return [...needs].sort((a, b) => a.localeCompare(b));
+}
+
+// src/scene.ts
+import * as fs4 from "node:fs";
+import * as path4 from "node:path";
 var Scene = class {
   constructor(file) {
     this.file = file;
@@ -303,7 +480,7 @@ var Scene = class {
   load() {
     let text;
     try {
-      text = fs3.readFileSync(this.file, "utf8");
+      text = fs4.readFileSync(this.file, "utf8");
     } catch {
       return false;
     }
@@ -317,7 +494,7 @@ var Scene = class {
     } catch (err) {
       this.setAside = `${this.file}.unreadable-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}`;
       try {
-        fs3.renameSync(this.file, this.setAside);
+        fs4.renameSync(this.file, this.setAside);
       } catch {
         this.setAside = void 0;
       }
@@ -327,17 +504,17 @@ var Scene = class {
   }
   loadError;
   save() {
-    fs3.mkdirSync(path3.dirname(this.file), { recursive: true });
+    fs4.mkdirSync(path4.dirname(this.file), { recursive: true });
     const data = {
       format: 1,
       name: this.name,
       groups: [],
       objects: this.objects.map(({ entityId: _live, ...rest }) => rest)
     };
-    fs3.writeFileSync(this.file, JSON.stringify(data, null, 2));
+    fs4.writeFileSync(this.file, JSON.stringify(data, null, 2));
   }
   add(kind, resource, transform, appearance) {
-    const base = resource ? path3.basename(resource).replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/gi, "_").toLowerCase() : kind;
+    const base = resource ? path4.basename(resource).replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/gi, "_").toLowerCase() : kind;
     let id = base;
     while (this.objects.some((o2) => o2.id === id)) id = `${base}_${++this.counter}`;
     const o = { id, kind, resource, appearance, transform };
@@ -348,9 +525,9 @@ var Scene = class {
   remove(id) {
     const i = this.objects.findIndex((o) => o.id === id);
     if (i < 0) return void 0;
-    const [gone] = this.objects.splice(i, 1);
+    const [gone2] = this.objects.splice(i, 1);
     this.save();
-    return gone;
+    return gone2;
   }
   get(id) {
     return id ? this.objects.find((o) => o.id === id) : void 0;
@@ -409,15 +586,17 @@ function lookOf(fwd) {
 var EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
 var SpawnDistance = 3;
 var ResultLimit = 120;
-var settingsFile = path4.join(pkg.dataDir, "settings.json");
+var settingsFile = path5.join(pkg.dataDir, "settings.json");
 var settings = {};
 try {
-  settings = JSON.parse(fs4.readFileSync(settingsFile, "utf8"));
+  settings = JSON.parse(fs5.readFileSync(settingsFile, "utf8"));
 } catch {
 }
-var scene = new Scene(path4.join(pkg.dataDir, "scenes", "working.scene.json"));
+var scene = new Scene(path5.join(pkg.dataDir, "scenes", "working.scene.json"));
 scene.load();
-var index = new AssetIndex(path4.join(pkg.dataDir, "index"));
+var index = new AssetIndex(path5.join(pkg.dataDir, "index"));
+var sources = new ModSources(path5.join(pkg.dataDir, "sources", "mods.json"));
+index.extra = sources.entries();
 var bridge;
 var blockedRetry;
 var ownBridge;
@@ -428,13 +607,14 @@ var state = {
   bridge: { status: "off" },
   index: { status: "none", count: 0 },
   results: [],
-  query: { text: "", kind: "all" },
-  scene: { name: scene.name, objects: scene.objects, file: scene.file },
+  query: { text: "", kind: "all", from: "all" },
+  sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
+  scene: { name: scene.name, objects: scene.objects, file: scene.file, needs: [] },
   settings: { ...settings, settingsFile },
   inUse: {}
 };
 function publish() {
-  state.scene = { name: scene.name, objects: scene.objects, file: scene.file };
+  state.scene = { name: scene.name, objects: scene.objects, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra) };
   state.settings = { ...settings, settingsFile };
   state.inUse.gameDir = gameDir();
   channel.post({ type: "state", state });
@@ -448,7 +628,7 @@ function gameDir() {
   if (isGameFolder(settings.gameDir)) return settings.gameDir;
   let dir = pkg.dir;
   for (let i = 0; i < 6; i++) {
-    dir = path4.dirname(dir);
+    dir = path5.dirname(dir);
     if (isGameFolder(dir)) return dir;
   }
   return void 0;
@@ -531,6 +711,7 @@ async function bridgeReady(info, source) {
   } else {
     await buildIndex();
   }
+  await refreshMods();
 }
 async function buildIndex() {
   if (!bridge?.running || !gameKey) return say("REDbridge is not running; the index needs it.", "warn");
@@ -548,6 +729,98 @@ async function buildIndex() {
     state.index = { status: "failed", count: 0, progress: err.message };
     say(`The asset index failed: ${err.message}`, "error");
   }
+}
+var modsBusy = false;
+var modsAgain = false;
+async function refreshMods() {
+  const dir = gameDir();
+  if (!bridge?.running || !dir) return;
+  if (modsBusy) {
+    modsAgain = true;
+    return;
+  }
+  modsBusy = true;
+  try {
+    do {
+      modsAgain = false;
+      const { changed, failed } = await sources.refreshMods(bridge, modArchives(dir), (p) => index.isGamePath(p), (text) => {
+        state.sources.mods.reading = text;
+        publish();
+      });
+      if (failed.length) console.log(`Mod archives not read: ${failed.join("; ")}`);
+      state.sources.mods = { archives: sources.archiveCount, assets: sources.modAssets };
+      if (changed) console.log(`Mods: ${sources.modAssets} meshes and entities in ${sources.archiveCount} archives`);
+      sourcesChanged();
+    } while (modsAgain && bridge?.running);
+  } catch (err) {
+    state.sources.mods = { archives: sources.archiveCount, assets: sources.modAssets };
+    say(`The mod archives could not be read: ${err.message}`, "warn");
+  } finally {
+    modsBusy = false;
+  }
+}
+function sourcesChanged() {
+  index.extra = sources.entries();
+  runSearch();
+}
+function debounced(run, ms = 1500) {
+  let timer;
+  return () => {
+    clearTimeout(timer);
+    timer = setTimeout(run, ms);
+  };
+}
+var modWatchers = [];
+function watchMods() {
+  const dir = gameDir();
+  if (!dir || modWatchers.length) return;
+  const changed = debounced(() => void refreshMods());
+  for (const folder of modFolders(dir)) {
+    try {
+      modWatchers.push(fs5.watch(folder, { recursive: true }, changed));
+    } catch {
+    }
+  }
+}
+var project = null;
+var projectWatch;
+var projectChanged = debounced(() => scanProject());
+function scanProject() {
+  sources.scanProject(project, (p) => index.isGamePath(p));
+  state.sources.project = project ? { name: project.name, dir: project.dir, archive: project.archive, assets: sources.project.length } : null;
+  sourcesChanged();
+}
+function setProject(next) {
+  if (next?.archive !== project?.archive) {
+    projectWatch?.close();
+    projectWatch = void 0;
+    if (next) {
+      try {
+        projectWatch = fs5.watch(next.archive, { recursive: true }, projectChanged);
+      } catch {
+      }
+      console.log(`REDcode project: ${next.name} (${next.archive})`);
+    } else if (project) {
+      console.log("REDcode project closed");
+    }
+  }
+  project = next;
+  scanProject();
+}
+async function connectRedcode() {
+  if (typeof service?.connect !== "function") return;
+  try {
+    const redcode = await service.connect("redcode");
+    redcode.$on("project-changed", (p) => setProject(p));
+    setProject(await redcode.project());
+  } catch (err) {
+    console.log(`REDcode's service is not there (${err.message}); looking again in a minute. Browse lists the game and mods meanwhile.`);
+    setTimeout(() => void connectRedcode(), 6e4);
+  }
+}
+function sourceOf(assetPath) {
+  const lower = assetPath.toLowerCase();
+  return index.extra.find((e) => !e.replaces && e.path.toLowerCase() === lower);
 }
 function worldBlocker() {
   switch (state.world) {
@@ -617,13 +890,8 @@ async function spawnPreview(o) {
   const orientation = { i, j, k, r };
   let id;
   if (o.kind === "mesh") {
-    const component = await api.$new("entMeshComponent", {
-      name: "edgebuilder_mesh",
-      mesh: o.resource,
-      meshAppearance: o.appearance ?? "default",
-      visualScale: { X: o.transform.scale[0], Y: o.transform.scale[1], Z: o.transform.scale[2] }
-    });
-    ({ id } = await world.spawn({ template: EmptyEntity, position, orientation, components: [component], tags: ["edgebuilder"] }));
+    const [sx, sy, sz] = o.transform.scale;
+    ({ id } = await world.spawn({ mesh: o.resource, meshAppearance: o.appearance ?? "default", scale: { x: sx, y: sy, z: sz }, position, orientation, tags: ["edgebuilder"] }));
   } else if (o.kind === "entity") {
     ({ id } = await world.spawn({ template: o.resource, position, orientation, appearance: o.appearance, tags: ["edgebuilder"] }));
   } else {
@@ -712,21 +980,21 @@ async function dropToFloor(id) {
   await setTransform(id, { ...o.transform, position: [x, y, floor - lowest] });
   say(`Dropped ${o.id} to the floor, ${(z - (floor - lowest)).toFixed(2)} m down.`, "ok");
 }
-var builderFile = path4.join(pkg.dataDir, "builder-mode.json");
+var builderFile = path5.join(pkg.dataDir, "builder-mode.json");
 var CameraName = "edgebuilder_camera";
 var HudHiddenTier = 4;
 var editorCam;
 var tierWatch;
 function readBuilderRecord() {
   try {
-    return JSON.parse(fs4.readFileSync(builderFile, "utf8"));
+    return JSON.parse(fs5.readFileSync(builderFile, "utf8"));
   } catch {
     return void 0;
   }
 }
 function writeBuilderRecord(r) {
-  fs4.mkdirSync(pkg.dataDir, { recursive: true });
-  fs4.writeFileSync(builderFile, JSON.stringify(r));
+  fs5.mkdirSync(pkg.dataDir, { recursive: true });
+  fs5.writeFileSync(builderFile, JSON.stringify(r));
 }
 async function sceneTierBoard() {
   const player = await api.GetPlayer(game.instance);
@@ -788,6 +1056,20 @@ async function playerCameraBack() {
   }
 }
 var builderOn = false;
+var soloOn = false;
+var soloAsked = false;
+async function setSolo(on) {
+  if (typeof ui?.solo !== "function" || on === soloOn) return;
+  try {
+    await ui.solo(on);
+    soloOn = on;
+  } catch (err) {
+    if (on && !soloAsked) {
+      soloAsked = true;
+      say(`Other windows stay while editing (${err.message.replace(/^rednode:\s*/, "")}). To hide them, allow Solo for EDGEbuilder in REDnode's Mod Manager.`, "info");
+    }
+  }
+}
 var builderQueue = Promise.resolve();
 function queued(op) {
   builderQueue = builderQueue.then(op, op);
@@ -871,6 +1153,7 @@ async function builderStart(pose) {
     await cameraOff();
   }
   const hidden = settings.hideHud !== false && await hudOff();
+  await setSolo(true);
   console.log(`Builder mode on: ${editorCam ? `editor camera ${editorCam.id}` : "V's camera"}${hidden ? ", HUD hidden" : ""}`);
   const note = switchesNote();
   if (note) say(note, "info");
@@ -901,16 +1184,17 @@ async function builderStop() {
   await cameraOff();
   await hudOn();
   stopTierWatch();
+  await setSolo(false);
   state.camera = void 0;
   try {
-    fs4.rmSync(builderFile, { force: true });
+    fs5.rmSync(builderFile, { force: true });
   } catch {
   }
   if (wasOn) console.log("Builder mode off");
   publish();
 }
 function runSearch() {
-  state.results = index.entries.length ? index.search(state.query.text, state.query.kind, ResultLimit) : [];
+  state.results = index.entries.length || index.extra.length ? index.search(state.query.text, state.query.kind, ResultLimit, state.query.from) : [];
   publish();
 }
 async function drop(assetPath, appearance, at) {
@@ -923,7 +1207,7 @@ async function drop(assetPath, appearance, at) {
     const place = await dropPlace(at);
     const o = scene.add(kind, assetPath, { position: place.position, rotation: yawToQuaternion(place.yaw), scale: [1, 1, 1] }, appearance);
     added = o;
-    if (bridge?.running) {
+    if (bridge?.running && !sourceOf(assetPath)) {
       try {
         const info = await index.lookAt(bridge, assetPath);
         if (info.bounds) o.bounds = info.bounds;
@@ -934,7 +1218,9 @@ async function drop(assetPath, appearance, at) {
     await spawnPreview(o);
     scene.save();
     await select(o.id);
-    say(`Dropped ${path4.basename(assetPath)} in ${Date.now() - started} ms.`, "ok");
+    const from = sourceOf(assetPath)?.source;
+    const note = from?.kind === "project" ? ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and try).` : from?.kind === "mod" ? ` From ${from.name}; its size is not known yet, so the gizmo uses a 1 m box.` : "";
+    say(`Dropped ${path5.basename(assetPath)} in ${Date.now() - started} ms.${note}`, "ok");
   } catch (err) {
     if (added) {
       await removePreview(added);
@@ -982,8 +1268,8 @@ async function clear() {
 function saveSettings(next) {
   settings = { ...settings, ...next };
   for (const k of Object.keys(settings)) if (settings[k] === void 0 || settings[k] === "") delete settings[k];
-  fs4.mkdirSync(pkg.dataDir, { recursive: true });
-  fs4.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
+  fs5.mkdirSync(pkg.dataDir, { recursive: true });
+  fs5.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
 }
 channel.on((m) => {
   void (async () => {
@@ -992,11 +1278,19 @@ channel.on((m) => {
         publish();
         break;
       case "search":
-        state.query = { text: m.text, kind: m.kind };
+        state.query = { text: m.text, kind: m.kind, from: m.from ?? state.query.from };
         runSearch();
         break;
       case "look":
         state.looked = { path: m.path };
+        {
+          const from = sourceOf(m.path)?.source;
+          if (from) {
+            state.looked.info = { appearances: [], error: `From ${from.kind === "project" ? `the REDcode project ${from.name}` : from.name}. Its size and appearances come in a later update; it can be dropped.` };
+            publish();
+            break;
+          }
+        }
         if (!bridge?.running) state.looked.info = index.info[m.path] ?? { appearances: [], error: "Size and appearances need REDbridge; it can still be dropped." };
         publish();
         if (bridge?.running) {
@@ -1075,27 +1369,49 @@ game.on("PlayerPuppet.OnGameAttached", () => {
     editorCam = void 0;
     state.camera = void 0;
     try {
-      fs4.rmSync(builderFile, { force: true });
+      fs5.rmSync(builderFile, { force: true });
     } catch {
     }
   }
+  gone.clear();
+  void setSolo(false);
   scene.forgetPreviews();
   state.selected = void 0;
   void checkWorld().then(() => {
     if (scene.objects.length) say(`A save loaded. ${scene.objects.length} object${scene.objects.length === 1 ? "" : "s"} in the scene; press Rebuild previews to see them.`, "info");
   });
 });
+var gone = /* @__PURE__ */ new Map();
 world.on("Entity/Detach", (e) => {
   const o = scene.objects.find((x) => x.entityId === e.entityId);
   if (o) {
+    if (e.entityId) gone.set(e.entityId, { id: o.id, selected: state.selected === o.id });
     delete o.entityId;
     if (state.selected === o.id) state.selected = void 0;
     publish();
   }
 });
-console.log(`EDGEbuilder ${"0.3.4"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+if (typeof world.onRespawn === "function") {
+  world.onRespawn((before, after) => {
+    const was = gone.get(before.hash);
+    gone.delete(before.hash);
+    const o = scene.get(was?.id) ?? scene.objects.find((x) => x.entityId === before.hash);
+    if (!o) return;
+    o.entityId = after.hash;
+    console.log(`${o.id} spawned again after an archive swap (${after.hash})`);
+    if (was?.selected) void select(o.id);
+    else publish();
+  });
+}
+if (typeof ui?.onSolo === "function") {
+  ui.onSolo((on) => {
+    soloOn = on;
+    if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
+  });
+}
+console.log(`EDGEbuilder ${"0.4.0"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
 if (scene.loadError) {
-  state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path4.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
+  state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path5.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);
 }
 if (index.loadNewest()) {
@@ -1105,3 +1421,5 @@ if (index.loadNewest()) {
 publish();
 void checkWorld();
 void startBridge();
+watchMods();
+void connectRedcode();

@@ -1,7 +1,7 @@
 // The editor page: shows the mod's state and sends requests. No truth lives here.
 import { channel } from "rednode";
 import { AXES, qAxisAngle, qMul, qNorm, qYaw, type Q } from "../math";
-import type { AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "../protocol";
+import type { AssetEntry, AssetFrom, AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "../protocol";
 import { Viewport } from "./viewport";
 
 declare const RednodeUI: { notify(text: string, options?: Record<string, unknown>): void } | undefined;
@@ -13,6 +13,7 @@ const shortName = (p: string) => p.slice(p.lastIndexOf("\\") + 1);
 
 let state: Snapshot | undefined;
 let kind: AssetKind | "all" = "all";
+let from: AssetFrom = "all";
 let lookedAt: string | undefined;
 let appearance: string | undefined;
 let lastMessage = "";
@@ -40,9 +41,23 @@ function render(s: Snapshot): void {
   const list = $("results");
   const keep = lookedAt;
   list.innerHTML = s.results
-    .map((r) => `<rn-item value="${esc(r.path)}" title="${esc(r.path)}"${r.path === keep ? " selected" : ""}>${esc(shortName(r.path))}<span slot="end">${r.path.toLowerCase().startsWith("ep1\\") ? "PL " : ""}${r.kind}</span></rn-item>`)
+    .map((r) => `<rn-item value="${esc(r.path)}" title="${esc(rowTitle(r))}"${r.path === keep ? " selected" : ""}>${esc(shortName(r.path))}<span slot="end">${esc(rowTag(r))}</span></rn-item>`)
     .join("");
-  $("count").textContent = s.index.status === "ready" ? (s.query.text ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} of ${s.index.count.toLocaleString()}` : `${s.index.count.toLocaleString()} assets: type a name to search`) : "";
+  const total = s.index.count + s.sources.mods.assets + (s.sources.project?.assets ?? 0);
+  const listsAll = s.query.from === "mods" || s.query.from === "project";
+  $("count").textContent =
+    s.index.status === "ready" || s.results.length
+      ? s.query.text || listsAll
+        ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} found`
+        : `${total.toLocaleString()} assets: type a name to search`
+      : "";
+  const mods = s.sources.mods;
+  const project = s.sources.project;
+  $("sources").textContent = [
+    mods.reading ? `Mods: ${mods.reading}` : `Mods: ${mods.assets.toLocaleString()} in ${mods.archives} archive${mods.archives === 1 ? "" : "s"}`,
+    project ? `Project ${project.name}: ${project.assets}` : "No REDcode project open",
+  ].join("  |  ");
+  $("sources").title = project ? project.archive : "Open a project in REDcode (0.10.5 or later) to list its meshes and entities here.";
   const looked = s.looked;
   if (looked && looked.path === lookedAt) {
     const info = looked.info;
@@ -75,6 +90,7 @@ function render(s: Snapshot): void {
     .map((o) => `<rn-item value="${esc(o.id)}"${o.id === s.selected ? " selected" : ""}>${esc(o.id)}<span slot="end">${o.entityId ? o.kind : "not in world"}</span></rn-item>`)
     .join("");
   $("sceneCount").textContent = `${s.scene.objects.length} object${s.scene.objects.length === 1 ? "" : "s"}`;
+  $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
   const sel = s.scene.objects.find((o) => o.id === s.selected);
   renderSelected(sel);
   $("delete").toggleAttribute("disabled", !sel);
@@ -104,6 +120,16 @@ function render(s: Snapshot): void {
     $("message").className = `message ${s.message.tone}`;
     if (s.message.tone === "error" && typeof RednodeUI !== "undefined") RednodeUI.notify(s.message.text, { title: "EDGEbuilder", type: "error" });
   }
+}
+
+/** The tag at a result's end: the mod or project it comes from, and its kind. */
+function rowTag(r: AssetEntry): string {
+  const where = r.source ? (r.source.kind === "project" ? `project ${r.source.name}` : r.source.name) : r.path.toLowerCase().startsWith("ep1\\") ? "PL" : "";
+  return [where, r.replaces ? "changes a game file" : "", r.kind].filter(Boolean).join(" ");
+}
+
+function rowTitle(r: AssetEntry): string {
+  return r.source ? `${r.path}\n${r.source.file}` : r.path;
 }
 
 type Field = HTMLElement & { value: string };
@@ -136,7 +162,7 @@ function renderSelected(o: SceneObject | undefined): void {
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 function search(): void {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => post({ type: "search", text: ($("search") as HTMLInputElement & { value: string }).value ?? "", kind }), 120);
+  searchTimer = setTimeout(() => post({ type: "search", text: ($("search") as HTMLInputElement & { value: string }).value ?? "", kind, from }), 120);
 }
 
 $("search").addEventListener("input", search);
@@ -164,6 +190,10 @@ window.addEventListener(
 );
 $("kinds").addEventListener("change", (e) => {
   kind = (["all", "mesh", "entity"] as const)[(e as CustomEvent<{ index: number }>).detail.index] ?? "all";
+  search();
+});
+$("from").addEventListener("change", (e) => {
+  from = (["all", "game", "mods", "project"] as const)[(e as CustomEvent<{ index: number }>).detail.index] ?? "all";
   search();
 });
 $("results").addEventListener("select", (e) => {

@@ -10,6 +10,19 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**New**
+
+- Browse lists the meshes and entities of installed mods (`archive\pc\mod` and REDmod's `mods\<name>\archives`), tagged with the mod's name, and of the project open in REDcode (0.10.5 or later). New tabs: Everywhere, Game, Mods, Project. A mod's name in the search box finds its files. A mod file with a game file's path says it changes that file.
+- Mod archives are read once and again only when one changes; a project's new files show up as they are saved.
+- The Scene tab says which mods and which REDcode project the scene needs.
+- While Edit is on, other packages' windows are hidden (REDnode's solo mode). Allow Solo for EDGEbuilder in REDnode's Mod Manager; without it they stay, and EDGEbuilder says so once.
+- After an archive swap (REDcode's Pack and try), previews that use a swapped file come back showing the new version, and stay selected.
+
+**Changed**
+
+- Mesh previews are REDnode's own mesh props (`world.spawn` with `mesh`), which REDnode can spawn again after an archive swap.
+- A mod's or project's file has no size or appearances yet (that needs a REDbridge update, https://github.com/Edgemodders/REDbridge/issues/12): it drops with a 1 m box for the gizmo and its default appearance.
+
 ## 0.3.4 (2026-10-29)
 
 Tested on game 2.5 with REDnode 0.45.0.

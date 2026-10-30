@@ -43,6 +43,8 @@
       <rn-tab label="Assets" active>
         <rn-input id="search" placeholder="Search meshes and entities, e.g. crate"></rn-input>
         <rn-tabs id="kinds"><rn-tab label="All" active></rn-tab><rn-tab label="Meshes"></rn-tab><rn-tab label="Entities"></rn-tab></rn-tabs>
+        <rn-tabs id="from"><rn-tab label="Everywhere" active></rn-tab><rn-tab label="Game"></rn-tab><rn-tab label="Mods"></rn-tab><rn-tab label="Project"></rn-tab></rn-tabs>
+        <div id="sources" class="count"></div>
         <div id="count" class="count"></div>
         <rn-list id="results"></rn-list>
         <rn-panel title="Picked">
@@ -54,6 +56,7 @@
       </rn-tab>
       <rn-tab label="Scene">
         <div id="sceneCount" class="count"></div>
+        <div id="needs" class="count"></div>
         <rn-list id="objects"></rn-list>
         <rn-panel title="Selected">
           <pre id="selected">Nothing selected</pre>

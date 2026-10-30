@@ -14,15 +14,16 @@ Last updated 2026-10-30.
 
 | Test | Kind | Phase | Last run | Result |
 |---|---|---|---|---|
-| [Type check and build](#type-check-and-build) | Automated | B1 on | 2026-10-16 (0.3.3) | Pass |
-| [Smoke test](#smoke-test) | Automated, needs REDbridge and the game files | B1 on | 2026-10-16 (0.3.3) | Pass |
-| [Page check in REDnode's host](#page-check-in-rednodes-host) | By hand, no game | B1 on | 2026-10-16 (0.3.3) | Pass |
+| [Type check and build](#type-check-and-build) | Automated | B1 on | 2026-10-30 (0.4.0) | Pass |
+| [Smoke test](#smoke-test) | Automated, needs REDbridge and the game files | B1 on | 2026-10-30 (0.4.0) | Pass |
+| [Page check in REDnode's host](#page-check-in-rednodes-host) | By hand, no game | B1 on | 2026-10-30 (0.4.0) | Pass |
 | [B1 Browse and drop](#b1-browse-and-drop) | In the game | B1 | 2026-10-13 (0.1.1) | Pass |
 | [B2a Position](#b2a-position) | In the game | B2a | 2026-10-14 (0.2.0) | Pass |
 | [B2b Camera](#b2b-camera) | In the game | B2b | 2026-10-14 (0.3.0) | Pass |
 | [B2b retest](#b2b-retest-in-032) | In the game | B2b | 2026-10-16 (0.3.2) | Pass |
 | [0.3.4 check on game 2.5](#034-check-on-game-25) | In the game | B2b | 2026-10-29 (0.3.4) | Pass |
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
+| [B2c-1 Mod assets](#b2c-1-mod-assets) | In the game | B2c | Built 2026-10-30 (0.4.0) | Waiting for the owner |
 
 ## Automated
 
@@ -76,6 +77,7 @@ Drive the page by evaluating scripts through the DevTools protocol on 127.0.0.1:
 | 2026-10-13, 0.2.0 | The page is 1920 x 1080 with the panel at x 1448; the Edit tint; "No camera yet" without a game; Selected fields and Apply; REDbridge through `kernel.bridge()` and the "Allow REDbridge" prompt; `requires` found Codeware | An unreadable scene file was replaced on the next save; now kept beside |
 | 2026-10-14, 0.3.0 | The page and the two new Settings switches | |
 | 2026-10-16, 0.3.3 | Typing `crate` with real key events lands in the search box and searches (95 results); Drop at click switches Edit on, shows the crosshair and its message, Esc cancels; the help line sits at the bottom centre | |
+| 2026-10-30, 0.4.0 | With REDcode's service package beside it (`--apps-dir` also `<REDcode>\extensions\redcode\rednode`, `--apps=edgebuilder,redcode`) and `LOCALAPPDATA` pointed at a scratch folder with a stand-in `REDcode\project.json`: the five mod archives on the dev PC read (17 meshes and entities); `chicken` finds EvilClown's `kratoes_rubber_chicken` mesh and entity first, tagged EvilClown, the archive in the tooltip; the Project tab lists the stand-in project's files, a file added to it shows up within 2 s, picking one explains that its size comes later and Drop stays on; the project closed: "No REDcode project open". Electron must start without `ELECTRON_RUN_AS_NODE` (VS Code's terminals set it) | |
 
 ## In the game
 
@@ -92,6 +94,7 @@ All on the owner's PC (game on `E:`, installed with EDGEdeck, Vortex purged). Lo
 | EDGEbuilder's zip, added in EDGEdeck and deployed with the game closed | EDGEdeck 0.21.1 and later put a new version in the old one's row. A version under test comes from the release workflow's artifact (Actions, Release, the run, `edgebuilder-build`) or `npm run package`; it gets a GitHub release on the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases) once its test passed |
 | Both Settings switches on, unless a step says otherwise | They persist: a test that turns them off leaves them off (this cost a retest on 2026-10-16) |
 | A save outdoors, in an open spot | Room to drop and fly |
+| From 0.4.0: **Solo allowed** for EDGEbuilder | F10, Mod Manager, EDGEbuilder, Permissions. Without it other windows stay while editing and the message line says so once |
 
 The Test timer cannot be pressed while Edit is on: REDnode has a tool layer for that now ([REDnode #10](https://github.com/Edgemodders/REDnode/issues/10)), which EDGEbuilder does not use yet; from B2b the steps skip the marks and the log has the times. If V's view gets stuck after EDGEbuilder stopped with Edit on, load a save.
 
@@ -247,4 +250,20 @@ streaming:
 | Does a scene's `streaming` reach the game? | Yes: `crate_far` stayed to about 120 m while `crate` went at about 40 m |
 | Does `sector.build`'s entity node work? | Yes: `crate_red.ent` stands as a `worldEntityNode` |
 | Collision | Through an entity with an `entPhysicalMeshComponent`: solid. A `worldMeshNode`: none. Solid meshes need another node type; see the design's Bake section |
+
+### B2c-1 Mod assets
+
+**Built on 2026-10-30, waiting for the owner's test.** EDGEbuilder 0.4.0, from `npm run package`, added in EDGEdeck (it goes into the old row). REDnode 0.41.0 or later; REDcode 0.10.5 or later for the Project steps. Browse lists installed mods' and the open REDcode project's meshes and entities; mesh previews are now REDnode's mesh props, so steps 1 and 2 repeat the basics.
+
+| # | Check | Expected |
+|---|---|---|
+| 1 | The log's start line, then a few seconds later | `EDGEbuilder 0.4.0 starting`; `Mods: 17 meshes and entities in 5 archives` (the dev PC's mods: EvilClown, EDGEmatA, SkippySkippy, `zzz_rednode_box`, the bake probe) |
+| 2 | The basics with the new mesh previews: drop `cargo_crate_a.mesh`, select it, drag an arrow, S 2, Ctrl+E | As in 0.3.4: it appears in about half a second with the outline, follows the gizmo, comes back twice the size, drops to the ground |
+| 3 | Assets: the Mods tab; then Everywhere and type `chicken` | Mods lists the mods' files with their mod's name; `kratoes_rubber_chicken` (mesh and entity) first, tagged EvilClown. `cardboard_box_a_closed` says `zzz_rednode_box changes a game file` |
+| 4 | Pick `kratoes_rubber_chicken.mesh` | "From EvilClown. Its size and appearances come in a later update; it can be dropped." |
+| 5 | Drop it, and the `.ent` beside it | Both appear (a rubber chicken); the message says the gizmo uses a 1 m box. The gizmo works on the 1 m box |
+| 6 | The Scene tab | "This scene needs: EvilClown" |
+| 7 | Edit on with another package's window open (the coords app, for example); Edit off | The other window goes while Edit is on and comes back; the Test timer and the launcher stay. Without Solo allowed: they stay and the message line says how to allow it |
+| 8 | With REDcode open on a project that has a mesh or entity under `source\archive` (EDGEfab's first prop when it exists): the Project tab | Its files, tagged `project <name>`. Save a new mesh into it: it appears within a few seconds. Close the project in REDcode: "No REDcode project open" |
+| 9 | Drop the project's file before packing; then REDcode's Pack and try | Before: the message says the game shows it once packed and loaded. After Pack and try: it shows; the log has `<id> spawned again after an archive swap` for a preview that uses a swapped file, and a selected one stays selected |
 

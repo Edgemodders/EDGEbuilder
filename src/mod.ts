@@ -2,17 +2,19 @@
 // REDbridge and the preview entities; the page shows state, draws the gizmo and sends requests.
 // B1: browse the game's assets, drop one in front of V, select it, delete it.
 // B2a: move, turn and scale with the page's gizmo and keys, drop to the floor.
+// B2c: Browse also lists installed mods' and the open REDcode project's meshes and entities.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { api, channel, game, kernel, pkg, world, type GameRef } from "rednode";
+import { api, channel, game, kernel, pkg, service, ui, world, type GameRef } from "rednode";
 import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge } from "./bridge";
 import { AssetIndex, kindOf } from "./index";
+import { ModSources, modArchives, modFolders, sceneNeeds } from "./sources";
 import { Scene, yawToQuaternion } from "./scene";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
-import type { AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "./protocol";
+import type { AssetEntry, AssetFrom, AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "./protocol";
 
-/** A base-game entity template that is a bare entity: no components, no appearances. The preview of a mesh is this with a mesh component attached. */
+/** A base-game entity template that is a bare entity: no components, no appearances. The editor camera is this with a camera component attached. */
 const EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
 /** EDGEbuilder's version, from the package manifest at build time. */
 declare const __VERSION__: string;
@@ -39,6 +41,9 @@ try {
 const scene = new Scene(path.join(pkg.dataDir, "scenes", "working.scene.json"));
 scene.load();
 const index = new AssetIndex(path.join(pkg.dataDir, "index"));
+/** Mods' archives and the project's loose files; kept out of the index folder, whose newest file is taken as the game's index. */
+const sources = new ModSources(path.join(pkg.dataDir, "sources", "mods.json"));
+index.extra = sources.entries();
 let bridge: Bridge | undefined;
 let blockedRetry: ReturnType<typeof setTimeout> | undefined;
 /** REDnode found no REDbridge, but EDGEbuilder's own lookup did: run that one. */
@@ -51,14 +56,15 @@ const state: Snapshot = {
   bridge: { status: "off" },
   index: { status: "none", count: 0 },
   results: [],
-  query: { text: "", kind: "all" },
-  scene: { name: scene.name, objects: scene.objects, file: scene.file },
+  query: { text: "", kind: "all", from: "all" },
+  sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
+  scene: { name: scene.name, objects: scene.objects, file: scene.file, needs: [] },
   settings: { ...settings, settingsFile },
   inUse: {},
 };
 
 function publish(): void {
-  state.scene = { name: scene.name, objects: scene.objects, file: scene.file };
+  state.scene = { name: scene.name, objects: scene.objects, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra) };
   state.settings = { ...settings, settingsFile };
   state.inUse.gameDir = gameDir();
   channel.post({ type: "state", state });
@@ -167,6 +173,7 @@ async function bridgeReady(info: { version: string; archives: number; files: num
   } else {
     await buildIndex();
   }
+  await refreshMods();
 }
 
 async function buildIndex(): Promise<void> {
@@ -185,6 +192,123 @@ async function buildIndex(): Promise<void> {
     state.index = { status: "failed", count: 0, progress: (err as Error).message };
     say(`The asset index failed: ${(err as Error).message}`, "error");
   }
+}
+
+// ---- mods and the REDcode project (B2c) ------------------------------------------------------------
+
+let modsBusy = false;
+let modsAgain = false;
+
+/** Reads the mod archives that are new or changed since last time. One read at a time; a change during one reads again after. */
+async function refreshMods(): Promise<void> {
+  const dir = gameDir();
+  if (!bridge?.running || !dir) return;
+  if (modsBusy) {
+    modsAgain = true;
+    return;
+  }
+  modsBusy = true;
+  try {
+    do {
+      modsAgain = false;
+      const { changed, failed } = await sources.refreshMods(bridge, modArchives(dir), (p) => index.isGamePath(p), (text) => {
+        state.sources.mods.reading = text;
+        publish();
+      });
+      if (failed.length) console.log(`Mod archives not read: ${failed.join("; ")}`);
+      state.sources.mods = { archives: sources.archiveCount, assets: sources.modAssets };
+      if (changed) console.log(`Mods: ${sources.modAssets} meshes and entities in ${sources.archiveCount} archives`);
+      sourcesChanged();
+    } while (modsAgain && bridge?.running);
+  } catch (err) {
+    state.sources.mods = { archives: sources.archiveCount, assets: sources.modAssets };
+    say(`The mod archives could not be read: ${(err as Error).message}`, "warn");
+  } finally {
+    modsBusy = false;
+  }
+}
+
+function sourcesChanged(): void {
+  index.extra = sources.entries();
+  runSearch();
+}
+
+/** Calls `run` once things have been quiet for a moment: a copy or a pack writes a file in many steps. */
+function debounced(run: () => void, ms = 1500): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return () => {
+    clearTimeout(timer);
+    timer = setTimeout(run, ms);
+  };
+}
+
+const modWatchers: fs.FSWatcher[] = [];
+function watchMods(): void {
+  const dir = gameDir();
+  if (!dir || modWatchers.length) return;
+  const changed = debounced(() => void refreshMods());
+  for (const folder of modFolders(dir)) {
+    try {
+      modWatchers.push(fs.watch(folder, { recursive: true }, changed));
+    } catch {
+      // No such folder: no mods there.
+    }
+  }
+}
+
+interface RedcodeProject {
+  name: string;
+  modName: string;
+  dir: string;
+  archive: string;
+}
+
+let project: RedcodeProject | null = null;
+let projectWatch: fs.FSWatcher | undefined;
+const projectChanged = debounced(() => scanProject());
+
+function scanProject(): void {
+  sources.scanProject(project, (p) => index.isGamePath(p));
+  state.sources.project = project ? { name: project.name, dir: project.dir, archive: project.archive, assets: sources.project.length } : null;
+  sourcesChanged();
+}
+
+function setProject(next: RedcodeProject | null): void {
+  if (next?.archive !== project?.archive) {
+    projectWatch?.close();
+    projectWatch = undefined;
+    if (next) {
+      try {
+        projectWatch = fs.watch(next.archive, { recursive: true }, projectChanged);
+      } catch {
+        // No source\archive yet: the next project-changed or a restart picks it up.
+      }
+      console.log(`REDcode project: ${next.name} (${next.archive})`);
+    } else if (project) {
+      console.log("REDcode project closed");
+    }
+  }
+  project = next;
+  scanProject();
+}
+
+/** The project open in REDcode, through REDcode's REDnode service (REDcode 0.10.5 and later). Without it, mods only. */
+async function connectRedcode(): Promise<void> {
+  if (typeof service?.connect !== "function") return;
+  try {
+    const redcode = await service.connect<{ project(): RedcodeProject | null }>("redcode");
+    redcode.$on("project-changed", (p: RedcodeProject | null) => setProject(p));
+    setProject(await redcode.project());
+  } catch (err) {
+    console.log(`REDcode's service is not there (${(err as Error).message}); looking again in a minute. Browse lists the game and mods meanwhile.`);
+    setTimeout(() => void connectRedcode(), 60_000);
+  }
+}
+
+/** The mod or project entry for a path that is not a game file. */
+function sourceOf(assetPath: string): AssetEntry | undefined {
+  const lower = assetPath.toLowerCase();
+  return index.extra.find((e) => !e.replaces && e.path.toLowerCase() === lower);
 }
 
 // ---- the world --------------------------------------------------------------------------------
@@ -275,13 +399,9 @@ async function spawnPreview(o: SceneObject): Promise<void> {
   const orientation = { i, j, k, r };
   let id: { hash: string };
   if (o.kind === "mesh") {
-    const component = (await api.$new("entMeshComponent", {
-      name: "edgebuilder_mesh",
-      mesh: o.resource,
-      meshAppearance: o.appearance ?? "default",
-      visualScale: { X: o.transform.scale[0], Y: o.transform.scale[1], Z: o.transform.scale[2] },
-    })) as GameRef;
-    ({ id } = await world.spawn({ template: EmptyEntity, position, orientation, components: [component], tags: ["edgebuilder"] }));
+    // REDnode's own mesh prop (0.39.0 and later), which REDnode can spawn again after an archive swap.
+    const [sx, sy, sz] = o.transform.scale;
+    ({ id } = await world.spawn({ mesh: o.resource, meshAppearance: o.appearance ?? "default", scale: { x: sx, y: sy, z: sz }, position, orientation, tags: ["edgebuilder"] }));
   } else if (o.kind === "entity") {
     ({ id } = await world.spawn({ template: o.resource, position, orientation, appearance: o.appearance, tags: ["edgebuilder"] }));
   } else {
@@ -499,6 +619,22 @@ async function playerCameraBack(): Promise<void> {
 
 /** Builder mode is on: Edit is on and the mod has done what the switches ask. */
 let builderOn = false;
+/** Solo mode: other packages' windows hidden while Edit is on. Said once when it is not allowed. */
+let soloOn = false;
+let soloAsked = false;
+
+async function setSolo(on: boolean): Promise<void> {
+  if (typeof ui?.solo !== "function" || on === soloOn) return;
+  try {
+    await ui.solo(on);
+    soloOn = on;
+  } catch (err) {
+    if (on && !soloAsked) {
+      soloAsked = true;
+      say(`Other windows stay while editing (${(err as Error).message.replace(/^rednode:\s*/, "")}). To hide them, allow Solo for EDGEbuilder in REDnode's Mod Manager.`, "info");
+    }
+  }
+}
 /** Builder changes one at a time: Edit on and off and the switches may arrive close together. */
 let builderQueue: Promise<void> = Promise.resolve();
 function queued(op: () => Promise<void>): Promise<void> {
@@ -600,6 +736,7 @@ async function builderStart(pose: Pose): Promise<void> {
     await cameraOff();
   }
   const hidden = settings.hideHud !== false && (await hudOff());
+  await setSolo(true);
   console.log(`Builder mode on: ${editorCam ? `editor camera ${editorCam.id}` : "V's camera"}${hidden ? ", HUD hidden" : ""}`);
   const note = switchesNote();
   if (note) say(note, "info");
@@ -634,6 +771,7 @@ async function builderStop(): Promise<void> {
   await cameraOff();
   await hudOn();
   stopTierWatch();
+  await setSolo(false);
   state.camera = undefined;
   try {
     fs.rmSync(builderFile, { force: true });
@@ -647,7 +785,7 @@ async function builderStop(): Promise<void> {
 // ---- requests from the page -------------------------------------------------------------------
 
 function runSearch(): void {
-  state.results = index.entries.length ? index.search(state.query.text, state.query.kind, ResultLimit) : [];
+  state.results = index.entries.length || index.extra.length ? index.search(state.query.text, state.query.kind, ResultLimit, state.query.from) : [];
   publish();
 }
 
@@ -661,7 +799,7 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
     const place = await dropPlace(at);
     const o = scene.add(kind, assetPath, { position: place.position, rotation: yawToQuaternion(place.yaw), scale: [1, 1, 1] }, appearance);
     added = o;
-    if (bridge?.running) {
+    if (bridge?.running && !sourceOf(assetPath)) {
       try {
         const info = await index.lookAt(bridge, assetPath);
         if (info.bounds) o.bounds = info.bounds;
@@ -673,7 +811,14 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
     await spawnPreview(o);
     scene.save();
     await select(o.id);
-    say(`Dropped ${path.basename(assetPath)} in ${Date.now() - started} ms.`, "ok");
+    const from = sourceOf(assetPath)?.source;
+    const note =
+      from?.kind === "project"
+        ? ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and try).`
+        : from?.kind === "mod"
+          ? ` From ${from.name}; its size is not known yet, so the gizmo uses a 1 m box.`
+          : "";
+    say(`Dropped ${path.basename(assetPath)} in ${Date.now() - started} ms.${note}`, "ok");
   } catch (err) {
     // The object went into the scene before the game was asked to spawn it: take it out again,
     // so a failed drop leaves nothing behind.
@@ -739,11 +884,20 @@ channel.on<PageMessage>((m) => {
         publish();
         break;
       case "search":
-        state.query = { text: m.text, kind: m.kind as AssetKind | "all" };
+        state.query = { text: m.text, kind: m.kind as AssetKind | "all", from: (m.from ?? state.query.from) as AssetFrom };
         runSearch();
         break;
       case "look":
         state.looked = { path: m.path };
+        {
+          // REDbridge reads sizes and appearances from the game's archives only, until REDbridge #12.
+          const from = sourceOf(m.path)?.source;
+          if (from) {
+            state.looked.info = { appearances: [], error: `From ${from.kind === "project" ? `the REDcode project ${from.name}` : from.name}. Its size and appearances come in a later update; it can be dropped.` };
+            publish();
+            break;
+          }
+        }
         if (!bridge?.running) state.looked.info = index.info[m.path] ?? { appearances: [], error: "Size and appearances need REDbridge; it can still be dropped." };
         publish();
         if (bridge?.running) {
@@ -833,6 +987,8 @@ game.on("PlayerPuppet.OnGameAttached", () => {
     }
   }
   // A save loaded: every preview entity of the old session is gone.
+  gone.clear();
+  void setSolo(false);
   scene.forgetPreviews();
   state.selected = undefined;
   void checkWorld().then(() => {
@@ -840,14 +996,40 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   });
 });
 
+/** Previews that left the world, by entity: an archive swap spawns them again under a new id. */
+const gone = new Map<string, { id: string; selected: boolean }>();
+
 world.on("Entity/Detach", (e) => {
   const o = scene.objects.find((x) => x.entityId === e.entityId);
   if (o) {
+    if (e.entityId) gone.set(e.entityId, { id: o.id, selected: state.selected === o.id });
     delete o.entityId;
     if (state.selected === o.id) state.selected = undefined;
     publish();
   }
 });
+
+// After an archive swap (REDcode's Pack and try, REDnode's archives.reload), REDnode spawns again the
+// previews that use a swapped file: they show the new version and keep their place in the scene.
+if (typeof world.onRespawn === "function") {
+  world.onRespawn((before, after) => {
+    const was = gone.get(before.hash);
+    gone.delete(before.hash);
+    const o = scene.get(was?.id) ?? scene.objects.find((x) => x.entityId === before.hash);
+    if (!o) return;
+    o.entityId = after.hash;
+    console.log(`${o.id} spawned again after an archive swap (${after.hash})`);
+    if (was?.selected) void select(o.id);
+    else publish();
+  });
+}
+
+if (typeof ui?.onSolo === "function") {
+  ui.onSolo((on) => {
+    soloOn = on;
+    if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
+  });
+}
 
 console.log(`EDGEbuilder ${__VERSION__} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
 if (scene.loadError) {
@@ -862,3 +1044,5 @@ if (index.loadNewest()) {
 publish();
 void checkWorld();
 void startBridge();
+watchMods();
+void connectRedcode();

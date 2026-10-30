@@ -36,6 +36,14 @@ export interface MeshInfoResult {
   error: string | null;
 }
 
+/** One .archive anywhere on disk, read by archive.openMod: its files, by name when the archive keeps names. */
+export interface ModArchive {
+  path: string;
+  name: string;
+  count: number;
+  items: BridgeFile[];
+}
+
 export class BridgeError extends Error {}
 
 /** What the mod needs from REDbridge, whether it is REDnode's shared one or a process of its own. */
@@ -44,6 +52,7 @@ export interface Bridge {
   info(): Promise<BridgeInfo>;
   list(prefix: string, offset: number, limit?: number): Promise<FileList>;
   meshInfoMany(paths: string[]): Promise<MeshInfoResult[]>;
+  openMod(archivePath: string): Promise<ModArchive>;
   stop(): void;
 }
 
@@ -59,6 +68,9 @@ export class KernelBridge implements Bridge {
   }
   meshInfoMany(paths: string[]): Promise<MeshInfoResult[]> {
     return this.handle.call<MeshInfoResult[]>("mesh.infoMany", { paths });
+  }
+  openMod(archivePath: string): Promise<ModArchive> {
+    return this.handle.call<ModArchive>("archive.openMod", { path: archivePath });
   }
   stop(): void {
     // REDnode owns the process and stops it when no package has used it for a while.
@@ -172,6 +184,10 @@ export class BridgeClient implements Bridge {
 
   meshInfoMany(paths: string[]): Promise<MeshInfoResult[]> {
     return this.call<MeshInfoResult[]>("mesh.infoMany", { paths });
+  }
+
+  openMod(archivePath: string): Promise<ModArchive> {
+    return this.call<ModArchive>("archive.openMod", { path: archivePath });
   }
 }
 
