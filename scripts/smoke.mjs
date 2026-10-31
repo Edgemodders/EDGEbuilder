@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as core from "../dist/core.mjs";
-import { AssetIndex, BridgeClient, ModSources, NeedsNewerBridge, Scene, findBridge, isGameFolder, kindOf, modArchives, quaternionToYaw, sceneNeeds, yawToQuaternion } from "../dist/core.mjs";
+import { AssetIndex, BridgeClient, applyChange, centreOf, duplicate, makeGroup, pickMany, pickSelection, pruneGroups, selectionUnits, ungroup, ModSources, NeedsNewerBridge, Scene, findBridge, isGameFolder, kindOf, modArchives, quaternionToYaw, sceneNeeds, yawToQuaternion } from "../dist/core.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
@@ -20,7 +20,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   const a = scene.add("mesh", "base\\environment\\decoration\\containers\\cargo\\cargo_crate\\cargo_crate_a.mesh", { position: [1, 2, 3], rotation: yawToQuaternion(90), scale: [1, 1, 1] }, "default");
   const b = scene.add("mesh", "base\\environment\\decoration\\containers\\cargo\\cargo_crate\\cargo_crate_a.mesh", { position: [4, 5, 6], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
   assert.equal(a.id, "cargo_crate_a");
-  assert.equal(b.id, "cargo_crate_a_1");
+  assert.equal(b.id, "cargo_crate_a_2");
   a.entityId = "123";
   scene.save();
   const again = new Scene(scene.file);
@@ -31,7 +31,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.equal(file.format, 1);
   assert.deepEqual(Object.keys(file.objects[0]).sort(), ["appearance", "id", "kind", "resource", "transform"]);
   assert.ok(Math.abs(quaternionToYaw(file.objects[0].transform.rotation) - 90) < 1e-6);
-  assert.equal(scene.remove("cargo_crate_a_1")?.id, "cargo_crate_a_1");
+  assert.equal(scene.remove("cargo_crate_a_2")?.id, "cargo_crate_a_2");
   assert.equal(scene.remove("nope"), undefined);
   scene.forgetPreviews();
   assert.equal(scene.objects[0].entityId, undefined);
@@ -46,6 +46,92 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   damaged.add("mesh", "base/a.mesh", { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
   assert.ok(fs.readFileSync(damaged.setAside, "utf8").includes("broken"), "the next save did not touch it");
   console.log("scene: ok");
+}
+
+// Arrange (B3): what a click selects, groups, duplicates, several objects around their middle, undo's restore.
+{
+  const T = (x, y = 0) => ({ position: [x, y, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
+  const objects = ["a", "b", "c", "d"].map((id, i) => ({ id, kind: "mesh", resource: "base/x.mesh", transform: T(i * 2) }));
+  const groups = [];
+  const ids = (list) => list.map((o) => o.id);
+  // Grouping a and b; a click on a then selects both, Alt picks a alone, Ctrl toggles.
+  const g1 = makeGroup(["a", "b"], objects, groups);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].name, "Group 1");
+  assert.deepEqual(pickSelection("a", [], objects, groups), ["a", "b"]);
+  assert.deepEqual(pickSelection("a", [], objects, groups, { single: true }), ["a"]);
+  assert.deepEqual(pickSelection("c", ["a", "b"], objects, groups, { toggle: true }), ["a", "b", "c"]);
+  assert.deepEqual(pickSelection("a", ["a", "b", "c"], objects, groups, { toggle: true }), ["c"]);
+  assert.deepEqual(pickSelection(undefined, ["a"], objects, groups), []);
+  assert.deepEqual(pickMany(["b", "d"], [], objects, groups), ["a", "b", "d"]);
+  // A group of the group and c: the new group holds the old one whole.
+  const g2 = makeGroup(["a", "b", "c"], objects, groups);
+  assert.equal(groups.find((g) => g.id === g1).parent, g2);
+  assert.equal(objects.find((o) => o.id === "c").group, g2);
+  assert.deepEqual(selectionUnits(["a", "b", "c"], objects, groups), { groups: [g2], objects: [] });
+  assert.deepEqual(pickSelection("a", [], objects, groups), ["a", "b", "c"], "a click selects the outermost group");
+  assert.deepEqual(selectionUnits(["a", "b"], objects, groups), { groups: [g1], objects: [] });
+  // Duplicating the outer group copies both groups and three objects, offset.
+  const copy = duplicate(["a", "b", "c"], objects, groups, [0, 10, 0]);
+  assert.deepEqual(ids(copy.objects), ["a_2", "b_2", "c_2"]);
+  assert.equal(copy.groups.length, 2);
+  assert.deepEqual(copy.objects[0].transform.position, [0, 10, 0]);
+  assert.equal(copy.objects[0].entityId, undefined);
+  const outerCopy = copy.groups.find((g) => g.parent === null);
+  assert.equal(copy.objects[2].group, outerCopy.id);
+  assert.equal(copy.groups.find((g) => g.parent === outerCopy.id).name, "Group 1");
+  // Ungrouping the outer group: the inner group and c step up to the top.
+  assert.equal(ungroup(["a", "b", "c"], objects, groups), 1);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].parent, null);
+  assert.equal(objects.find((o) => o.id === "c").group, undefined);
+  // An object picked out of a group steps out of it; the empty group then goes.
+  ungroup(["a"], objects, groups);
+  assert.equal(objects.find((o) => o.id === "a").group, undefined);
+  objects.find((o) => o.id === "b").group = undefined;
+  pruneGroups(objects, groups);
+  assert.equal(groups.length, 0);
+  // Turning two objects 90 degrees around their middle swaps their places; scaling spreads them.
+  const two = [T(-1), T(1)];
+  const mid = centreOf(two);
+  assert.deepEqual(mid, [0, 0, 0]);
+  const q = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
+  const turned = two.map((t) => applyChange(t, { turn: q }, mid));
+  assert.ok(Math.abs(turned[0].position[1] + 1) < 1e-9 && Math.abs(turned[0].position[0]) < 1e-9);
+  const spread = applyChange(T(1), { scale: [2, 2, 2], move: [0, 0, 1] }, mid);
+  assert.deepEqual(spread.position, [2, 0, 1]);
+  assert.deepEqual(spread.scale, [2, 2, 2]);
+  // The scene keeps its groups, and restore says which previews change.
+  const scene = new Scene(path.join(tmp, "scenes", "arrange.scene.json"));
+  const x = scene.add("mesh", "base/x.mesh", T(0));
+  const y = scene.add("mesh", "base/x.mesh", T(2));
+  const z = scene.add("mesh", "base/y.mesh", T(4));
+  x.entityId = "1";
+  y.entityId = "2";
+  z.entityId = "3";
+  makeGroup([x.id, y.id], scene.objects, scene.groups);
+  scene.save();
+  const back = new Scene(scene.file);
+  back.load();
+  assert.equal(back.groups.length, 1);
+  assert.equal(back.objects[0].group, back.groups[0].id);
+  const before = scene.state();
+  assert.equal(before.objects[0].entityId, undefined, "a state has no previews");
+  y.transform = T(3);
+  z.transform.scale = [2, 2, 2];
+  scene.remove(x.id);
+  assert.equal(scene.groups.length, 1, "y still holds the group");
+  const w = scene.add("mesh", "base/w.mesh", T(9));
+  w.entityId = "4";
+  const ch = scene.restore(before);
+  assert.deepEqual(ids(ch.spawn), [x.id]);
+  assert.deepEqual(ids(ch.move), [y.id]);
+  assert.deepEqual(ids(ch.respawn), [z.id]);
+  assert.deepEqual(ids(ch.gone), [w.id]);
+  assert.equal(scene.get(y.id).entityId, "2", "a moved preview keeps its entity");
+  assert.equal(scene.get(x.id).entityId, undefined);
+  assert.equal(scene.objects.length, 3);
+  console.log("arrange: ok");
 }
 
 // The viewport's geometry against a simulated game camera, for both ways ProjectPoint might answer.

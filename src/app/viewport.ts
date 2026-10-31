@@ -1,8 +1,10 @@
 // The viewport: a canvas over the whole game view. It follows the game's camera each frame, draws
-// the gizmo on the selected object, picks objects under the cursor, and turns drags and keys into
-// new transforms. Previews move live through REDnode's world API; the mod keeps the result.
+// the gizmo at the middle of the selection, picks objects under the cursor (or in a box), and turns
+// drags and keys into new transforms for every selected object. Previews move live through REDnode's
+// world API; the mod keeps the result.
 
 import { api, game, world, type GameRef } from "rednode";
+import { applyChange, boxOf, centreOf, type Change } from "../arrange";
 import {
   AXES,
   add,
@@ -44,10 +46,16 @@ const HOT = "#ffffff";
 const UNIT_BOX = { min: [-0.5, -0.5, 0] as V3, max: [0.5, 0.5, 1] as V3 };
 
 export interface ViewportHooks {
-  select(id: string | undefined): void;
-  commit(id: string, t: SceneTransform): void;
-  remove(id: string): void;
-  floor(id: string): void;
+  /** A click on this object, or on nothing. `toggle`: Ctrl was held; `single`: Alt (one object, not its group). */
+  pick(id: string | undefined, opts: { toggle: boolean; single: boolean }): void;
+  /** A box (Shift+drag) took these objects. `add`: Ctrl was held. */
+  pickBox(ids: string[], opts: { add: boolean; single: boolean }): void;
+  /** The objects' new transforms, one undo step; `merge`: the move that places a duplicate. */
+  commit(items: { id: string; transform: SceneTransform }[], merge: boolean): void;
+  remove(ids: string[]): void;
+  floor(ids: string[]): void;
+  /** Esc on a duplicate's move: the copies go. */
+  undo(): void;
   log(text: string): void;
   status(text: string): void;
   /** Edit went on: switch to EDGEbuilder's camera at this pose. */
@@ -57,13 +65,19 @@ export interface ViewportHooks {
 }
 
 interface Drag {
-  id: string;
+  /** The objects being moved, and where each started. */
+  ids: string[];
+  starts: Map<string, SceneTransform>;
   mode: Mode;
   /** The handle being dragged, or the axis a key locked. */
   axis?: Axis;
   ring?: boolean;
-  start: SceneTransform;
-  now: SceneTransform;
+  /** The middle of the selection when the drag started: what it turns and scales around. */
+  pivot: V3;
+  /** The change so far, the same for every object. */
+  change: Change;
+  /** A duplicate's move: Esc takes the copies back, and keeping it joins the duplicate's undo step. */
+  copy: boolean;
   /** Where the drag started: on the axis (metres), on the floor plane, the angle, or the cursor distance. */
   s0?: number;
   p0?: V3;
@@ -82,7 +96,9 @@ export class Viewport {
   private ctx: CanvasRenderingContext2D;
   private edit = false;
   private objects: SceneObject[] = [];
-  private selected: string | undefined;
+  private selected: string[] = [];
+  /** A selection box being drawn with Shift held: where it started and where the cursor is. */
+  private box: { x0: number; y0: number; x1: number; y1: number } | undefined;
   private cam: Camera | undefined;
   private calib: Calibration | undefined;
   private fov = 0;
@@ -93,7 +109,8 @@ export class Viewport {
   private hover: Handle | undefined;
   private drag: Drag | undefined;
   private mouse: [number, number] = [0, 0];
-  private pending: SceneTransform | undefined;
+  /** The drag changed since the last frame: send the previews' new places. */
+  private pending = false;
   private cameraError = "";
   // The editor camera (B2b): its entity, its component, and where the page wants it.
   private camEntity: string | undefined;
@@ -119,7 +136,7 @@ export class Viewport {
     // Moves and releases are heard on the whole page: while looking, orbiting or dragging, the
     // cursor may cross the EDGEbuilder window, and the camera should keep following it (B2b test).
     window.addEventListener("pointermove", (e) => {
-      if (e.target === canvas || this.rmb || this.mmb || this.drag) this.onMove(e);
+      if (e.target === canvas || this.rmb || this.mmb || this.drag || this.box) this.onMove(e);
     });
     canvas.addEventListener("pointerdown", (e) => this.onDown(e));
     window.addEventListener("pointerup", (e) => this.onUp(e));
@@ -147,6 +164,7 @@ export class Viewport {
     if (!on) {
       this.cancel();
       this.disarm();
+      this.box = undefined;
       this.rmb = this.mmb = false;
       this.unlock();
       if (this.builderAsked) this.hooks.builderStop();
@@ -182,18 +200,46 @@ export class Viewport {
     this.canvas.style.cursor = "";
   }
 
-  setScene(objects: SceneObject[], selected: string | undefined): void {
+  setScene(objects: SceneObject[], selected: string[]): void {
     this.objects = objects;
-    if (selected !== this.selected && this.drag) this.cancel();
+    if (this.drag && selected.join("\n") !== this.selected.join("\n")) this.cancel();
     this.selected = selected;
     this.kick();
   }
 
-  /** The selected object, as the page shows it now (mid-drag included). */
-  private current(): SceneObject | undefined {
-    const o = this.objects.find((x) => x.id === this.selected);
-    if (!o) return undefined;
-    return this.drag && this.drag.id === o.id ? { ...o, transform: this.drag.now } : o;
+  /** Edit is on and the camera is known: a drag can start. */
+  get canDrag(): boolean {
+    return this.edit && !!this.cam;
+  }
+
+  /** A drag, a box or Drop at click is under way: keys belong to it. */
+  get busy(): boolean {
+    return !!(this.drag || this.box || this.placing);
+  }
+
+  /** A duplicate's copies are selected: they follow the mouse until a click places them, Esc takes them back. */
+  moveCopies(): void {
+    if (!this.canDrag || this.drag) return;
+    this.begin("move", true, undefined, false, true);
+    this.kick();
+  }
+
+  /** The selected objects as the page shows them now, mid-drag included. */
+  private chosen(): SceneObject[] {
+    const d = this.drag;
+    return this.objects
+      .filter((o) => this.selected.includes(o.id))
+      .map((o) => (d && d.starts.has(o.id) ? { ...o, transform: this.nowOf(d, o.id) } : o));
+  }
+
+  private nowOf(d: Drag, id: string): SceneTransform {
+    return applyChange(d.starts.get(id)!, d.change, d.pivot);
+  }
+
+  /** Where the gizmo sits: the middle of the selected previews. */
+  private gizmoAt(): V3 | undefined {
+    const shown = this.chosen().filter((o) => o.entityId);
+    return shown.length ? centreOf(shown.map((o) => o.transform)) : undefined;
   }
 
   // ---- the camera ----------------------------------------------------------------------------
@@ -298,8 +344,7 @@ export class Viewport {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
-  private handleEnds(o: SceneObject): { origin: V3; size: number; tips: Record<Axis, V3> } {
-    const origin = o.transform.position;
+  private handleEnds(origin: V3): { origin: V3; size: number; tips: Record<Axis, V3> } {
     const dist = this.cam ? Math.max(1, Math.hypot(...sub(origin, this.cam.pos))) : 5;
     const size = dist * 0.12; // the same size on screen at any distance
     return { origin, size, tips: { x: add(origin, mul(AXES.x, size)), y: add(origin, mul(AXES.y, size)), z: add(origin, mul(AXES.z, size)) } };
@@ -318,14 +363,15 @@ export class Viewport {
     this.clear();
     const ctx = this.ctx;
     const cam = this.cam;
-    const o = this.current();
+    const chosen = this.chosen();
+    const at = this.gizmoAt();
     if (!cameraOk || !cam) {
       if (this.edit) this.label(`No camera yet: ${this.cameraError || "load a save"}`);
       return;
     }
-    if (o && o.entityId) {
-      this.drawBox(o);
-      const { origin, size, tips } = this.handleEnds(o);
+    for (const o of chosen) if (o.entityId) this.drawBox(o);
+    if (at) {
+      const { origin, size, tips } = this.handleEnds(at);
       const c = project(cam, origin);
       // The turn ring, flat around the object.
       const ring = this.ringPoints(origin, size * 0.8).map((p) => project(cam, p));
@@ -365,10 +411,27 @@ export class Viewport {
         ctx.fill();
       }
     }
+    if (this.box) {
+      const b = this.box;
+      ctx.strokeStyle = COLORS.ring;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(252,238,10,0.06)";
+      ctx.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
+    }
     if (this.drag) this.label(...this.dragText(this.drag).split("   "));
     else if (this.edit) {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
-      const help = this.placing ? "Click where it should go.  Esc: cancel." : o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.";
+      const n = chosen.length;
+      const help = this.placing
+        ? "Click where it should go.  Esc: cancel."
+        : this.box
+          ? "Release to select what is inside.  Ctrl: add to the selection."
+          : n
+            ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D copy, Ctrl+G group, Ctrl+Z undo.`
+            : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
       this.label(help, camHelp);
     }
   }
@@ -430,21 +493,23 @@ export class Viewport {
   }
 
   private dragText(d: Drag): string {
-    const t = d.now;
     const typed = d.typed ? `  [${d.typed}]` : "";
     const lock = d.axis ? ` ${d.axis.toUpperCase()}` : "";
+    const many = d.ids.length > 1 ? ` ${d.ids.length} objects` : "";
+    const keep = d.copy ? "Enter or click: place the copy · Esc: no copy" : "Enter or click: keep · Esc or right-click: undo";
     if (d.mode === "move") {
-      const dx = sub(t.position, d.start.position);
-      return `Move${lock}  ${dx.map((n) => n.toFixed(2)).join(", ")} m${typed}   Enter or click: keep · Esc or right-click: undo`;
+      const dx = d.change.move ?? [0, 0, 0];
+      return `Move${many}${lock}  ${dx.map((n) => n.toFixed(2)).join(", ")} m${typed}   ${keep}`;
     }
-    if (d.mode === "rotate") return `Turn${lock || " Z"}  ${this.turnedDegrees(d).toFixed(1)}°${typed}   Enter or click: keep · Esc: undo`;
-    return `Scale${lock}  ${t.scale.map((n) => n.toFixed(2)).join(", ")}${typed}   Enter or click: keep · Esc: undo`;
+    if (d.mode === "rotate") return `Turn${many}${lock || " Z"}  ${this.turnedDegrees(d).toFixed(1)}°${typed}   ${keep}`;
+    const f = d.change.scale ?? [1, 1, 1];
+    const shown = d.ids.length === 1 ? this.nowOf(d, d.ids[0]).scale : f;
+    return `Scale${many}${lock}  ${d.ids.length === 1 ? "" : "x "}${shown.map((n) => n.toFixed(2)).join(", ")}${typed}   ${keep}`;
   }
 
   private turnedDegrees(d: Drag): number {
-    const q = qMul(d.now.rotation as Q, [-d.start.rotation[0], -d.start.rotation[1], -d.start.rotation[2], d.start.rotation[3]]);
-    const deg = (2 * Math.acos(Math.min(1, Math.abs(q[3]))) * 180) / Math.PI;
-    return deg;
+    const q = d.change.turn ?? [0, 0, 0, 1];
+    return (2 * Math.acos(Math.min(1, Math.abs(q[3]))) * 180) / Math.PI;
   }
 
   // ---- the mouse ---------------------------------------------------------------------------------
@@ -455,10 +520,10 @@ export class Viewport {
   }
 
   private handleAt(p: [number, number]): Handle | undefined {
-    const o = this.current();
+    const at = this.gizmoAt();
     const cam = this.cam;
-    if (!o || !o.entityId || !cam) return undefined;
-    const { origin, size, tips } = this.handleEnds(o);
+    if (!at || !cam) return undefined;
+    const { origin, size, tips } = this.handleEnds(at);
     const c = project(cam, origin);
     if (!c) return undefined;
     let best: Handle | undefined;
@@ -528,14 +593,17 @@ export class Viewport {
       this.camDirty = true;
       return;
     }
-    if (this.drag) this.dragTo(this.mouse, e.ctrlKey);
+    if (this.box) {
+      this.box.x1 = this.mouse[0];
+      this.box.y1 = this.mouse[1];
+    } else if (this.drag) this.dragTo(this.mouse, e.ctrlKey);
     else this.hover = this.handleAt(this.mouse);
   }
 
-  /** What the camera orbits and dollies towards: the selected object, else a point 10 m ahead. */
+  /** What the camera orbits and dollies towards: the middle of the selection, else a point 10 m ahead. */
   private pivot(): V3 {
-    const o = this.current();
-    if (o?.entityId) return o.transform.position;
+    const at = this.gizmoAt();
+    if (at) return at;
     const a = lookAxes(this.look!);
     return add(this.camPos!, mul(a.fwd, 10));
   }
@@ -584,13 +652,12 @@ export class Viewport {
     world.move(this.camEntity, { x: this.camPos[0], y: this.camPos[1], z: this.camPos[2] }, { i: q[0], j: q[1], k: q[2], r: q[3] }).catch((err: Error) => this.hooks.log(`Camera move failed: ${err.message}`));
   }
 
-  /** Puts the selected object in front of the camera, at a distance that fits it. */
+  /** Puts the selection in front of the camera, at a distance that fits it. */
   private frameSelected(): void {
-    const o = this.current();
-    if (!o || !this.camPos || !this.look) return;
-    const b = o.bounds ? { min: o.bounds.min as V3, max: o.bounds.max as V3 } : UNIT_BOX;
-    const size = Math.max(...[0, 1, 2].map((i) => (b.max[i] - b.min[i]) * o.transform.scale[i]));
-    const centre = add(o.transform.position, mul(add(b.min, b.max), 0.5));
+    const b = boxOf(this.chosen());
+    if (!b || !this.camPos || !this.look) return;
+    const size = Math.max(...[0, 1, 2].map((i) => b.max[i] - b.min[i]));
+    const centre = mul(add(b.min, b.max), 0.5);
     const fwd = lookAxes(this.look).fwd;
     this.camPos = sub(centre, mul(fwd, Math.max(2, size * 2.5)));
     this.camDirty = true;
@@ -625,15 +692,20 @@ export class Viewport {
       return then(rayFrom(this.cam, this.mouse[0], this.mouse[1]));
     }
     if (this.drag?.modal) return this.confirm();
-    const h = this.handleAt(this.mouse);
-    const o = this.current();
-    if (h && o) {
+    const h = e.shiftKey ? undefined : this.handleAt(this.mouse);
+    if (h) {
       this.canvas.setPointerCapture(e.pointerId);
-      if (h === "ring") this.begin(o, "rotate", false, undefined, true);
-      else this.begin(o, "move", false, h);
+      if (h === "ring") this.begin("rotate", false, undefined, true);
+      else this.begin("move", false, h);
       return;
     }
-    this.pick(this.mouse);
+    if (e.shiftKey) {
+      // Shift+drag: a box; what is inside is selected on release.
+      this.canvas.setPointerCapture(e.pointerId);
+      this.box = { x0: this.mouse[0], y0: this.mouse[1], x1: this.mouse[0], y1: this.mouse[1] };
+      return;
+    }
+    this.pick(this.mouse, e);
   }
 
   private onUp(e: PointerEvent): void {
@@ -648,14 +720,41 @@ export class Viewport {
       }
       return;
     }
+    if (this.box && e.button === 0) {
+      this.canvas.releasePointerCapture(e.pointerId);
+      this.endBox(e);
+      return;
+    }
     if (this.drag && !this.drag.modal && e.button === 0) {
       this.canvas.releasePointerCapture(e.pointerId);
       this.confirm();
     }
   }
 
+  /** The objects whose middle is inside the box on screen. A box a few pixels wide is a click. */
+  private endBox(e: PointerEvent): void {
+    const b = this.box!;
+    this.box = undefined;
+    const cam = this.cam;
+    if (!cam) return;
+    if (Math.abs(b.x1 - b.x0) < 4 && Math.abs(b.y1 - b.y0) < 4) return this.pick([b.x1, b.y1], e);
+    const [l, r] = [Math.min(b.x0, b.x1), Math.max(b.x0, b.x1)];
+    const [t, d] = [Math.min(b.y0, b.y1), Math.max(b.y0, b.y1)];
+    const inside = this.objects.filter((o) => {
+      if (!o.entityId) return false;
+      const bb = o.bounds ? { min: o.bounds.min as V3, max: o.bounds.max as V3 } : UNIT_BOX;
+      const middle = add(o.transform.position as V3, qRotate(o.transform.rotation as Q, mul(add(bb.min, bb.max).map((v, i) => v * o.transform.scale[i]) as V3, 0.5)));
+      const p = project(cam, middle);
+      return !!p && p[0] >= l && p[0] <= r && p[1] >= t && p[1] <= d;
+    });
+    this.hooks.pickBox(
+      inside.map((o) => o.id),
+      { add: e.ctrlKey, single: e.altKey },
+    );
+  }
+
   /** Selects the nearest object under the cursor, or nothing. */
-  private pick(p: [number, number]): void {
+  private pick(p: [number, number], e: { ctrlKey: boolean; altKey: boolean }): void {
     const cam = this.cam!;
     const ray = rayFrom(cam, p[0], p[1]);
     let best: SceneObject | undefined;
@@ -669,18 +768,25 @@ export class Viewport {
         best = o;
       }
     }
-    this.hooks.select(best?.id);
+    this.hooks.pick(best?.id, { toggle: e.ctrlKey, single: e.altKey });
   }
 
   // ---- drags and keys ------------------------------------------------------------------------------
 
-  private begin(o: SceneObject, mode: Mode, modal: boolean, axis?: Axis, ring = false): void {
-    if (mode === "scale" && o.kind !== "mesh") {
-      this.hooks.status("Only meshes scale; an entity keeps the size its template gives it.");
+  /**
+   * Starts a drag of the selected previews. They all get the same change: moved by the same amount,
+   * turned and scaled around their middle. `copy`: a duplicate's move.
+   */
+  private begin(mode: Mode, modal: boolean, axis?: Axis, ring = false, copy = false): void {
+    const shown = this.objects.filter((o) => this.selected.includes(o.id) && o.entityId);
+    if (!shown.length) return;
+    if (mode === "scale" && shown.some((o) => o.kind !== "mesh")) {
+      this.hooks.status(shown.length === 1 ? "Only meshes scale; an entity keeps the size its template gives it." : "Only meshes scale, and the selection has an entity: an entity keeps the size its template gives it.");
       return;
     }
-    const t: SceneTransform = { position: [...o.transform.position], rotation: [...o.transform.rotation], scale: [...o.transform.scale] };
-    this.drag = { id: o.id, mode, axis, ring, start: t, now: t, x0: this.mouse[0], y0: this.mouse[1], typed: "", modal, moves: 0, started: performance.now() };
+    const starts = new Map(shown.map((o) => [o.id, { position: [...o.transform.position], rotation: [...o.transform.rotation], scale: [...o.transform.scale] } as SceneTransform]));
+    const pivot = centreOf([...starts.values()]);
+    this.drag = { ids: shown.map((o) => o.id), starts, mode, axis, ring, pivot, change: {}, copy, x0: this.mouse[0], y0: this.mouse[1], typed: "", modal, moves: 0, started: performance.now() };
     this.anchor();
   }
 
@@ -689,7 +795,7 @@ export class Viewport {
     const d = this.drag!;
     const cam = this.cam!;
     const ray = rayFrom(cam, this.mouse[0], this.mouse[1]);
-    const origin = d.start.position;
+    const origin = d.pivot;
     d.x0 = this.mouse[0];
     d.y0 = this.mouse[1];
     if (d.mode === "move") {
@@ -709,105 +815,109 @@ export class Viewport {
     const cam = this.cam;
     if (!cam || d.typed) return;
     const ray = rayFrom(cam, p[0], p[1]);
-    const s = d.start;
-    let next: SceneTransform = d.now;
+    const o = d.pivot;
     if (d.mode === "move") {
       let delta: V3 = [0, 0, 0];
       if (d.axis) {
-        const t = closestOnAxis(ray, s.position, AXES[d.axis]);
+        const t = closestOnAxis(ray, o, AXES[d.axis]);
         if (t === null) return;
         delta = mul(AXES[d.axis], t - (d.s0 ?? 0));
       } else {
-        const q = rayOnPlaneZ(ray, s.position[2]);
+        const q = rayOnPlaneZ(ray, o[2]);
         if (!q) return;
-        delta = sub(q, d.p0 ?? s.position);
+        delta = sub(q, d.p0 ?? o);
       }
       if (snap) delta = delta.map((n) => Math.round(n / 0.25) * 0.25) as V3;
-      next = { ...s, position: add(s.position, delta) };
+      this.apply({ move: delta });
     } else if (d.mode === "rotate") {
       let deg: number;
       if (!d.axis || d.axis === "z") {
-        const q = rayOnPlaneZ(ray, s.position[2]);
-        const a = q ? Math.atan2(q[1] - s.position[1], q[0] - s.position[0]) : (d.a0 ?? 0) + ((p[0] - d.x0) * Math.PI) / 360;
+        const q = rayOnPlaneZ(ray, o[2]);
+        const a = q ? Math.atan2(q[1] - o[1], q[0] - o[0]) : (d.a0 ?? 0) + ((p[0] - d.x0) * Math.PI) / 360;
         deg = ((a - (d.a0 ?? 0)) * 180) / Math.PI;
       } else {
         deg = (p[0] - d.x0) * 0.5;
       }
       if (snap) deg = Math.round(deg / 15) * 15;
-      next = { ...s, rotation: qNorm(qMul(qAxisAngle(AXES[d.axis ?? "z"], deg), s.rotation as Q)) };
+      this.apply({ turn: qAxisAngle(AXES[d.axis ?? "z"], deg) });
     } else {
-      const c = project(cam, s.position);
+      const c = project(cam, o);
       if (!c) return;
       let f = Math.max(0.01, Math.hypot(p[0] - c[0], p[1] - c[1]) / (d.d0 ?? 100));
       if (snap) f = Math.round(f / 0.25) * 0.25 || 0.25;
-      next = { ...s, scale: this.scaled(s.scale as V3, f, d.axis) };
+      this.apply({ scale: this.factor(f, d.axis) });
     }
-    this.apply(next);
   }
 
-  private scaled(base: V3, f: number, axis?: Axis): V3 {
-    if (!axis) return mul(base, f);
-    const i = axis === "x" ? 0 : axis === "y" ? 1 : 2;
-    const out: V3 = [...base];
-    out[i] = base[i] * f;
+  private factor(f: number, axis?: Axis): V3 {
+    if (!axis) return [f, f, f];
+    const out: V3 = [1, 1, 1];
+    out[axis === "x" ? 0 : axis === "y" ? 1 : 2] = f;
     return out;
   }
 
-  /** A transform from typed numbers: metres along the locked axis, degrees around it, or a factor. */
-  private typedTransform(d: Drag): SceneTransform | undefined {
+  /** A change from typed numbers: metres along the locked axis, degrees around it, or a factor. */
+  private typedChange(d: Drag): Change | undefined {
     const n = Number(d.typed);
     if (!d.typed || Number.isNaN(n)) return undefined;
-    const s = d.start;
-    if (d.mode === "move") return { ...s, position: add(s.position, mul(AXES[d.axis ?? "z"], n)) };
-    if (d.mode === "rotate") return { ...s, rotation: qNorm(qMul(qAxisAngle(AXES[d.axis ?? "z"], n), s.rotation as Q)) };
-    return { ...s, scale: this.scaled(s.scale as V3, n || 1, d.axis) };
+    if (d.mode === "move") return { move: mul(AXES[d.axis ?? "z"], n) };
+    if (d.mode === "rotate") return { turn: qAxisAngle(AXES[d.axis ?? "z"], n) };
+    return { scale: this.factor(n || 1, d.axis) };
   }
 
-  /** Shows a transform on the preview: the newest one is sent once a frame, by the frame loop. */
-  private apply(t: SceneTransform): void {
+  /** Shows a change on the previews: the newest places are sent once a frame, by the frame loop. */
+  private apply(c: Change): void {
     const d = this.drag!;
-    d.now = t;
-    if (d.mode === "scale") return; // the box shows a new scale; the mod rebuilds the preview on keep
-    this.pending = t;
+    d.change = c;
+    if (d.mode === "scale" && d.ids.length === 1) return; // the box shows a new scale; the mod rebuilds the preview on keep
+    this.pending = true;
   }
 
   /**
-   * Sends the newest pending transform without waiting for the answer. REDnode runs every call that
-   * is waiting when a game frame starts in that frame, so one move a page frame keeps the object with
-   * the cursor; waiting for each answer let it fall a frame or two behind (B2a test).
+   * Sends the previews' newest places without waiting for the answers. REDnode runs every call that
+   * is waiting when a game frame starts in that frame, so one move a page frame keeps the objects with
+   * the cursor; waiting for each answer let them fall a frame or two behind (B2a test).
    */
   private flushMove(): void {
-    const p = this.pending;
     const d = this.drag;
-    if (!p || !d) return;
-    this.pending = undefined;
-    const o = this.objects.find((x) => x.id === d.id);
-    if (!o?.entityId) return;
-    d.moves++;
-    world
-      .move(o.entityId, { x: p.position[0], y: p.position[1], z: p.position[2] }, { i: p.rotation[0], j: p.rotation[1], k: p.rotation[2], r: p.rotation[3] })
-      .catch((err: Error) => this.hooks.log(`Move failed: ${err.message}`));
+    if (!this.pending || !d) return;
+    this.pending = false;
+    for (const id of d.ids) {
+      const o = this.objects.find((x) => x.id === id);
+      if (!o?.entityId) continue;
+      const p = this.nowOf(d, id);
+      d.moves++;
+      world
+        .move(o.entityId, { x: p.position[0], y: p.position[1], z: p.position[2] }, { i: p.rotation[0], j: p.rotation[1], k: p.rotation[2], r: p.rotation[3] })
+        .catch((err: Error) => this.hooks.log(`Move failed: ${err.message}`));
+    }
   }
 
   private confirm(): void {
     const d = this.drag;
     if (!d) return;
-    const t = (d.typed && this.typedTransform(d)) || d.now;
+    if (d.typed) d.change = this.typedChange(d) ?? d.change;
     this.drag = undefined;
     this.hover = undefined;
+    this.pending = false;
     const secs = (performance.now() - d.started) / 1000;
-    if (d.moves > 0) this.hooks.log(`Drag (${d.mode}${d.axis ? ` ${d.axis}` : ""}): ${d.moves} moves in ${secs.toFixed(1)} s, ${(d.moves / Math.max(secs, 0.001)).toFixed(0)} a second`);
-    this.hooks.commit(d.id, t);
+    if (d.moves > 0) this.hooks.log(`Drag (${d.mode}${d.axis ? ` ${d.axis}` : ""}, ${d.ids.length} object${d.ids.length === 1 ? "" : "s"}): ${d.moves} moves in ${secs.toFixed(1)} s, ${(d.moves / Math.max(secs, 0.001)).toFixed(0)} a second`);
+    this.hooks.commit(
+      d.ids.map((id) => ({ id, transform: this.nowOf(d, id) })),
+      d.copy,
+    );
   }
 
   private cancel(): void {
     const d = this.drag;
     if (!d) return;
     this.drag = undefined;
-    const o = this.objects.find((x) => x.id === d.id);
-    if (o?.entityId && d.mode !== "scale") {
-      this.pending = undefined;
-      void world.move(o.entityId, { x: d.start.position[0], y: d.start.position[1], z: d.start.position[2] }, { i: d.start.rotation[0], j: d.start.rotation[1], k: d.start.rotation[2], r: d.start.rotation[3] });
+    this.pending = false;
+    // A duplicate's move: no copy after all (one undo takes the copies out).
+    if (d.copy) return this.hooks.undo();
+    for (const [id, t] of d.starts) {
+      const o = this.objects.find((x) => x.id === id);
+      if (o?.entityId) void world.move(o.entityId, { x: t.position[0], y: t.position[1], z: t.position[2] }, { i: t.rotation[0], j: t.rotation[1], k: t.rotation[2], r: t.rotation[3] });
     }
   }
 
@@ -821,40 +931,46 @@ export class Viewport {
       this.disarm();
       return this.hooks.status("Drop at click cancelled.");
     }
+    if (key === "escape" && this.box) {
+      this.box = undefined;
+      return;
+    }
     if (key === "f" && !this.drag) return this.frameSelected();
     const d = this.drag;
     if (d) {
+      if (e.ctrlKey && key.length === 1) return; // Ctrl snaps; Ctrl with a letter is not an axis
       if (key === "escape") return this.cancel();
       if (key === "enter") return this.confirm();
       if (key === "x" || key === "y" || key === "z") {
         d.axis = d.axis === key ? undefined : (key as Axis);
-        d.now = d.start;
         this.anchor();
-        if (d.mode !== "scale") this.apply(d.start);
+        this.apply({});
         return;
       }
       if (/^[0-9.\-]$/.test(e.key)) {
         d.typed += e.key;
-        const t = this.typedTransform(d);
-        if (t) this.apply(t);
+        const c = this.typedChange(d);
+        if (c) this.apply(c);
         return;
       }
       if (key === "backspace") {
         d.typed = d.typed.slice(0, -1);
-        const t = this.typedTransform(d) ?? d.start;
-        this.apply(t);
+        this.apply(this.typedChange(d) ?? {});
       }
       return;
     }
-    const o = this.current();
-    if (!o?.entityId || !this.cam) return;
-    if (key === "g") this.begin(o, "move", true);
-    else if (key === "r") this.begin(o, "rotate", true);
-    else if (key === "s") this.begin(o, "scale", true);
-    else if (key === "e" && e.ctrlKey) {
+    if (!this.selected.length || !this.cam) return;
+    // Ctrl with a letter is the page's (Ctrl+D, Ctrl+G, Ctrl+Z), except Ctrl+E.
+    if (key === "e" && e.ctrlKey) {
       e.preventDefault();
-      this.hooks.floor(o.id);
-    } else if (key === "delete") this.hooks.remove(o.id);
+      this.hooks.floor(this.selected);
+      return;
+    }
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (key === "g") this.begin("move", true);
+    else if (key === "r") this.begin("rotate", true);
+    else if (key === "s") this.begin("scale", true);
+    else if (key === "delete") this.hooks.remove(this.selected);
   }
 }
 

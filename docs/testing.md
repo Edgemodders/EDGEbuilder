@@ -14,9 +14,9 @@ Last updated 2026-10-30.
 
 | Test | Kind | Phase | Last run | Result |
 |---|---|---|---|---|
-| [Type check and build](#type-check-and-build) | Automated | B1 on | 2026-10-30 (0.4.0) | Pass |
-| [Smoke test](#smoke-test) | Automated, needs REDbridge and the game files | B1 on | 2026-10-30 (0.4.0) | Pass |
-| [Page check in REDnode's host](#page-check-in-rednodes-host) | By hand, no game | B1 on | 2026-10-30 (0.4.0) | Pass |
+| [Type check and build](#type-check-and-build) | Automated | B1 on | 2026-10-31 (0.5.0) | Pass |
+| [Smoke test](#smoke-test) | Automated, needs REDbridge and the game files | B1 on | 2026-10-31 (0.5.0) | Pass (the arrange part; the bridge part unchanged since 0.4.0) |
+| [Page check in REDnode's host](#page-check-in-rednodes-host) | By hand, no game | B1 on | 2026-10-31 (0.5.0) | Pass |
 | [B1 Browse and drop](#b1-browse-and-drop) | In the game | B1 | 2026-10-13 (0.1.1) | Pass |
 | [B2a Position](#b2a-position) | In the game | B2a | 2026-10-14 (0.2.0) | Pass |
 | [B2b Camera](#b2b-camera) | In the game | B2b | 2026-10-14 (0.3.0) | Pass |
@@ -24,6 +24,7 @@ Last updated 2026-10-30.
 | [0.3.4 check on game 2.5](#034-check-on-game-25) | In the game | B2b | 2026-10-29 (0.3.4) | Pass |
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
+| [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | Built 2026-10-31 (0.5.0) | Waiting for the owner |
 
 ## Automated
 
@@ -78,6 +79,7 @@ Drive the page by evaluating scripts through the DevTools protocol on 127.0.0.1:
 | 2026-10-14, 0.3.0 | The page and the two new Settings switches | |
 | 2026-10-16, 0.3.3 | Typing `crate` with real key events lands in the search box and searches (95 results); Drop at click switches Edit on, shows the crosshair and its message, Esc cancels; the help line sits at the bottom centre | |
 | 2026-10-30, 0.4.0 | With REDcode's service package beside it (`--apps-dir` also `<REDcode>\extensions\redcode\rednode`, `--apps=edgebuilder,redcode`) and `LOCALAPPDATA` pointed at a scratch folder with a stand-in `REDcode\project.json`: the five mod archives on the dev PC read (17 meshes and entities); `chicken` finds EvilClown's `kratoes_rubber_chicken` mesh and entity first, tagged EvilClown, the archive in the tooltip; the Project tab lists the stand-in project's files, a file added to it shows up within 2 s, picking one explains that its size comes later and Drop stays on; the project closed: "No REDcode project open". Electron must start without `ELECTRON_RUN_AS_NODE` (VS Code's terminals set it) | |
+| 2026-10-31, 0.5.0 | With a working scene of four objects and a group written beforehand (no game, so no previews): the Scene list as a tree, the group's row selects its two objects and shows its name in Group name; Ctrl+click adds the barrel ("3 objects", Turn by and Scale by); Group nests the old group in Group 1; rename; Undo twice and Redo once step through the changes and their counts; the group's arrow closes it; Apply with X 12 and Turn by 90 moves the group's middle and turns it around it (the barrel at 12, 2); Clear scene, then Ctrl+Z from the keyboard brings the four back. Drops, the gizmo, the box and Duplicate need the game | The five arrange buttons wrap onto two rows and the window scrolls: left as is |
 
 ## In the game
 
@@ -278,4 +280,24 @@ streaming:
 **Retest in 0.4.1:** step 9 again (drop the grip, move and turn it, select it, Pack and Play: it stays where it was, selected, and the log has `spawned again after an archive swap`), and the two messages: the Project tab with Entities on, and the drop message for the grip.
 
 **Retest with 0.4.1 (2026-10-30, the owner's report): passed.** The grip, moved and turned, stayed where it was and selected after Pack and Play; the Project tab with Entities on and the drop message read as written. The owner asked for a shorter count: `1 mesh found`, `4 entities found`, without the tab's own name; that wording comes after 0.4.1.
+
+### B3-1 Arrange
+
+**Built on 2026-10-31, waiting for the owner's test.** EDGEbuilder 0.5.0, from `npm run package`, added in EDGEdeck. REDnode 0.41.0 or later. B3's first half: several objects at once, groups, duplicates, undo and redo ([design](design.md), B3). Saved scenes, the Library and the service are B3-2. Start somewhere open with Edit on.
+
+| # | Check | Expected |
+|---|---|---|
+| 1 | The log's start line | `EDGEbuilder 0.5.0 starting` |
+| 2 | Drop `cargo_crate_a.mesh` three times, a few metres apart (Drop at click). Click one, then Ctrl+click the other two | Each click adds one: three outlined, three boxes, one gizmo at their middle. The Scene tab says "3 selected", the Selected panel "3 objects" and their middle. A plain click on one selects it alone; a click on empty ground selects nothing |
+| 3 | Shift+drag a box around all three | A dashed yellow box while dragging; on release all three are selected. Shift+drag around nothing selects nothing |
+| 4 | Drag an arrow, then the ring; then G, R, S with X, Y or Z and a typed number; Esc once in the middle of one | They move together, turn together around their middle (the outer ones swing round), and S spreads them and makes them bigger. Esc puts them back |
+| 5 | Ctrl+G | "Grouped 3 objects as Group 1". The Scene list shows Group 1 with the crates under it. Click one crate in the world: all three are selected. Alt+click one: only that one |
+| 6 | Rename the group in Group name, Enter; close and open it with its arrow | The new name in the list; the arrow folds the crates away and back |
+| 7 | With the group selected, Ctrl+D; move the mouse; click | Three copies appear on top of the originals and follow the mouse; the click places them. The Scene list has a second group with the same name and three new crates (`cargo_crate_a_4` and on) |
+| 8 | Ctrl+D again, then Esc | The copies follow the mouse, then go away; the scene is as before |
+| 9 | Ctrl+Z several times, then Ctrl+Y | Each Ctrl+Z takes one step back: the copies' place, the copies, the name, the group, the moves, the drops. Each Ctrl+Y does it again. The message says what came back or went; Undo and Redo on the Scene tab show how many steps are left |
+| 10 | Select a group and a crate outside it, Delete; Ctrl+Z | All selected go; Ctrl+Z brings them back, in their group and where they were |
+| 11 | Clear scene; Ctrl+Z | All gone; all back |
+| 12 | Ctrl+Shift+G on a group | The group opens: its crates stay where they are and are on their own in the list |
+| 13 | Make a group, then load a save (or restart the game) and Rebuild previews | The objects and the group come back; a click on one selects the group |
 

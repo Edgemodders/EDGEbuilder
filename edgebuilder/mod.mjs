@@ -519,83 +519,6 @@ function sceneNeeds(resources, sources2) {
 // src/scene.ts
 import * as fs4 from "node:fs";
 import * as path4 from "node:path";
-var Scene = class {
-  constructor(file) {
-    this.file = file;
-  }
-  name = "Working scene";
-  objects = [];
-  counter = 0;
-  /** Where an unreadable scene file was moved, so the next save does not overwrite it. */
-  setAside;
-  load() {
-    let text;
-    try {
-      text = fs4.readFileSync(this.file, "utf8");
-    } catch {
-      return false;
-    }
-    try {
-      const data = JSON.parse(text);
-      if (data.format !== 1 || !Array.isArray(data.objects)) throw new Error(`not a format 1 scene`);
-      this.name = data.name || this.name;
-      this.objects = data.objects.map((o) => ({ ...o }));
-      this.counter = this.objects.length;
-      return true;
-    } catch (err) {
-      this.setAside = `${this.file}.unreadable-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}`;
-      try {
-        fs4.renameSync(this.file, this.setAside);
-      } catch {
-        this.setAside = void 0;
-      }
-      this.loadError = err.message;
-      return false;
-    }
-  }
-  loadError;
-  save() {
-    fs4.mkdirSync(path4.dirname(this.file), { recursive: true });
-    const data = {
-      format: 1,
-      name: this.name,
-      groups: [],
-      objects: this.objects.map(({ entityId: _live, ...rest }) => rest)
-    };
-    fs4.writeFileSync(this.file, JSON.stringify(data, null, 2));
-  }
-  add(kind, resource, transform, appearance) {
-    const base = resource ? path4.basename(resource).replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/gi, "_").toLowerCase() : kind;
-    let id = base;
-    while (this.objects.some((o2) => o2.id === id)) id = `${base}_${++this.counter}`;
-    const o = { id, kind, resource, appearance, transform };
-    this.objects.push(o);
-    this.save();
-    return o;
-  }
-  remove(id) {
-    const i = this.objects.findIndex((o) => o.id === id);
-    if (i < 0) return void 0;
-    const [gone2] = this.objects.splice(i, 1);
-    this.save();
-    return gone2;
-  }
-  get(id) {
-    return id ? this.objects.find((o) => o.id === id) : void 0;
-  }
-  /** Forgets every preview: after a save loads, the entities are gone. */
-  forgetPreviews() {
-    for (const o of this.objects) delete o.entityId;
-  }
-  clear() {
-    this.objects = [];
-    this.save();
-  }
-};
-function yawToQuaternion(yawDegrees) {
-  const half = yawDegrees * Math.PI / 360;
-  return [0, 0, Math.sin(half), Math.cos(half)];
-}
 
 // src/math.ts
 var add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -633,6 +556,228 @@ function lookOf(fwd) {
   return { yaw: Math.atan2(-f[0], f[1]) * 180 / Math.PI, pitch: Math.asin(Math.max(-1, Math.min(1, f[2]))) * 180 / Math.PI };
 }
 
+// src/arrange.ts
+function groupChain(id, groups) {
+  const chain = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (let g = groups.find((x) => x.id === id); g && !seen.has(g.id); g = groups.find((x) => x.id === g.parent)) {
+    seen.add(g.id);
+    chain.push(g.id);
+  }
+  return chain;
+}
+function membersOf(groupId, objects, groups) {
+  return objects.filter((o) => groupChain(o.group, groups).includes(groupId));
+}
+function selectionUnits(selected, objects, groups) {
+  const sel = new Set(selected);
+  const whole = (g) => membersOf(g, objects, groups).every((o) => sel.has(o.id));
+  const unitGroups = /* @__PURE__ */ new Set();
+  const unitObjects = [];
+  for (const o of objects) {
+    if (!sel.has(o.id)) continue;
+    const chain = groupChain(o.group, groups);
+    let unit;
+    for (const g of chain) {
+      if (whole(g)) unit = g;
+      else break;
+    }
+    if (unit) unitGroups.add(unit);
+    else unitObjects.push(o.id);
+  }
+  return { groups: [...unitGroups], objects: unitObjects };
+}
+function freshId(base, taken) {
+  if (!taken.has(base)) return base;
+  const stem = base.replace(/_\d+$/, "");
+  for (let n = 2; ; n++) if (!taken.has(`${stem}_${n}`)) return `${stem}_${n}`;
+}
+function nextGroupName(groups) {
+  const names = new Set(groups.map((g) => g.name));
+  for (let n = 1; ; n++) if (!names.has(`Group ${n}`)) return `Group ${n}`;
+}
+function makeGroup(selected, objects, groups, name = nextGroupName(groups)) {
+  const units = selectionUnits(selected, objects, groups);
+  if (units.groups.length + units.objects.length < 1) return void 0;
+  const parents = /* @__PURE__ */ new Set([
+    ...units.groups.map((g) => groups.find((x) => x.id === g).parent),
+    ...units.objects.map((id2) => objects.find((o) => o.id === id2).group ?? null)
+  ]);
+  const id = freshId("grp_1", new Set(groups.map((g) => g.id)));
+  groups.push({ id, name, parent: parents.size === 1 ? [...parents][0] : null });
+  for (const g of units.groups) groups.find((x) => x.id === g).parent = id;
+  for (const oid of units.objects) objects.find((o) => o.id === oid).group = id;
+  return id;
+}
+function ungroup(selected, objects, groups) {
+  const units = selectionUnits(selected, objects, groups);
+  for (const gid of units.groups) {
+    const g = groups.find((x) => x.id === gid);
+    for (const o of objects) if (o.group === gid) o.group = g.parent ?? void 0;
+    for (const inner of groups) if (inner.parent === gid) inner.parent = g.parent;
+    groups.splice(groups.indexOf(g), 1);
+  }
+  for (const oid of units.objects) {
+    const o = objects.find((x) => x.id === oid);
+    if (o.group) o.group = groups.find((x) => x.id === o.group)?.parent ?? void 0;
+  }
+  for (const o of objects) if (!o.group) delete o.group;
+  return units.groups.length;
+}
+function pruneGroups(objects, groups) {
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const g of [...groups]) {
+      const used = objects.some((o) => o.group === g.id) || groups.some((x) => x.parent === g.id);
+      if (!used) {
+        groups.splice(groups.indexOf(g), 1);
+        changed = true;
+      }
+    }
+  }
+}
+function duplicate(selected, objects, groups, offset = [0, 0, 0]) {
+  const units = selectionUnits(selected, objects, groups);
+  const takenObjects = new Set(objects.map((o) => o.id));
+  const takenGroups = new Set(groups.map((g) => g.id));
+  const newGroups = [];
+  const groupMap = /* @__PURE__ */ new Map();
+  const copyGroup = (gid, parent) => {
+    const g = groups.find((x) => x.id === gid);
+    const id = freshId(g.id, takenGroups);
+    takenGroups.add(id);
+    groupMap.set(gid, id);
+    newGroups.push({ id, name: g.name, parent });
+    for (const inner of groups) if (inner.parent === gid) copyGroup(inner.id, id);
+  };
+  for (const gid of units.groups) copyGroup(gid, groups.find((x) => x.id === gid).parent);
+  const copies = [];
+  const sel = new Set(selected);
+  for (const o of objects) {
+    if (!sel.has(o.id)) continue;
+    const id = freshId(o.id, takenObjects);
+    takenObjects.add(id);
+    const { entityId: _live, ...rest } = o;
+    const copy = JSON.parse(JSON.stringify(rest));
+    copy.id = id;
+    copy.transform.position = add(o.transform.position, offset);
+    const group2 = o.group && groupMap.get(o.group);
+    if (group2) copy.group = group2;
+    copies.push(copy);
+  }
+  return { objects: copies, groups: newGroups };
+}
+
+// src/scene.ts
+var Scene = class {
+  constructor(file) {
+    this.file = file;
+  }
+  name = "Working scene";
+  objects = [];
+  groups = [];
+  /** Where an unreadable scene file was moved, so the next save does not overwrite it. */
+  setAside;
+  load() {
+    let text;
+    try {
+      text = fs4.readFileSync(this.file, "utf8");
+    } catch {
+      return false;
+    }
+    try {
+      const data = JSON.parse(text);
+      if (data.format !== 1 || !Array.isArray(data.objects)) throw new Error(`not a format 1 scene`);
+      this.name = data.name || this.name;
+      this.objects = data.objects.map((o) => ({ ...o }));
+      this.groups = Array.isArray(data.groups) ? data.groups.map((g) => ({ id: g.id, name: g.name, parent: g.parent ?? null })) : [];
+      for (const o of this.objects) if (o.group && !this.groups.some((g) => g.id === o.group)) delete o.group;
+      return true;
+    } catch (err) {
+      this.setAside = `${this.file}.unreadable-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}`;
+      try {
+        fs4.renameSync(this.file, this.setAside);
+      } catch {
+        this.setAside = void 0;
+      }
+      this.loadError = err.message;
+      return false;
+    }
+  }
+  loadError;
+  save() {
+    fs4.mkdirSync(path4.dirname(this.file), { recursive: true });
+    const data = {
+      format: 1,
+      name: this.name,
+      groups: this.groups,
+      objects: this.objects.map(({ entityId: _live, ...rest }) => rest)
+    };
+    fs4.writeFileSync(this.file, JSON.stringify(data, null, 2));
+  }
+  add(kind, resource, transform, appearance) {
+    const base = resource ? path4.basename(resource).replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/gi, "_").toLowerCase() : kind;
+    const id = freshId(base, new Set(this.objects.map((o2) => o2.id)));
+    const o = { id, kind, resource, appearance, transform };
+    this.objects.push(o);
+    this.save();
+    return o;
+  }
+  remove(id) {
+    const i = this.objects.findIndex((o) => o.id === id);
+    if (i < 0) return void 0;
+    const [gone2] = this.objects.splice(i, 1);
+    pruneGroups(this.objects, this.groups);
+    this.save();
+    return gone2;
+  }
+  /** A copy of the scene as it is now, for Undo. */
+  state() {
+    return JSON.parse(JSON.stringify({ objects: this.objects.map(({ entityId: _live, ...rest }) => rest), groups: this.groups }));
+  }
+  /**
+   * Puts the scene back to `s`, keeping the previews of objects that are still there (by id). Returns
+   * what the mod has to do: spawn objects that came back, spawn again those whose file, appearance or
+   * scale changed, move those that moved, and remove the previews of objects that are gone.
+   */
+  restore(s) {
+    const before = new Map(this.objects.map((o) => [o.id, o]));
+    const out = { spawn: [], respawn: [], move: [], gone: [] };
+    this.objects = s.objects.map((saved) => {
+      const o = JSON.parse(JSON.stringify(saved));
+      const was = before.get(o.id);
+      before.delete(o.id);
+      if (!was) out.spawn.push(o);
+      if (!was?.entityId) return o;
+      o.entityId = was.entityId;
+      const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+      if (was.kind !== o.kind || was.resource !== o.resource || was.appearance !== o.appearance || !same(was.transform.scale, o.transform.scale)) out.respawn.push(o);
+      else if (!same(was.transform.position, o.transform.position) || !same(was.transform.rotation, o.transform.rotation)) out.move.push(o);
+      return o;
+    });
+    out.gone = [...before.values()].filter((o) => o.entityId);
+    this.groups = JSON.parse(JSON.stringify(s.groups));
+    this.save();
+    return out;
+  }
+  get(id) {
+    return id ? this.objects.find((o) => o.id === id) : void 0;
+  }
+  /** Forgets every preview: after a save loads, the entities are gone. */
+  forgetPreviews() {
+    for (const o of this.objects) delete o.entityId;
+  }
+  clear() {
+    this.objects = [];
+    this.groups = [];
+    this.save();
+  }
+};
+function yawToQuaternion(yawDegrees) {
+  const half = yawDegrees * Math.PI / 360;
+  return [0, 0, Math.sin(half), Math.cos(half)];
+}
+
 // src/mod.ts
 var EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
 var SpawnDistance = 3;
@@ -645,6 +790,10 @@ try {
 }
 var scene = new Scene(path5.join(pkg.dataDir, "scenes", "working.scene.json"));
 scene.load();
+var past = [];
+var future = [];
+var HistoryLength = 100;
+var duplicates = 0;
 var index = new AssetIndex(path5.join(pkg.dataDir, "index"));
 var sources = new ModSources(path5.join(pkg.dataDir, "sources", "mods.json"));
 index.extra = sources.entries();
@@ -660,12 +809,16 @@ var state = {
   results: [],
   query: { text: "", kind: "all", from: "all" },
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
-  scene: { name: scene.name, objects: scene.objects, file: scene.file, needs: [] },
+  scene: { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: [] },
+  selected: [],
+  history: { undo: 0, redo: 0 },
   settings: { ...settings, settingsFile },
   inUse: {}
 };
 function publish() {
-  state.scene = { name: scene.name, objects: scene.objects, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra) };
+  state.scene = { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra) };
+  state.selected = state.selected.filter((id) => scene.get(id));
+  state.history = { undo: past.length, redo: future.length };
   state.settings = { ...settings, settingsFile };
   state.inUse.gameDir = gameDir();
   channel.post({ type: "state", state });
@@ -986,24 +1139,62 @@ async function highlight(o, on) {
 }
 var toPoint = (p) => ({ x: p[0], y: p[1], z: p[2] });
 var toQuat = (q) => ({ i: q[0], j: q[1], k: q[2], r: q[3] });
-async function setTransform(id, t) {
-  const o = scene.get(id);
-  if (!o) return;
+async function place(o, t) {
   if (o.kind !== "mesh") t = { ...t, scale: [1, 1, 1] };
   const scaled = t.scale.some((s, i) => Math.abs(s - o.transform.scale[i]) > 1e-6);
   o.transform = t;
-  scene.save();
-  if (o.entityId) {
-    if (scaled) {
-      await removePreview(o);
-      await spawnPreview(o);
-      scene.save();
-      if (state.selected === o.id) await highlight(o, true);
-    } else {
-      await world.move(o.entityId, toPoint(t.position), toQuat(t.rotation));
-    }
+  if (!o.entityId) return;
+  if (scaled) await respawn(o);
+  else await world.move(o.entityId, toPoint(t.position), toQuat(t.rotation));
+}
+async function respawn(o) {
+  await removePreview(o);
+  await trySpawn(o);
+  if (state.selected.includes(o.id)) await highlight(o, true);
+}
+async function trySpawn(o) {
+  if (o.kind === "light" || state.world !== "ready") return false;
+  try {
+    await spawnPreview(o);
+    return true;
+  } catch (err) {
+    console.log(`Preview of ${o.id}: ${err.message}`);
+    return false;
   }
+}
+async function setTransforms(items, merge = false) {
+  const known = items.filter((i) => scene.get(i.id));
+  if (!known.length) return;
+  if (!merge || !past.length) step();
+  for (const i of known) await place(scene.get(i.id), i.transform);
+  scene.save();
   publish();
+}
+function step(before = scene.state()) {
+  past.push({ ...before, selected: before.selected ?? [...state.selected] });
+  if (past.length > HistoryLength) past.shift();
+  future.length = 0;
+}
+async function travel(from, to, word) {
+  const s = from.pop();
+  if (!s) return say(`Nothing to ${word.toLowerCase()}.`, "info");
+  to.push({ ...scene.state(), selected: [...state.selected] });
+  const ch = scene.restore(s);
+  for (const o of ch.gone) await removePreview(o);
+  for (const o of ch.respawn) await respawn(o);
+  for (const o of ch.move) await world.move(o.entityId, toPoint(o.transform.position), toQuat(o.transform.rotation)).catch(() => void 0);
+  let back = 0;
+  for (const o of ch.spawn) if (await trySpawn(o)) back++;
+  scene.save();
+  const moved = ch.move.length + ch.respawn.length;
+  const what = [
+    moved ? `${moved} moved back` : "",
+    ch.spawn.length ? `${ch.spawn.length} back${back < ch.spawn.length ? ` (${ch.spawn.length - back} not in the world: Rebuild previews)` : ""}` : "",
+    ch.gone.length ? `${ch.gone.length} taken out` : ""
+  ].filter(Boolean);
+  state.message = { text: `${word}${what.length ? `: ${what.join(", ")}` : ""}.`, tone: "ok" };
+  const changed = [...ch.spawn, ...ch.respawn, ...ch.move].map((o) => o.id);
+  await select(changed.length ? changed : s.selected ?? state.selected);
 }
 var FloorGroups = ["Static", "Terrain", "PlayerBlocker"];
 async function raycast(start, end) {
@@ -1012,11 +1203,11 @@ async function raycast(start, end) {
   let hit;
   let best = Infinity;
   const tried = [];
-  for (const group of FloorGroups) {
+  for (const group2 of FloorGroups) {
     try {
-      const r = await queries.SyncRaycastByCollisionGroup({ X: start[0], Y: start[1], Z: start[2], W: 1 }, { X: end[0], Y: end[1], Z: end[2], W: 1 }, group, null, false, false);
+      const r = await queries.SyncRaycastByCollisionGroup({ X: start[0], Y: start[1], Z: start[2], W: 1 }, { X: end[0], Y: end[1], Z: end[2], W: 1 }, group2, null, false, false);
       const p = r.out?.result?.position;
-      tried.push(`${group}: ${r.result && p ? p.Z.toFixed(2) : "miss"}`);
+      tried.push(`${group2}: ${r.result && p ? p.Z.toFixed(2) : "miss"}`);
       if (r.result && p) {
         const at = [p.X, p.Y, p.Z];
         const d = Math.hypot(...sub(at, start));
@@ -1026,24 +1217,37 @@ async function raycast(start, end) {
         }
       }
     } catch (err) {
-      tried.push(`${group}: ${err.message}`);
+      tried.push(`${group2}: ${err.message}`);
     }
   }
   return { hit, tried };
 }
-async function dropToFloor(id) {
-  const o = scene.get(id);
-  if (!o) return;
+async function dropToFloor(ids) {
+  const objects = ids.map((id) => scene.get(id)).filter((o) => !!o);
+  if (!objects.length) return;
   if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const items = [];
+  let fell = 0;
+  for (const o of objects) {
+    const t = await floorUnder(o);
+    if (!t) continue;
+    fell = o.transform.position[2] - t.position[2];
+    items.push({ id: o.id, transform: t });
+  }
+  if (!items.length) return say(objects.length === 1 ? "Nothing below to drop onto within 100 m." : "Nothing below any of them to drop onto within 100 m.", "warn");
+  await setTransforms(items);
+  const missed = objects.length - items.length;
+  if (objects.length === 1) say(`Dropped ${objects[0].id} to the floor, ${fell.toFixed(2)} m down.`, "ok");
+  else say(`Dropped ${items.length} objects to the floor${missed ? `; ${missed} had nothing below within 100 m` : ""}.`, missed ? "warn" : "ok");
+}
+async function floorUnder(o) {
   const [x, y, z] = o.transform.position;
   const lowest = (o.bounds?.min[2] ?? 0) * o.transform.scale[2];
   const startZ = z + lowest + 0.05;
   const { hit, tried } = await raycast([x, y, startZ], [x, y, startZ - 100]);
   const floor = hit?.[2];
   console.log(`Drop to floor ${o.id} from z ${startZ.toFixed(2)}: ${tried.join("; ")}`);
-  if (floor === void 0) return say("Nothing below to drop onto within 100 m.", "warn");
-  await setTransform(id, { ...o.transform, position: [x, y, floor - lowest] });
-  say(`Dropped ${o.id} to the floor, ${(z - (floor - lowest)).toFixed(2)} m down.`, "ok");
+  return floor === void 0 ? void 0 : { ...o.transform, position: [x, y, floor - lowest] };
 }
 var builderFile = path5.join(pkg.dataDir, "builder-mode.json");
 var CameraName = "edgebuilder_camera";
@@ -1139,6 +1343,12 @@ var builderQueue = Promise.resolve();
 function queued(op) {
   builderQueue = builderQueue.then(op, op);
   return builderQueue;
+}
+var sceneQueue = Promise.resolve();
+function inTurn(op) {
+  const run = async () => op();
+  sceneQueue = sceneQueue.then(run, run);
+  return sceneQueue;
 }
 async function playerPose() {
   const player = await api.GetPlayer(game.instance);
@@ -1268,9 +1478,10 @@ async function drop(assetPath, appearance, at) {
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
   let added;
+  const before = scene.state();
   try {
-    const place = await dropPlace(at);
-    const o = scene.add(kind, assetPath, { position: place.position, rotation: yawToQuaternion(place.yaw), scale: [1, 1, 1] }, appearance);
+    const place2 = await dropPlace(at);
+    const o = scene.add(kind, assetPath, { position: place2.position, rotation: yawToQuaternion(place2.yaw), scale: [1, 1, 1] }, appearance);
     added = o;
     let sized = true;
     if (bridge?.running) {
@@ -1284,7 +1495,8 @@ async function drop(assetPath, appearance, at) {
     const started = Date.now();
     await spawnPreview(o);
     scene.save();
-    await select(o.id);
+    step(before);
+    await select([o.id]);
     const from = sourceOf(assetPath)?.source;
     const note = from?.kind === "project" ? await inGameArchives(assetPath) ? ` From the REDcode project ${from.name}, at a game file's path: the game shows its own version until the project is packed and loaded (REDcode's Pack and Play).` : ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).` : from?.kind === "mod" ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}` : "";
     say(`Dropped ${path5.basename(assetPath)} in ${Date.now() - started} ms.${note}`, "ok");
@@ -1296,19 +1508,70 @@ async function drop(assetPath, appearance, at) {
     say(`Drop failed, nothing was added: ${err.message}`, "error");
   }
 }
-async function select(id) {
-  if (state.selected && state.selected !== id) await highlight(scene.get(state.selected), false);
-  state.selected = id;
-  await highlight(scene.get(id), true);
+async function select(ids) {
+  ids = ids.filter((id, i) => scene.get(id) && ids.indexOf(id) === i);
+  const off = state.selected.filter((id) => !ids.includes(id));
+  const on = ids.filter((id) => !state.selected.includes(id));
+  state.selected = ids;
+  for (const id of off) await highlight(scene.get(id), false);
+  for (const id of on) await highlight(scene.get(id), true);
   publish();
 }
-async function remove(id) {
-  const o = scene.get(id);
-  if (!o) return;
-  await removePreview(o);
-  scene.remove(id);
-  if (state.selected === id) state.selected = void 0;
-  say(`Removed ${o.id}.`, "ok");
+async function remove(ids) {
+  const objects = ids.map((id) => scene.get(id)).filter((o) => !!o);
+  if (!objects.length) return;
+  step();
+  for (const o of objects) {
+    await removePreview(o);
+    scene.remove(o.id);
+  }
+  say(objects.length === 1 ? `Removed ${objects[0].id}. Ctrl+Z brings it back.` : `Removed ${objects.length} objects. Ctrl+Z brings them back.`, "ok");
+}
+function group(ids) {
+  const before = scene.state();
+  const id = makeGroup(ids.filter((x) => scene.get(x)), scene.objects, scene.groups);
+  if (!id) return say("Select something to group first.", "warn");
+  step(before);
+  scene.save();
+  const g = scene.groups.find((x) => x.id === id);
+  say(`Grouped ${ids.length} object${ids.length === 1 ? "" : "s"} as ${g.name}. A click on one now selects the group; Alt+click picks one.`, "ok");
+}
+function ungroup2(ids) {
+  const before = scene.state();
+  const opened = ungroup(ids.filter((x) => scene.get(x)), scene.objects, scene.groups);
+  if (JSON.stringify(before) === JSON.stringify(scene.state())) return say("Nothing selected is in a group.", "info");
+  step(before);
+  scene.save();
+  say(opened ? `Ungrouped ${opened} group${opened === 1 ? "" : "s"}.` : "Taken out of the group.", "ok");
+}
+function rename(groupId, name) {
+  const g = scene.groups.find((x) => x.id === groupId);
+  name = name.trim();
+  if (!g || !name || name === g.name) return publish();
+  step();
+  g.name = name;
+  scene.save();
+  say(`Renamed the group ${name}.`, "ok");
+}
+async function duplicate2(ids, offset) {
+  ids = ids.filter((x) => scene.get(x));
+  if (!ids.length) return say("Select something to copy first.", "warn");
+  if (state.world !== "ready") await checkWorld();
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  step();
+  const copies = duplicate(ids, scene.objects, scene.groups, offset);
+  scene.groups.push(...copies.groups);
+  scene.objects.push(...copies.objects);
+  let shown = 0;
+  for (const o of copies.objects) if (await trySpawn(o)) shown++;
+  scene.save();
+  state.duplicated = { seq: ++duplicates, ids: copies.objects.map((o) => o.id) };
+  const n = copies.objects.length;
+  state.message = {
+    text: `Copied ${n} object${n === 1 ? "" : "s"}${shown < n ? ` (${n - shown} not in the world)` : ""}.${offset ? "" : " Move the copy and click to place it; Esc takes it back."}`,
+    tone: shown < n ? "warn" : "ok"
+  };
+  await select(state.duplicated.ids);
 }
 async function rebuild() {
   if (state.world !== "ready") await checkWorld();
@@ -1327,10 +1590,12 @@ async function rebuild() {
   say(`${n} preview${n === 1 ? "" : "s"} back in the world.`, "ok");
 }
 async function clear() {
+  if (!scene.objects.length && !scene.groups.length) return say("The scene is already empty.", "info");
+  step();
   for (const o of scene.objects) await removePreview(o);
   scene.clear();
-  state.selected = void 0;
-  say("Scene cleared.", "ok");
+  state.selected = [];
+  say("Scene cleared. Ctrl+Z brings it back.", "ok");
 }
 function saveSettings(next) {
   settings = { ...settings, ...next };
@@ -1362,19 +1627,37 @@ channel.on((m) => {
         }
         break;
       case "drop":
-        await drop(m.path, m.appearance, m.at);
+        await inTurn(() => drop(m.path, m.appearance, m.at));
         break;
       case "select":
-        await select(m.id);
+        await inTurn(() => select(m.ids));
         break;
       case "delete":
-        await remove(m.id);
+        await inTurn(() => remove(m.ids));
+        break;
+      case "group":
+        await inTurn(() => group(m.ids));
+        break;
+      case "ungroup":
+        await inTurn(() => ungroup2(m.ids));
+        break;
+      case "rename":
+        await inTurn(() => rename(m.group, m.name));
+        break;
+      case "duplicate":
+        await inTurn(() => duplicate2(m.ids, m.offset));
+        break;
+      case "undo":
+        await inTurn(() => travel(past, future, "Undo"));
+        break;
+      case "redo":
+        await inTurn(() => travel(future, past, "Redo"));
         break;
       case "rebuild":
-        await rebuild();
+        await inTurn(() => rebuild());
         break;
       case "clear":
-        await clear();
+        await inTurn(() => clear());
         break;
       case "index.build":
         await buildIndex();
@@ -1389,10 +1672,10 @@ channel.on((m) => {
         await queued(() => builderStop());
         break;
       case "transform":
-        await setTransform(m.id, m.transform);
+        await inTurn(() => setTransforms(m.items, m.merge));
         break;
       case "floor":
-        await dropToFloor(m.id);
+        await inTurn(() => dropToFloor(m.ids));
         break;
       case "log":
         console.log(m.text);
@@ -1417,7 +1700,7 @@ game.onState((s) => {
   linked = s.connected;
   if (!s.connected) {
     scene.forgetPreviews();
-    state.selected = void 0;
+    state.selected = [];
   }
   void checkWorld();
 });
@@ -1435,7 +1718,7 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   gone.clear();
   void setSolo(false);
   scene.forgetPreviews();
-  state.selected = void 0;
+  state.selected = [];
   void checkWorld().then(() => {
     if (scene.objects.length) say(`A save loaded. ${scene.objects.length} object${scene.objects.length === 1 ? "" : "s"} in the scene; press Rebuild previews to see them.`, "info");
   });
@@ -1444,9 +1727,9 @@ var gone = /* @__PURE__ */ new Map();
 world.on("Entity/Detach", (e) => {
   const o = scene.objects.find((x) => x.entityId === e.entityId);
   if (o) {
-    if (e.entityId) gone.set(e.entityId, { id: o.id, selected: state.selected === o.id });
+    if (e.entityId) gone.set(e.entityId, { id: o.id, selected: state.selected.includes(o.id) });
     delete o.entityId;
-    if (state.selected === o.id) state.selected = void 0;
+    state.selected = state.selected.filter((id) => id !== o.id);
     publish();
   }
 });
@@ -1458,7 +1741,7 @@ if (typeof world.onRespawn === "function") {
     if (!o) return;
     o.entityId = after.hash;
     console.log(`${o.id} spawned again after an archive swap (${after.hash})`);
-    void world.move(after.hash, toPoint(o.transform.position), toQuat(o.transform.rotation)).catch((err) => console.log(`${o.id} not moved back after the swap: ${err.message}`)).then(() => was?.selected ? select(o.id) : publish());
+    void world.move(after.hash, toPoint(o.transform.position), toQuat(o.transform.rotation)).catch((err) => console.log(`${o.id} not moved back after the swap: ${err.message}`)).then(() => was?.selected ? select([...state.selected, o.id]) : publish());
   });
 }
 if (typeof ui?.onSolo === "function") {
@@ -1467,7 +1750,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.4.1"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+console.log(`EDGEbuilder ${"0.5.0"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
 if (scene.loadError) {
   state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path5.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);

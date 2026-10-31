@@ -10,7 +10,8 @@ import { api, channel, game, kernel, pkg, service, ui, world, type GameRef } fro
 import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge } from "./bridge";
 import { AssetIndex, kindOf } from "./index";
 import { ModSources, modArchives, modFolders, sceneNeeds } from "./sources";
-import { Scene, yawToQuaternion } from "./scene";
+import { Scene, yawToQuaternion, type SceneState } from "./scene";
+import { duplicate as copySelection, makeGroup, ungroup as openGroups } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
 import type { AssetEntry, AssetFrom, AssetInfo, AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "./protocol";
 
@@ -40,6 +41,12 @@ try {
 
 const scene = new Scene(path.join(pkg.dataDir, "scenes", "working.scene.json"));
 scene.load();
+/** Undo and redo (B3): the scene before each change, for this session, the last 100. */
+const past: SceneState[] = [];
+const future: SceneState[] = [];
+const HistoryLength = 100;
+/** Counts duplicates, so the page knows a new one's copies are there to move. */
+let duplicates = 0;
 const index = new AssetIndex(path.join(pkg.dataDir, "index"));
 /** Mods' archives and the project's loose files; kept out of the index folder, whose newest file is taken as the game's index. */
 const sources = new ModSources(path.join(pkg.dataDir, "sources", "mods.json"));
@@ -58,13 +65,17 @@ const state: Snapshot = {
   results: [],
   query: { text: "", kind: "all", from: "all" },
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
-  scene: { name: scene.name, objects: scene.objects, file: scene.file, needs: [] },
+  scene: { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: [] },
+  selected: [],
+  history: { undo: 0, redo: 0 },
   settings: { ...settings, settingsFile },
   inUse: {},
 };
 
 function publish(): void {
-  state.scene = { name: scene.name, objects: scene.objects, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra) };
+  state.scene = { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra) };
+  state.selected = state.selected.filter((id) => scene.get(id));
+  state.history = { undo: past.length, redo: future.length };
   state.settings = { ...settings, settingsFile };
   state.inUse.gameDir = gameDir();
   channel.post({ type: "state", state });
@@ -459,26 +470,78 @@ async function highlight(o: SceneObject | undefined, on: boolean): Promise<void>
 const toPoint = (p: [number, number, number]) => ({ x: p[0], y: p[1], z: p[2] });
 const toQuat = (q: [number, number, number, number]) => ({ i: q[0], j: q[1], k: q[2], r: q[3] });
 
-/** The page moved, turned or scaled an object: keep it, and put the preview there. */
-async function setTransform(id: string, t: SceneTransform): Promise<void> {
-  const o = scene.get(id);
-  if (!o) return;
+/** Gives an object a new transform and puts its preview there. The caller saves and publishes. */
+async function place(o: SceneObject, t: SceneTransform): Promise<void> {
   if (o.kind !== "mesh") t = { ...t, scale: [1, 1, 1] }; // an entity template keeps its own size
   const scaled = t.scale.some((s, i) => Math.abs(s - o.transform.scale[i]) > 1e-6);
   o.transform = t;
-  scene.save();
-  if (o.entityId) {
-    if (scaled) {
-      // A mesh component's scale is set when it is built, so a new scale means a new preview.
-      await removePreview(o);
-      await spawnPreview(o);
-      scene.save();
-      if (state.selected === o.id) await highlight(o, true);
-    } else {
-      await world.move(o.entityId, toPoint(t.position), toQuat(t.rotation));
-    }
+  if (!o.entityId) return;
+  if (scaled) await respawn(o);
+  else await world.move(o.entityId, toPoint(t.position), toQuat(t.rotation));
+}
+
+/** A mesh component's scale is set when it is built, so a new scale (or file) means a new preview. */
+async function respawn(o: SceneObject): Promise<void> {
+  await removePreview(o);
+  await trySpawn(o);
+  if (state.selected.includes(o.id)) await highlight(o, true);
+}
+
+/** Spawns a preview; the log says why when the game will not. */
+async function trySpawn(o: SceneObject): Promise<boolean> {
+  if (o.kind === "light" || state.world !== "ready") return false;
+  try {
+    await spawnPreview(o);
+    return true;
+  } catch (err) {
+    console.log(`Preview of ${o.id}: ${(err as Error).message}`);
+    return false;
   }
+}
+
+/** The page moved, turned or scaled objects: one undo step, or part of the one before (`merge`). */
+async function setTransforms(items: { id: string; transform: SceneTransform }[], merge = false): Promise<void> {
+  const known = items.filter((i) => scene.get(i.id));
+  if (!known.length) return;
+  if (!merge || !past.length) step();
+  for (const i of known) await place(scene.get(i.id)!, i.transform);
+  scene.save();
   publish();
+}
+
+// ---- undo and redo (B3) ------------------------------------------------------------------------------
+//
+// The scene as it was before each change (`past`, `future`, at the top). Undo puts one back and
+// changes only the previews that differ; Redo the other way. Selecting and previews are not steps.
+
+/** Call before a change: remembers the scene as it is, and forgets what Redo had. */
+function step(before: SceneState = scene.state()): void {
+  past.push({ ...before, selected: before.selected ?? [...state.selected] });
+  if (past.length > HistoryLength) past.shift();
+  future.length = 0;
+}
+
+async function travel(from: SceneState[], to: SceneState[], word: "Undo" | "Redo"): Promise<void> {
+  const s = from.pop();
+  if (!s) return say(`Nothing to ${word.toLowerCase()}.`, "info");
+  to.push({ ...scene.state(), selected: [...state.selected] });
+  const ch = scene.restore(s);
+  for (const o of ch.gone) await removePreview(o);
+  for (const o of ch.respawn) await respawn(o);
+  for (const o of ch.move) await world.move(o.entityId!, toPoint(o.transform.position), toQuat(o.transform.rotation)).catch(() => undefined);
+  let back = 0;
+  for (const o of ch.spawn) if (await trySpawn(o)) back++;
+  scene.save();
+  const moved = ch.move.length + ch.respawn.length;
+  const what = [
+    moved ? `${moved} moved back` : "",
+    ch.spawn.length ? `${ch.spawn.length} back${back < ch.spawn.length ? ` (${ch.spawn.length - back} not in the world: Rebuild previews)` : ""}` : "",
+    ch.gone.length ? `${ch.gone.length} taken out` : "",
+  ].filter(Boolean);
+  state.message = { text: `${word}${what.length ? `: ${what.join(", ")}` : ""}.`, tone: "ok" };
+  const changed = [...ch.spawn, ...ch.respawn, ...ch.move].map((o) => o.id);
+  // What changed, to see it; else what was selected then (Esc on a copy: the originals again).
+  await select(changed.length ? changed : (s.selected ?? state.selected));
 }
 
 /** The collision groups a floor can be in. The first that answers is not always the nearest, so all are asked. */
@@ -514,11 +577,28 @@ async function raycast(start: V3, end: V3): Promise<{ hit?: V3; tried: string[] 
   return { hit, tried };
 }
 
-/** Puts an object's lowest point on whatever is below it. */
-async function dropToFloor(id: string): Promise<void> {
-  const o = scene.get(id);
-  if (!o) return;
+/** Puts each object's lowest point on whatever is below it: one undo step. */
+async function dropToFloor(ids: string[]): Promise<void> {
+  const objects = ids.map((id) => scene.get(id)).filter((o): o is SceneObject => !!o);
+  if (!objects.length) return;
   if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const items: { id: string; transform: SceneTransform }[] = [];
+  let fell = 0;
+  for (const o of objects) {
+    const t = await floorUnder(o);
+    if (!t) continue;
+    fell = o.transform.position[2] - t.position[2];
+    items.push({ id: o.id, transform: t });
+  }
+  if (!items.length) return say(objects.length === 1 ? "Nothing below to drop onto within 100 m." : "Nothing below any of them to drop onto within 100 m.", "warn");
+  await setTransforms(items);
+  const missed = objects.length - items.length;
+  if (objects.length === 1) say(`Dropped ${objects[0].id} to the floor, ${fell.toFixed(2)} m down.`, "ok");
+  else say(`Dropped ${items.length} objects to the floor${missed ? `; ${missed} had nothing below within 100 m` : ""}.`, missed ? "warn" : "ok");
+}
+
+/** Where an object would stand on whatever is below it, or nothing within 100 m. */
+async function floorUnder(o: SceneObject): Promise<SceneTransform | undefined> {
   const [x, y, z] = o.transform.position;
   const lowest = (o.bounds?.min[2] ?? 0) * o.transform.scale[2];
   // Start just above the object's base, so an entity's own colliders above it are not hit.
@@ -526,9 +606,7 @@ async function dropToFloor(id: string): Promise<void> {
   const { hit, tried } = await raycast([x, y, startZ], [x, y, startZ - 100]);
   const floor = hit?.[2];
   console.log(`Drop to floor ${o.id} from z ${startZ.toFixed(2)}: ${tried.join("; ")}`);
-  if (floor === undefined) return say("Nothing below to drop onto within 100 m.", "warn");
-  await setTransform(id, { ...o.transform, position: [x, y, floor - lowest] });
-  say(`Dropped ${o.id} to the floor, ${(z - (floor - lowest)).toFixed(2)} m down.`, "ok");
+  return floor === undefined ? undefined : { ...o.transform, position: [x, y, floor - lowest] };
 }
 
 // ---- builder mode (B2b) -----------------------------------------------------------------------------
@@ -661,6 +739,17 @@ let builderQueue: Promise<void> = Promise.resolve();
 function queued(op: () => Promise<void>): Promise<void> {
   builderQueue = builderQueue.then(op, op);
   return builderQueue;
+}
+
+/**
+ * Scene changes one at a time (B3): each awaits the game for its previews, and Ctrl+Z held down or a
+ * drag's keep followed by an undo must not interleave. A failed change does not stop the next.
+ */
+let sceneQueue: Promise<void> = Promise.resolve();
+function inTurn(op: () => Promise<void> | void): Promise<void> {
+  const run = async () => op();
+  sceneQueue = sceneQueue.then(run, run);
+  return sceneQueue;
 }
 
 type Pose = { position: [number, number, number]; rotation: [number, number, number, number]; fov: number };
@@ -816,6 +905,7 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
   let added: SceneObject | undefined;
+  const before = scene.state();
   try {
     const place = await dropPlace(at);
     const o = scene.add(kind, assetPath, { position: place.position, rotation: yawToQuaternion(place.yaw), scale: [1, 1, 1] }, appearance);
@@ -833,7 +923,8 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
     const started = Date.now();
     await spawnPreview(o);
     scene.save();
-    await select(o.id);
+    step(before);
+    await select([o.id]);
     const from = sourceOf(assetPath)?.source;
     const note =
       from?.kind === "project"
@@ -855,20 +946,79 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
   }
 }
 
-async function select(id: string | undefined): Promise<void> {
-  if (state.selected && state.selected !== id) await highlight(scene.get(state.selected), false);
-  state.selected = id;
-  await highlight(scene.get(id), true);
+/** Selects these objects: the game's outline goes on them and off the others. */
+async function select(ids: string[]): Promise<void> {
+  ids = ids.filter((id, i) => scene.get(id) && ids.indexOf(id) === i);
+  const off = state.selected.filter((id) => !ids.includes(id));
+  const on = ids.filter((id) => !state.selected.includes(id));
+  state.selected = ids;
+  for (const id of off) await highlight(scene.get(id), false);
+  for (const id of on) await highlight(scene.get(id), true);
   publish();
 }
 
-async function remove(id: string): Promise<void> {
-  const o = scene.get(id);
-  if (!o) return;
-  await removePreview(o);
-  scene.remove(id);
-  if (state.selected === id) state.selected = undefined;
-  say(`Removed ${o.id}.`, "ok");
+async function remove(ids: string[]): Promise<void> {
+  const objects = ids.map((id) => scene.get(id)).filter((o): o is SceneObject => !!o);
+  if (!objects.length) return;
+  step();
+  for (const o of objects) {
+    await removePreview(o);
+    scene.remove(o.id);
+  }
+  say(objects.length === 1 ? `Removed ${objects[0].id}. Ctrl+Z brings it back.` : `Removed ${objects.length} objects. Ctrl+Z brings them back.`, "ok");
+}
+
+/** Groups the selection (Ctrl+G). */
+function group(ids: string[]): void {
+  const before = scene.state();
+  const id = makeGroup(ids.filter((x) => scene.get(x)), scene.objects, scene.groups);
+  if (!id) return say("Select something to group first.", "warn");
+  step(before);
+  scene.save();
+  const g = scene.groups.find((x) => x.id === id)!;
+  say(`Grouped ${ids.length} object${ids.length === 1 ? "" : "s"} as ${g.name}. A click on one now selects the group; Alt+click picks one.`, "ok");
+}
+
+/** Opens the selected groups, or takes picked objects out of theirs (Ctrl+Shift+G). */
+function ungroup(ids: string[]): void {
+  const before = scene.state();
+  const opened = openGroups(ids.filter((x) => scene.get(x)), scene.objects, scene.groups);
+  if (JSON.stringify(before) === JSON.stringify(scene.state())) return say("Nothing selected is in a group.", "info");
+  step(before);
+  scene.save();
+  say(opened ? `Ungrouped ${opened} group${opened === 1 ? "" : "s"}.` : "Taken out of the group.", "ok");
+}
+
+function rename(groupId: string, name: string): void {
+  const g = scene.groups.find((x) => x.id === groupId);
+  name = name.trim();
+  if (!g || !name || name === g.name) return publish();
+  step();
+  g.name = name;
+  scene.save();
+  say(`Renamed the group ${name}.`, "ok");
+}
+
+/** Copies the selection (Ctrl+D) and selects the copies; without `offset` the page moves them next. */
+async function duplicate(ids: string[], offset?: V3): Promise<void> {
+  ids = ids.filter((x) => scene.get(x));
+  if (!ids.length) return say("Select something to copy first.", "warn");
+  if (state.world !== "ready") await checkWorld();
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  step();
+  const copies = copySelection(ids, scene.objects, scene.groups, offset);
+  scene.groups.push(...copies.groups);
+  scene.objects.push(...copies.objects);
+  let shown = 0;
+  for (const o of copies.objects) if (await trySpawn(o)) shown++;
+  scene.save();
+  state.duplicated = { seq: ++duplicates, ids: copies.objects.map((o) => o.id) };
+  const n = copies.objects.length;
+  state.message = {
+    text: `Copied ${n} object${n === 1 ? "" : "s"}${shown < n ? ` (${n - shown} not in the world)` : ""}.${offset ? "" : " Move the copy and click to place it; Esc takes it back."}`,
+    tone: shown < n ? "warn" : "ok",
+  };
+  await select(state.duplicated.ids);
 }
 
 async function rebuild(): Promise<void> {
@@ -889,10 +1039,12 @@ async function rebuild(): Promise<void> {
 }
 
 async function clear(): Promise<void> {
+  if (!scene.objects.length && !scene.groups.length) return say("The scene is already empty.", "info");
+  step();
   for (const o of scene.objects) await removePreview(o);
   scene.clear();
-  state.selected = undefined;
-  say("Scene cleared.", "ok");
+  state.selected = [];
+  say("Scene cleared. Ctrl+Z brings it back.", "ok");
 }
 
 function saveSettings(next: Settings): void {
@@ -926,19 +1078,37 @@ channel.on<PageMessage>((m) => {
         }
         break;
       case "drop":
-        await drop(m.path, m.appearance, m.at);
+        await inTurn(() => drop(m.path, m.appearance, m.at));
         break;
       case "select":
-        await select(m.id);
+        await inTurn(() => select(m.ids));
         break;
       case "delete":
-        await remove(m.id);
+        await inTurn(() => remove(m.ids));
+        break;
+      case "group":
+        await inTurn(() => group(m.ids));
+        break;
+      case "ungroup":
+        await inTurn(() => ungroup(m.ids));
+        break;
+      case "rename":
+        await inTurn(() => rename(m.group, m.name));
+        break;
+      case "duplicate":
+        await inTurn(() => duplicate(m.ids, m.offset));
+        break;
+      case "undo":
+        await inTurn(() => travel(past, future, "Undo"));
+        break;
+      case "redo":
+        await inTurn(() => travel(future, past, "Redo"));
         break;
       case "rebuild":
-        await rebuild();
+        await inTurn(() => rebuild());
         break;
       case "clear":
-        await clear();
+        await inTurn(() => clear());
         break;
       case "index.build":
         await buildIndex();
@@ -953,10 +1123,10 @@ channel.on<PageMessage>((m) => {
         await queued(() => builderStop());
         break;
       case "transform":
-        await setTransform(m.id, m.transform);
+        await inTurn(() => setTransforms(m.items, m.merge));
         break;
       case "floor":
-        await dropToFloor(m.id);
+        await inTurn(() => dropToFloor(m.ids));
         break;
       case "log":
         console.log(m.text);
@@ -985,7 +1155,7 @@ game.onState((s) => {
   linked = s.connected;
   if (!s.connected) {
     scene.forgetPreviews();
-    state.selected = undefined;
+    state.selected = [];
   }
   void checkWorld();
 });
@@ -1006,7 +1176,7 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   gone.clear();
   void setSolo(false);
   scene.forgetPreviews();
-  state.selected = undefined;
+  state.selected = [];
   void checkWorld().then(() => {
     if (scene.objects.length) say(`A save loaded. ${scene.objects.length} object${scene.objects.length === 1 ? "" : "s"} in the scene; press Rebuild previews to see them.`, "info");
   });
@@ -1018,9 +1188,9 @@ const gone = new Map<string, { id: string; selected: boolean }>();
 world.on("Entity/Detach", (e) => {
   const o = scene.objects.find((x) => x.entityId === e.entityId);
   if (o) {
-    if (e.entityId) gone.set(e.entityId, { id: o.id, selected: state.selected === o.id });
+    if (e.entityId) gone.set(e.entityId, { id: o.id, selected: state.selected.includes(o.id) });
     delete o.entityId;
-    if (state.selected === o.id) state.selected = undefined;
+    state.selected = state.selected.filter((id) => id !== o.id);
     publish();
   }
 });
@@ -1040,7 +1210,7 @@ if (typeof world.onRespawn === "function") {
     void world
       .move(after.hash, toPoint(o.transform.position), toQuat(o.transform.rotation))
       .catch((err) => console.log(`${o.id} not moved back after the swap: ${(err as Error).message}`))
-      .then(() => (was?.selected ? select(o.id) : publish()));
+      .then(() => (was?.selected ? select([...state.selected, o.id]) : publish()));
   });
 }
 

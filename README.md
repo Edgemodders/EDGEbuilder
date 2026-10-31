@@ -57,7 +57,7 @@ Two halves share the scene file: the **runtime builder** in the game, where what
 - **B2b Camera.** EDGEbuilder's own camera while Edit is on, builder mode without the game's HUD, drops where the camera looks. Passed in game 2026-10-14.
 - **Bake probe.** One crate baked, packed, deployed and loaded on game 2.5, before anything is built on the bake. Passed on 2026-10-30.
 - **B2c Mod assets.** Browse also lists mod archives and the open REDcode project. Passed in game on 2026-10-30 (0.4.1).
-- **B3 Arrange and save.** Groups, multi-select, duplicate, undo and redo, scene files, a service other packages can ask for scenes.
+- **B3 Arrange and save.** Groups, multi-select, duplicate, undo and redo, scene files, a service other packages can ask for scenes. B3-1 Arrange built on 2026-10-31 (0.5.0), waiting for its in-game test.
 - **B4 Bake.** `sector.build` in REDbridge, the bake panel, the scene in the REDcode project, install through EDGEdeck. The first public release (a preview) follows.
 - **B3c NPCs and scenes through REDnode.** NPCs as a scene kind, and scenes REDnode loads for any package (REDnode's side passed in game).
 - **B3b World objects.** Pick, inspect and copy what the game already placed. Agreed.

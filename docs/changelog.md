@@ -10,6 +10,14 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**New**
+
+- Several objects at once: Ctrl+click adds an object to the selection (in the world and in the Scene list), Shift+drag selects everything in a box. Moving, turning and scaling act on all of them, around their middle; G, R, S, the axis keys, typed numbers and Ctrl snapping work as for one. Delete and Drop to floor act on each.
+- Groups: Ctrl+G groups the selection, Ctrl+Shift+G ungroups. A click on an object in a group selects the whole group; Alt+click picks just that object. Groups can hold groups, have a name you can change, and open and close in the Scene list, which is now a tree.
+- Duplicate: Ctrl+D copies the selection, its groups with it, and the copy follows the mouse until a click places it; Esc takes it back. With Edit off the copy goes beside the original.
+- Undo and redo: Ctrl+Z and Ctrl+Y (or Ctrl+Shift+Z), and buttons on the Scene tab, for the last 100 changes of the session: drops, moves, turns, scales, Apply, Drop to floor, deletes, copies, grouping, renaming and Clear scene.
+- With several objects selected, the Selected panel shows their middle: Apply moves them there, Turn by turns them around it, Scale by scales them from it.
+
 **Changed**
 
 - The found count is shorter and in the kind's own word: `1 mesh found`, `4 entities found`, `0 assets found for "chair"`. The tab already says where.

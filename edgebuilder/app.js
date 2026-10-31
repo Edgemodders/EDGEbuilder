@@ -130,6 +130,95 @@ function lookAxes(l) {
   return { fwd: qRotate(q, [0, 1, 0]), right: qRotate(q, [1, 0, 0]), up: qRotate(q, [0, 0, 1]) };
 }
 
+// src/arrange.ts
+function groupChain(id, groups) {
+  const chain = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (let g = groups.find((x) => x.id === id); g && !seen.has(g.id); g = groups.find((x) => x.id === g.parent)) {
+    seen.add(g.id);
+    chain.push(g.id);
+  }
+  return chain;
+}
+function topGroup(o, groups) {
+  const chain = groupChain(o.group, groups);
+  return chain[chain.length - 1];
+}
+function membersOf(groupId, objects, groups) {
+  return objects.filter((o) => groupChain(o.group, groups).includes(groupId));
+}
+function pickSelection(id, selected, objects, groups, opts = {}) {
+  const o = objects.find((x) => x.id === id);
+  if (!o) return opts.toggle ? selected : [];
+  const top = opts.single ? void 0 : topGroup(o, groups);
+  const ids = top ? membersOf(top, objects, groups).map((x) => x.id) : [o.id];
+  return opts.toggle ? toggleIds(selected, ids) : ids;
+}
+function pickMany(ids, selected, objects, groups, opts = {}) {
+  const out = new Set(opts.add ? selected : []);
+  for (const id of ids) for (const x of pickSelection(id, [], objects, groups, { single: opts.single })) out.add(x);
+  return objects.filter((o) => out.has(o.id)).map((o) => o.id);
+}
+function toggleIds(selected, ids) {
+  const all = ids.every((id) => selected.includes(id));
+  return all ? selected.filter((id) => !ids.includes(id)) : [...selected, ...ids.filter((id) => !selected.includes(id))];
+}
+function selectionUnits(selected, objects, groups) {
+  const sel = new Set(selected);
+  const whole = (g) => membersOf(g, objects, groups).every((o) => sel.has(o.id));
+  const unitGroups = /* @__PURE__ */ new Set();
+  const unitObjects = [];
+  for (const o of objects) {
+    if (!sel.has(o.id)) continue;
+    const chain = groupChain(o.group, groups);
+    let unit;
+    for (const g of chain) {
+      if (whole(g)) unit = g;
+      else break;
+    }
+    if (unit) unitGroups.add(unit);
+    else unitObjects.push(o.id);
+  }
+  return { groups: [...unitGroups], objects: unitObjects };
+}
+function centreOf(ts) {
+  if (!ts.length) return [0, 0, 0];
+  let c = [0, 0, 0];
+  for (const t of ts) c = add(c, t.position);
+  return mul(c, 1 / ts.length);
+}
+function applyChange(t, c, pivot) {
+  let position = t.position;
+  let rotation = t.rotation;
+  let scale = t.scale;
+  if (c.turn) {
+    position = add(pivot, qRotate(c.turn, sub(position, pivot)));
+    rotation = qNorm(qMul(c.turn, rotation));
+  }
+  if (c.scale) {
+    const off = sub(position, pivot);
+    position = add(pivot, [off[0] * c.scale[0], off[1] * c.scale[1], off[2] * c.scale[2]]);
+    scale = [scale[0] * c.scale[0], scale[1] * c.scale[1], scale[2] * c.scale[2]];
+  }
+  if (c.move) position = add(position, c.move);
+  return { position, rotation, scale };
+}
+function boxOf(objects) {
+  let min;
+  let max;
+  for (const o of objects) {
+    const b = o.bounds ?? { min: [-0.5, -0.5, 0], max: [0.5, 0.5, 1] };
+    const t = o.transform;
+    for (let i = 0; i < 8; i++) {
+      const local = [(i & 1 ? b.max[0] : b.min[0]) * t.scale[0], (i & 2 ? b.max[1] : b.min[1]) * t.scale[1], (i & 4 ? b.max[2] : b.min[2]) * t.scale[2]];
+      const p = add(t.position, qRotate(t.rotation, local));
+      min = min ? [Math.min(min[0], p[0]), Math.min(min[1], p[1]), Math.min(min[2], p[2])] : p;
+      max = max ? [Math.max(max[0], p[0]), Math.max(max[1], p[1]), Math.max(max[2], p[2])] : p;
+    }
+  }
+  return min && max ? { min, max } : void 0;
+}
+
 // src/app/viewport.ts
 import { api, game, world } from "rednode";
 var COLORS = { x: "#ff4d5e", y: "#5dffa1", z: "#4d9dff", ring: "#fcee0a" };
@@ -141,7 +230,7 @@ var Viewport = class {
     this.hooks = hooks;
     this.ctx = canvas.getContext("2d");
     window.addEventListener("pointermove", (e) => {
-      if (e.target === canvas || this.rmb || this.mmb || this.drag) this.onMove(e);
+      if (e.target === canvas || this.rmb || this.mmb || this.drag || this.box) this.onMove(e);
     });
     canvas.addEventListener("pointerdown", (e) => this.onDown(e));
     window.addEventListener("pointerup", (e) => this.onUp(e));
@@ -164,7 +253,9 @@ var Viewport = class {
   ctx;
   edit = false;
   objects = [];
-  selected;
+  selected = [];
+  /** A selection box being drawn with Shift held: where it started and where the cursor is. */
+  box;
   cam;
   calib;
   fov = 0;
@@ -175,7 +266,8 @@ var Viewport = class {
   hover;
   drag;
   mouse = [0, 0];
-  pending;
+  /** The drag changed since the last frame: send the previews' new places. */
+  pending = false;
   cameraError = "";
   // The editor camera (B2b): its entity, its component, and where the page wants it.
   camEntity;
@@ -198,6 +290,7 @@ var Viewport = class {
     if (!on) {
       this.cancel();
       this.disarm();
+      this.box = void 0;
       this.rmb = this.mmb = false;
       this.unlock();
       if (this.builderAsked) this.hooks.builderStop();
@@ -230,15 +323,36 @@ var Viewport = class {
   }
   setScene(objects, selected) {
     this.objects = objects;
-    if (selected !== this.selected && this.drag) this.cancel();
+    if (this.drag && selected.join("\n") !== this.selected.join("\n")) this.cancel();
     this.selected = selected;
     this.kick();
   }
-  /** The selected object, as the page shows it now (mid-drag included). */
-  current() {
-    const o = this.objects.find((x) => x.id === this.selected);
-    if (!o) return void 0;
-    return this.drag && this.drag.id === o.id ? { ...o, transform: this.drag.now } : o;
+  /** Edit is on and the camera is known: a drag can start. */
+  get canDrag() {
+    return this.edit && !!this.cam;
+  }
+  /** A drag, a box or Drop at click is under way: keys belong to it. */
+  get busy() {
+    return !!(this.drag || this.box || this.placing);
+  }
+  /** A duplicate's copies are selected: they follow the mouse until a click places them, Esc takes them back. */
+  moveCopies() {
+    if (!this.canDrag || this.drag) return;
+    this.begin("move", true, void 0, false, true);
+    this.kick();
+  }
+  /** The selected objects as the page shows them now, mid-drag included. */
+  chosen() {
+    const d = this.drag;
+    return this.objects.filter((o) => this.selected.includes(o.id)).map((o) => d && d.starts.has(o.id) ? { ...o, transform: this.nowOf(d, o.id) } : o);
+  }
+  nowOf(d, id) {
+    return applyChange(d.starts.get(id), d.change, d.pivot);
+  }
+  /** Where the gizmo sits: the middle of the selected previews. */
+  gizmoAt() {
+    const shown = this.chosen().filter((o) => o.entityId);
+    return shown.length ? centreOf(shown.map((o) => o.transform)) : void 0;
   }
   // ---- the camera ----------------------------------------------------------------------------
   forgetCamera() {
@@ -332,8 +446,7 @@ var Viewport = class {
   clear() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
-  handleEnds(o) {
-    const origin = o.transform.position;
+  handleEnds(origin) {
     const dist = this.cam ? Math.max(1, Math.hypot(...sub(origin, this.cam.pos))) : 5;
     const size = dist * 0.12;
     return { origin, size, tips: { x: add(origin, mul(AXES.x, size)), y: add(origin, mul(AXES.y, size)), z: add(origin, mul(AXES.z, size)) } };
@@ -350,14 +463,15 @@ var Viewport = class {
     this.clear();
     const ctx = this.ctx;
     const cam = this.cam;
-    const o = this.current();
+    const chosen = this.chosen();
+    const at = this.gizmoAt();
     if (!cameraOk || !cam) {
       if (this.edit) this.label(`No camera yet: ${this.cameraError || "load a save"}`);
       return;
     }
-    if (o && o.entityId) {
-      this.drawBox(o);
-      const { origin, size, tips } = this.handleEnds(o);
+    for (const o of chosen) if (o.entityId) this.drawBox(o);
+    if (at) {
+      const { origin, size, tips } = this.handleEnds(at);
       const c = project(cam, origin);
       const ring = this.ringPoints(origin, size * 0.8).map((p) => project(cam, p));
       ctx.lineWidth = this.hover === "ring" || this.drag?.ring ? 4 : 2;
@@ -396,10 +510,21 @@ var Viewport = class {
         ctx.fill();
       }
     }
+    if (this.box) {
+      const b = this.box;
+      ctx.strokeStyle = COLORS.ring;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(252,238,10,0.06)";
+      ctx.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
+    }
     if (this.drag) this.label(...this.dragText(this.drag).split("   "));
     else if (this.edit) {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
-      const help = this.placing ? "Click where it should go.  Esc: cancel." : o ? "Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete." : "Click an object to select it.";
+      const n = chosen.length;
+      const help = this.placing ? "Click where it should go.  Esc: cancel." : this.box ? "Release to select what is inside.  Ctrl: add to the selection." : n ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D copy, Ctrl+G group, Ctrl+Z undo.` : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
       this.label(help, camHelp);
     }
   }
@@ -458,20 +583,22 @@ var Viewport = class {
     lines.forEach((l, i) => ctx.fillText(l, left + 12, top + 22 + i * lineH));
   }
   dragText(d) {
-    const t = d.now;
     const typed = d.typed ? `  [${d.typed}]` : "";
     const lock = d.axis ? ` ${d.axis.toUpperCase()}` : "";
+    const many = d.ids.length > 1 ? ` ${d.ids.length} objects` : "";
+    const keep = d.copy ? "Enter or click: place the copy \xB7 Esc: no copy" : "Enter or click: keep \xB7 Esc or right-click: undo";
     if (d.mode === "move") {
-      const dx = sub(t.position, d.start.position);
-      return `Move${lock}  ${dx.map((n) => n.toFixed(2)).join(", ")} m${typed}   Enter or click: keep \xB7 Esc or right-click: undo`;
+      const dx = d.change.move ?? [0, 0, 0];
+      return `Move${many}${lock}  ${dx.map((n) => n.toFixed(2)).join(", ")} m${typed}   ${keep}`;
     }
-    if (d.mode === "rotate") return `Turn${lock || " Z"}  ${this.turnedDegrees(d).toFixed(1)}\xB0${typed}   Enter or click: keep \xB7 Esc: undo`;
-    return `Scale${lock}  ${t.scale.map((n) => n.toFixed(2)).join(", ")}${typed}   Enter or click: keep \xB7 Esc: undo`;
+    if (d.mode === "rotate") return `Turn${many}${lock || " Z"}  ${this.turnedDegrees(d).toFixed(1)}\xB0${typed}   ${keep}`;
+    const f = d.change.scale ?? [1, 1, 1];
+    const shown = d.ids.length === 1 ? this.nowOf(d, d.ids[0]).scale : f;
+    return `Scale${many}${lock}  ${d.ids.length === 1 ? "" : "x "}${shown.map((n) => n.toFixed(2)).join(", ")}${typed}   ${keep}`;
   }
   turnedDegrees(d) {
-    const q = qMul(d.now.rotation, [-d.start.rotation[0], -d.start.rotation[1], -d.start.rotation[2], d.start.rotation[3]]);
-    const deg = 2 * Math.acos(Math.min(1, Math.abs(q[3]))) * 180 / Math.PI;
-    return deg;
+    const q = d.change.turn ?? [0, 0, 0, 1];
+    return 2 * Math.acos(Math.min(1, Math.abs(q[3]))) * 180 / Math.PI;
   }
   // ---- the mouse ---------------------------------------------------------------------------------
   pageXY(e) {
@@ -479,10 +606,10 @@ var Viewport = class {
     return [(e.clientX - r.left) / r.width * this.canvas.width, (e.clientY - r.top) / r.height * this.canvas.height];
   }
   handleAt(p) {
-    const o = this.current();
+    const at = this.gizmoAt();
     const cam = this.cam;
-    if (!o || !o.entityId || !cam) return void 0;
-    const { origin, size, tips } = this.handleEnds(o);
+    if (!at || !cam) return void 0;
+    const { origin, size, tips } = this.handleEnds(at);
     const c = project(cam, origin);
     if (!c) return void 0;
     let best;
@@ -546,13 +673,16 @@ var Viewport = class {
       this.camDirty = true;
       return;
     }
-    if (this.drag) this.dragTo(this.mouse, e.ctrlKey);
+    if (this.box) {
+      this.box.x1 = this.mouse[0];
+      this.box.y1 = this.mouse[1];
+    } else if (this.drag) this.dragTo(this.mouse, e.ctrlKey);
     else this.hover = this.handleAt(this.mouse);
   }
-  /** What the camera orbits and dollies towards: the selected object, else a point 10 m ahead. */
+  /** What the camera orbits and dollies towards: the middle of the selection, else a point 10 m ahead. */
   pivot() {
-    const o = this.current();
-    if (o?.entityId) return o.transform.position;
+    const at = this.gizmoAt();
+    if (at) return at;
     const a = lookAxes(this.look);
     return add(this.camPos, mul(a.fwd, 10));
   }
@@ -597,13 +727,12 @@ var Viewport = class {
     const q = qLook(this.look);
     world.move(this.camEntity, { x: this.camPos[0], y: this.camPos[1], z: this.camPos[2] }, { i: q[0], j: q[1], k: q[2], r: q[3] }).catch((err) => this.hooks.log(`Camera move failed: ${err.message}`));
   }
-  /** Puts the selected object in front of the camera, at a distance that fits it. */
+  /** Puts the selection in front of the camera, at a distance that fits it. */
   frameSelected() {
-    const o = this.current();
-    if (!o || !this.camPos || !this.look) return;
-    const b = o.bounds ? { min: o.bounds.min, max: o.bounds.max } : UNIT_BOX;
-    const size = Math.max(...[0, 1, 2].map((i) => (b.max[i] - b.min[i]) * o.transform.scale[i]));
-    const centre = add(o.transform.position, mul(add(b.min, b.max), 0.5));
+    const b = boxOf(this.chosen());
+    if (!b || !this.camPos || !this.look) return;
+    const size = Math.max(...[0, 1, 2].map((i) => b.max[i] - b.min[i]));
+    const centre = mul(add(b.min, b.max), 0.5);
     const fwd = lookAxes(this.look).fwd;
     this.camPos = sub(centre, mul(fwd, Math.max(2, size * 2.5)));
     this.camDirty = true;
@@ -637,15 +766,19 @@ var Viewport = class {
       return then(rayFrom(this.cam, this.mouse[0], this.mouse[1]));
     }
     if (this.drag?.modal) return this.confirm();
-    const h = this.handleAt(this.mouse);
-    const o = this.current();
-    if (h && o) {
+    const h = e.shiftKey ? void 0 : this.handleAt(this.mouse);
+    if (h) {
       this.canvas.setPointerCapture(e.pointerId);
-      if (h === "ring") this.begin(o, "rotate", false, void 0, true);
-      else this.begin(o, "move", false, h);
+      if (h === "ring") this.begin("rotate", false, void 0, true);
+      else this.begin("move", false, h);
       return;
     }
-    this.pick(this.mouse);
+    if (e.shiftKey) {
+      this.canvas.setPointerCapture(e.pointerId);
+      this.box = { x0: this.mouse[0], y0: this.mouse[1], x1: this.mouse[0], y1: this.mouse[1] };
+      return;
+    }
+    this.pick(this.mouse, e);
   }
   onUp(e) {
     if (e.button === 2 || e.button === 1) {
@@ -658,13 +791,39 @@ var Viewport = class {
       }
       return;
     }
+    if (this.box && e.button === 0) {
+      this.canvas.releasePointerCapture(e.pointerId);
+      this.endBox(e);
+      return;
+    }
     if (this.drag && !this.drag.modal && e.button === 0) {
       this.canvas.releasePointerCapture(e.pointerId);
       this.confirm();
     }
   }
+  /** The objects whose middle is inside the box on screen. A box a few pixels wide is a click. */
+  endBox(e) {
+    const b = this.box;
+    this.box = void 0;
+    const cam = this.cam;
+    if (!cam) return;
+    if (Math.abs(b.x1 - b.x0) < 4 && Math.abs(b.y1 - b.y0) < 4) return this.pick([b.x1, b.y1], e);
+    const [l, r] = [Math.min(b.x0, b.x1), Math.max(b.x0, b.x1)];
+    const [t, d] = [Math.min(b.y0, b.y1), Math.max(b.y0, b.y1)];
+    const inside = this.objects.filter((o) => {
+      if (!o.entityId) return false;
+      const bb = o.bounds ? { min: o.bounds.min, max: o.bounds.max } : UNIT_BOX;
+      const middle = add(o.transform.position, qRotate(o.transform.rotation, mul(add(bb.min, bb.max).map((v2, i) => v2 * o.transform.scale[i]), 0.5)));
+      const p = project(cam, middle);
+      return !!p && p[0] >= l && p[0] <= r && p[1] >= t && p[1] <= d;
+    });
+    this.hooks.pickBox(
+      inside.map((o) => o.id),
+      { add: e.ctrlKey, single: e.altKey }
+    );
+  }
   /** Selects the nearest object under the cursor, or nothing. */
-  pick(p) {
+  pick(p, e) {
     const cam = this.cam;
     const ray = rayFrom(cam, p[0], p[1]);
     let best;
@@ -678,16 +837,23 @@ var Viewport = class {
         best = o;
       }
     }
-    this.hooks.select(best?.id);
+    this.hooks.pick(best?.id, { toggle: e.ctrlKey, single: e.altKey });
   }
   // ---- drags and keys ------------------------------------------------------------------------------
-  begin(o, mode, modal, axis, ring = false) {
-    if (mode === "scale" && o.kind !== "mesh") {
-      this.hooks.status("Only meshes scale; an entity keeps the size its template gives it.");
+  /**
+   * Starts a drag of the selected previews. They all get the same change: moved by the same amount,
+   * turned and scaled around their middle. `copy`: a duplicate's move.
+   */
+  begin(mode, modal, axis, ring = false, copy = false) {
+    const shown = this.objects.filter((o) => this.selected.includes(o.id) && o.entityId);
+    if (!shown.length) return;
+    if (mode === "scale" && shown.some((o) => o.kind !== "mesh")) {
+      this.hooks.status(shown.length === 1 ? "Only meshes scale; an entity keeps the size its template gives it." : "Only meshes scale, and the selection has an entity: an entity keeps the size its template gives it.");
       return;
     }
-    const t = { position: [...o.transform.position], rotation: [...o.transform.rotation], scale: [...o.transform.scale] };
-    this.drag = { id: o.id, mode, axis, ring, start: t, now: t, x0: this.mouse[0], y0: this.mouse[1], typed: "", modal, moves: 0, started: performance.now() };
+    const starts = new Map(shown.map((o) => [o.id, { position: [...o.transform.position], rotation: [...o.transform.rotation], scale: [...o.transform.scale] }]));
+    const pivot = centreOf([...starts.values()]);
+    this.drag = { ids: shown.map((o) => o.id), starts, mode, axis, ring, pivot, change: {}, copy, x0: this.mouse[0], y0: this.mouse[1], typed: "", modal, moves: 0, started: performance.now() };
     this.anchor();
   }
   /** Records where the drag starts, in the terms its constraint uses. */
@@ -695,7 +861,7 @@ var Viewport = class {
     const d = this.drag;
     const cam = this.cam;
     const ray = rayFrom(cam, this.mouse[0], this.mouse[1]);
-    const origin = d.start.position;
+    const origin = d.pivot;
     d.x0 = this.mouse[0];
     d.y0 = this.mouse[1];
     if (d.mode === "move") {
@@ -714,97 +880,100 @@ var Viewport = class {
     const cam = this.cam;
     if (!cam || d.typed) return;
     const ray = rayFrom(cam, p[0], p[1]);
-    const s = d.start;
-    let next = d.now;
+    const o = d.pivot;
     if (d.mode === "move") {
       let delta = [0, 0, 0];
       if (d.axis) {
-        const t = closestOnAxis(ray, s.position, AXES[d.axis]);
+        const t = closestOnAxis(ray, o, AXES[d.axis]);
         if (t === null) return;
         delta = mul(AXES[d.axis], t - (d.s0 ?? 0));
       } else {
-        const q = rayOnPlaneZ(ray, s.position[2]);
+        const q = rayOnPlaneZ(ray, o[2]);
         if (!q) return;
-        delta = sub(q, d.p0 ?? s.position);
+        delta = sub(q, d.p0 ?? o);
       }
       if (snap) delta = delta.map((n) => Math.round(n / 0.25) * 0.25);
-      next = { ...s, position: add(s.position, delta) };
+      this.apply({ move: delta });
     } else if (d.mode === "rotate") {
       let deg;
       if (!d.axis || d.axis === "z") {
-        const q = rayOnPlaneZ(ray, s.position[2]);
-        const a = q ? Math.atan2(q[1] - s.position[1], q[0] - s.position[0]) : (d.a0 ?? 0) + (p[0] - d.x0) * Math.PI / 360;
+        const q = rayOnPlaneZ(ray, o[2]);
+        const a = q ? Math.atan2(q[1] - o[1], q[0] - o[0]) : (d.a0 ?? 0) + (p[0] - d.x0) * Math.PI / 360;
         deg = (a - (d.a0 ?? 0)) * 180 / Math.PI;
       } else {
         deg = (p[0] - d.x0) * 0.5;
       }
       if (snap) deg = Math.round(deg / 15) * 15;
-      next = { ...s, rotation: qNorm(qMul(qAxisAngle(AXES[d.axis ?? "z"], deg), s.rotation)) };
+      this.apply({ turn: qAxisAngle(AXES[d.axis ?? "z"], deg) });
     } else {
-      const c = project(cam, s.position);
+      const c = project(cam, o);
       if (!c) return;
       let f = Math.max(0.01, Math.hypot(p[0] - c[0], p[1] - c[1]) / (d.d0 ?? 100));
       if (snap) f = Math.round(f / 0.25) * 0.25 || 0.25;
-      next = { ...s, scale: this.scaled(s.scale, f, d.axis) };
+      this.apply({ scale: this.factor(f, d.axis) });
     }
-    this.apply(next);
   }
-  scaled(base, f, axis) {
-    if (!axis) return mul(base, f);
-    const i = axis === "x" ? 0 : axis === "y" ? 1 : 2;
-    const out = [...base];
-    out[i] = base[i] * f;
+  factor(f, axis) {
+    if (!axis) return [f, f, f];
+    const out = [1, 1, 1];
+    out[axis === "x" ? 0 : axis === "y" ? 1 : 2] = f;
     return out;
   }
-  /** A transform from typed numbers: metres along the locked axis, degrees around it, or a factor. */
-  typedTransform(d) {
+  /** A change from typed numbers: metres along the locked axis, degrees around it, or a factor. */
+  typedChange(d) {
     const n = Number(d.typed);
     if (!d.typed || Number.isNaN(n)) return void 0;
-    const s = d.start;
-    if (d.mode === "move") return { ...s, position: add(s.position, mul(AXES[d.axis ?? "z"], n)) };
-    if (d.mode === "rotate") return { ...s, rotation: qNorm(qMul(qAxisAngle(AXES[d.axis ?? "z"], n), s.rotation)) };
-    return { ...s, scale: this.scaled(s.scale, n || 1, d.axis) };
+    if (d.mode === "move") return { move: mul(AXES[d.axis ?? "z"], n) };
+    if (d.mode === "rotate") return { turn: qAxisAngle(AXES[d.axis ?? "z"], n) };
+    return { scale: this.factor(n || 1, d.axis) };
   }
-  /** Shows a transform on the preview: the newest one is sent once a frame, by the frame loop. */
-  apply(t) {
+  /** Shows a change on the previews: the newest places are sent once a frame, by the frame loop. */
+  apply(c) {
     const d = this.drag;
-    d.now = t;
-    if (d.mode === "scale") return;
-    this.pending = t;
+    d.change = c;
+    if (d.mode === "scale" && d.ids.length === 1) return;
+    this.pending = true;
   }
   /**
-   * Sends the newest pending transform without waiting for the answer. REDnode runs every call that
-   * is waiting when a game frame starts in that frame, so one move a page frame keeps the object with
-   * the cursor; waiting for each answer let it fall a frame or two behind (B2a test).
+   * Sends the previews' newest places without waiting for the answers. REDnode runs every call that
+   * is waiting when a game frame starts in that frame, so one move a page frame keeps the objects with
+   * the cursor; waiting for each answer let them fall a frame or two behind (B2a test).
    */
   flushMove() {
-    const p = this.pending;
     const d = this.drag;
-    if (!p || !d) return;
-    this.pending = void 0;
-    const o = this.objects.find((x) => x.id === d.id);
-    if (!o?.entityId) return;
-    d.moves++;
-    world.move(o.entityId, { x: p.position[0], y: p.position[1], z: p.position[2] }, { i: p.rotation[0], j: p.rotation[1], k: p.rotation[2], r: p.rotation[3] }).catch((err) => this.hooks.log(`Move failed: ${err.message}`));
+    if (!this.pending || !d) return;
+    this.pending = false;
+    for (const id of d.ids) {
+      const o = this.objects.find((x) => x.id === id);
+      if (!o?.entityId) continue;
+      const p = this.nowOf(d, id);
+      d.moves++;
+      world.move(o.entityId, { x: p.position[0], y: p.position[1], z: p.position[2] }, { i: p.rotation[0], j: p.rotation[1], k: p.rotation[2], r: p.rotation[3] }).catch((err) => this.hooks.log(`Move failed: ${err.message}`));
+    }
   }
   confirm() {
     const d = this.drag;
     if (!d) return;
-    const t = d.typed && this.typedTransform(d) || d.now;
+    if (d.typed) d.change = this.typedChange(d) ?? d.change;
     this.drag = void 0;
     this.hover = void 0;
+    this.pending = false;
     const secs = (performance.now() - d.started) / 1e3;
-    if (d.moves > 0) this.hooks.log(`Drag (${d.mode}${d.axis ? ` ${d.axis}` : ""}): ${d.moves} moves in ${secs.toFixed(1)} s, ${(d.moves / Math.max(secs, 1e-3)).toFixed(0)} a second`);
-    this.hooks.commit(d.id, t);
+    if (d.moves > 0) this.hooks.log(`Drag (${d.mode}${d.axis ? ` ${d.axis}` : ""}, ${d.ids.length} object${d.ids.length === 1 ? "" : "s"}): ${d.moves} moves in ${secs.toFixed(1)} s, ${(d.moves / Math.max(secs, 1e-3)).toFixed(0)} a second`);
+    this.hooks.commit(
+      d.ids.map((id) => ({ id, transform: this.nowOf(d, id) })),
+      d.copy
+    );
   }
   cancel() {
     const d = this.drag;
     if (!d) return;
     this.drag = void 0;
-    const o = this.objects.find((x) => x.id === d.id);
-    if (o?.entityId && d.mode !== "scale") {
-      this.pending = void 0;
-      void world.move(o.entityId, { x: d.start.position[0], y: d.start.position[1], z: d.start.position[2] }, { i: d.start.rotation[0], j: d.start.rotation[1], k: d.start.rotation[2], r: d.start.rotation[3] });
+    this.pending = false;
+    if (d.copy) return this.hooks.undo();
+    for (const [id, t] of d.starts) {
+      const o = this.objects.find((x) => x.id === id);
+      if (o?.entityId) void world.move(o.entityId, { x: t.position[0], y: t.position[1], z: t.position[2] }, { i: t.rotation[0], j: t.rotation[1], k: t.rotation[2], r: t.rotation[3] });
     }
   }
   onKey(e) {
@@ -817,40 +986,45 @@ var Viewport = class {
       this.disarm();
       return this.hooks.status("Drop at click cancelled.");
     }
+    if (key === "escape" && this.box) {
+      this.box = void 0;
+      return;
+    }
     if (key === "f" && !this.drag) return this.frameSelected();
     const d = this.drag;
     if (d) {
+      if (e.ctrlKey && key.length === 1) return;
       if (key === "escape") return this.cancel();
       if (key === "enter") return this.confirm();
       if (key === "x" || key === "y" || key === "z") {
         d.axis = d.axis === key ? void 0 : key;
-        d.now = d.start;
         this.anchor();
-        if (d.mode !== "scale") this.apply(d.start);
+        this.apply({});
         return;
       }
       if (/^[0-9.\-]$/.test(e.key)) {
         d.typed += e.key;
-        const t = this.typedTransform(d);
-        if (t) this.apply(t);
+        const c = this.typedChange(d);
+        if (c) this.apply(c);
         return;
       }
       if (key === "backspace") {
         d.typed = d.typed.slice(0, -1);
-        const t = this.typedTransform(d) ?? d.start;
-        this.apply(t);
+        this.apply(this.typedChange(d) ?? {});
       }
       return;
     }
-    const o = this.current();
-    if (!o?.entityId || !this.cam) return;
-    if (key === "g") this.begin(o, "move", true);
-    else if (key === "r") this.begin(o, "rotate", true);
-    else if (key === "s") this.begin(o, "scale", true);
-    else if (key === "e" && e.ctrlKey) {
+    if (!this.selected.length || !this.cam) return;
+    if (key === "e" && e.ctrlKey) {
       e.preventDefault();
-      this.hooks.floor(o.id);
-    } else if (key === "delete") this.hooks.remove(o.id);
+      this.hooks.floor(this.selected);
+      return;
+    }
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (key === "g") this.begin("move", true);
+    else if (key === "r") this.begin("rotate", true);
+    else if (key === "s") this.begin("scale", true);
+    else if (key === "delete") this.hooks.remove(this.selected);
   }
 };
 
@@ -865,6 +1039,9 @@ var from = "all";
 var lookedAt;
 var appearance;
 var lastMessage = "";
+var closed = /* @__PURE__ */ new Set();
+var copyAsked = false;
+var lastCopy;
 function render(s) {
   state = s;
   const worldText = { ready: "World ready", "no-game": "No game", "no-save": "Load a save", "no-codeware": "Needs Codeware 1.14+", unknown: "World: checking" }[s.world];
@@ -918,17 +1095,30 @@ function render(s) {
     $("drop").setAttribute("disabled", "");
     $("dropClick").setAttribute("disabled", "");
   }
-  const objects = $("objects");
-  objects.innerHTML = s.scene.objects.map((o) => `<rn-item value="${esc(o.id)}"${o.id === s.selected ? " selected" : ""}>${esc(o.id)}<span slot="end">${o.entityId ? o.kind : "not in world"}</span></rn-item>`).join("");
-  $("sceneCount").textContent = `${s.scene.objects.length} object${s.scene.objects.length === 1 ? "" : "s"}`;
+  $("objects").innerHTML = sceneRows(s);
+  const groupCount = s.scene.groups.length;
+  $("sceneCount").textContent = `${s.scene.objects.length} object${s.scene.objects.length === 1 ? "" : "s"}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
   $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
-  const sel = s.scene.objects.find((o) => o.id === s.selected);
-  renderSelected(sel);
-  $("delete").toggleAttribute("disabled", !sel);
-  $("floor").toggleAttribute("disabled", !sel?.entityId);
-  $("apply").toggleAttribute("disabled", !sel);
+  const sel = s.scene.objects.filter((o) => s.selected.includes(o.id));
+  renderSelected(sel, s);
+  $("delete").toggleAttribute("disabled", !sel.length);
+  $("floor").toggleAttribute("disabled", !sel.some((o) => o.entityId));
+  $("apply").toggleAttribute("disabled", !sel.length);
+  $("duplicate").toggleAttribute("disabled", !sel.length);
+  $("group").toggleAttribute("disabled", !sel.length);
+  $("ungroup").toggleAttribute("disabled", !sel.some((o) => o.group));
+  $("undo").toggleAttribute("disabled", !s.history.undo);
+  $("redo").toggleAttribute("disabled", !s.history.redo);
+  $("undo").title = `Ctrl+Z (${s.history.undo} step${s.history.undo === 1 ? "" : "s"})`;
+  $("redo").title = `Ctrl+Y (${s.history.redo} step${s.history.redo === 1 ? "" : "s"})`;
   viewport.setScene(s.scene.objects, s.selected);
   viewport.setCamera(s.camera?.entityId);
+  if (lastCopy === void 0) lastCopy = s.duplicated?.seq ?? 0;
+  if (s.duplicated && s.duplicated.seq !== lastCopy) {
+    lastCopy = s.duplicated.seq;
+    if (copyAsked) viewport.moveCopies();
+    copyAsked = false;
+  }
   const missing = s.scene.objects.some((o) => !o.entityId && o.kind !== "light");
   $("rebuild").toggleAttribute("disabled", !missing);
   if (document.activeElement?.id !== "bridgePath") $("bridgePath").value = s.settings.bridgePath ?? "";
@@ -961,10 +1151,50 @@ function rowTitle(r) {
   return r.source ? `${r.path}
 ${r.source.file}` : r.path;
 }
+function sceneRows(s) {
+  const { objects, groups } = s.scene;
+  const rows = [];
+  const pad = (depth) => ` style="padding-left:${12 + depth * 18}px"`;
+  const walk = (parent, depth) => {
+    for (const g of groups.filter((x) => x.parent === parent)) {
+      const members = membersOf(g.id, objects, groups);
+      const all = members.length > 0 && members.every((o) => s.selected.includes(o.id));
+      rows.push(
+        `<rn-item value="g:${esc(g.id)}"${all ? " selected" : ""}${pad(depth)}><span class="fold" data-group="${esc(g.id)}">${closed.has(g.id) ? "\u25B8" : "\u25BE"}</span>${esc(g.name)}<span slot="end">group of ${members.length}</span></rn-item>`
+      );
+      if (!closed.has(g.id)) walk(g.id, depth + 1);
+    }
+    for (const o of objects.filter((x) => (x.group ?? null) === parent)) {
+      rows.push(`<rn-item value="o:${esc(o.id)}"${s.selected.includes(o.id) ? " selected" : ""}${pad(depth)}>${esc(o.id)}<span slot="end">${o.entityId ? o.kind : "not in world"}</span></rn-item>`);
+    }
+  };
+  walk(null, 0);
+  return rows.join("");
+}
 var fields = ["px", "py", "pz", "yaw", "scale"];
 var field = (id) => $(id);
-function renderSelected(o) {
+function renderSelected(sel, s) {
   const focused = document.activeElement?.id;
+  const units = selectionUnits(s.selected, s.scene.objects, s.scene.groups);
+  const oneGroup = units.groups.length === 1 && !units.objects.length ? s.scene.groups.find((g) => g.id === units.groups[0]) : void 0;
+  const groupName = $("groupName");
+  groupName.hidden = !oneGroup;
+  groupName.dataset.group = oneGroup?.id ?? "";
+  if (oneGroup && focused !== "groupName") groupName.value = oneGroup.name;
+  field("yaw").setAttribute("label", sel.length > 1 ? "Turn by" : "Heading");
+  field("scale").setAttribute("label", sel.length > 1 ? "Scale by" : "Scale");
+  if (sel.length > 1) {
+    const c = centreOf(sel.map((o2) => o2.transform));
+    const values = { px: c[0].toFixed(2), py: c[1].toFixed(2), pz: c[2].toFixed(2), yaw: "0", scale: "1" };
+    for (const f of fields) if (focused !== f) field(f).value = values[f];
+    field("scale").toggleAttribute("disabled", sel.some((o2) => o2.kind !== "mesh"));
+    const shown = sel.filter((o2) => o2.entityId).length;
+    $("selected").textContent = `${oneGroup ? `${oneGroup.name}: ` : ""}${sel.length} objects
+middle at ${c.map((n) => n.toFixed(2)).join(", ")}${shown < sel.length ? `
+${sel.length - shown} not in the world` : ""}`;
+    return;
+  }
+  const o = sel[0];
   if (o) {
     const values = {
       px: o.transform.position[0].toFixed(2),
@@ -981,7 +1211,7 @@ function renderSelected(o) {
     return;
   }
   const [x, y, z] = o.transform.position;
-  $("selected").textContent = `${o.id}
+  $("selected").textContent = `${oneGroup ? `${oneGroup.name}: ` : ""}${o.id}
 ${o.resource ?? o.kind}
 ${o.appearance ? `appearance ${o.appearance}
 ` : ""}at ${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}${o.entityId ? `
@@ -1045,16 +1275,71 @@ $("dropClick").addEventListener("click", () => {
   $("message").textContent = `Click where ${shortName(path)} should go; Esc cancels.`;
   $("message").className = "message";
 });
-$("objects").addEventListener("select", (e) => post({ type: "select", id: e.detail.value }));
-$("delete").addEventListener("click", () => state?.selected && post({ type: "delete", id: state.selected }));
-$("floor").addEventListener("click", () => state?.selected && post({ type: "floor", id: state.selected }));
+var listCtrl = false;
+$("objects").addEventListener(
+  "click",
+  (e) => {
+    listCtrl = e.ctrlKey;
+    const fold = e.target.closest?.(".fold");
+    if (!fold) return;
+    e.stopPropagation();
+    const g = fold.dataset.group;
+    if (closed.has(g)) closed.delete(g);
+    else closed.add(g);
+    if (state) render(state);
+  },
+  true
+);
+$("objects").addEventListener("keydown", () => listCtrl = false, true);
+$("objects").addEventListener("select", (e) => {
+  if (!state) return;
+  const value = e.detail.value;
+  const { objects, groups } = state.scene;
+  const ids = value.startsWith("g:") ? membersOf(value.slice(2), objects, groups).map((o) => o.id) : [value.slice(2)];
+  const all = ids.every((id) => state.selected.includes(id));
+  const next = !listCtrl ? ids : all ? state.selected.filter((id) => !ids.includes(id)) : [...state.selected, ...ids];
+  post({ type: "select", ids: next });
+});
+var selection = () => state?.selected ?? [];
+$("delete").addEventListener("click", () => selection().length && post({ type: "delete", ids: selection() }));
+$("floor").addEventListener("click", () => selection().length && post({ type: "floor", ids: selection() }));
+$("undo").addEventListener("click", () => post({ type: "undo" }));
+$("redo").addEventListener("click", () => post({ type: "redo" }));
+$("group").addEventListener("click", () => selection().length && post({ type: "group", ids: selection() }));
+$("ungroup").addEventListener("click", () => selection().length && post({ type: "ungroup", ids: selection() }));
+$("duplicate").addEventListener("click", () => duplicate());
+$("groupName").addEventListener("submit", () => {
+  const g = $("groupName");
+  if (g.dataset.group) post({ type: "rename", group: g.dataset.group, name: g.value ?? "" });
+});
+function duplicate() {
+  if (!state || !state.selected.length) return;
+  if (viewport.canDrag) {
+    copyAsked = true;
+    post({ type: "duplicate", ids: state.selected });
+  } else {
+    const b = boxOf(state.scene.objects.filter((o) => state.selected.includes(o.id)));
+    const width = b ? b.max[0] - b.min[0] : 1;
+    post({ type: "duplicate", ids: state.selected, offset: [width + 0.5, 0, 0] });
+  }
+}
 function applyFields() {
-  const o = state?.scene.objects.find((x) => x.id === state?.selected);
-  if (!o) return;
+  const sel = state?.scene.objects.filter((x) => state.selected.includes(x.id)) ?? [];
+  if (!sel.length) return;
   const num = (f, fallback) => {
     const n = Number(field(f).value);
     return Number.isFinite(n) ? n : fallback;
   };
+  if (sel.length > 1) {
+    const c = centreOf(sel.map((o2) => o2.transform));
+    const to = [num("px", c[0]), num("py", c[1]), num("pz", c[2])];
+    const turn2 = num("yaw", 0);
+    const f = sel.every((o2) => o2.kind === "mesh") ? num("scale", 1) || 1 : 1;
+    const change = { move: sub(to, c), turn: Math.abs(turn2) > 1e-3 ? qAxisAngle(AXES.z, turn2) : void 0, scale: f !== 1 ? [f, f, f] : void 0 };
+    post({ type: "transform", items: sel.map((o2) => ({ id: o2.id, transform: applyChange(o2.transform, change, c) })) });
+    return;
+  }
+  const o = sel[0];
   const t = o.transform;
   const yawNow = qYaw(t.rotation);
   const turn = num("yaw", yawNow) - yawNow;
@@ -1064,18 +1349,28 @@ function applyFields() {
     rotation: Math.abs(turn) > 1e-3 ? qNorm(qMul(qAxisAngle(AXES.z, turn), t.rotation)) : t.rotation,
     scale: o.kind === "mesh" ? [s, s, s] : t.scale
   };
-  post({ type: "transform", id: o.id, transform: next });
+  post({ type: "transform", items: [{ id: o.id, transform: next }] });
 }
 $("apply").addEventListener("click", applyFields);
 for (const f of fields) field(f).addEventListener("submit", applyFields);
+var showSceneTab = () => document.getElementById("mainTabs").select?.(1);
 var viewport = new Viewport($("view"), {
-  select(id) {
-    post({ type: "select", id });
-    if (id) document.getElementById("mainTabs").select?.(1);
+  pick(id, opts) {
+    if (!state) return;
+    const ids = pickSelection(id, state.selected, state.scene.objects, state.scene.groups, opts);
+    post({ type: "select", ids });
+    if (ids.length) showSceneTab();
   },
-  commit: (id, transform) => post({ type: "transform", id, transform }),
-  remove: (id) => post({ type: "delete", id }),
-  floor: (id) => post({ type: "floor", id }),
+  pickBox(found, opts) {
+    if (!state) return;
+    const ids = pickMany(found, state.selected, state.scene.objects, state.scene.groups, opts);
+    post({ type: "select", ids });
+    if (ids.length) showSceneTab();
+  },
+  commit: (items, merge) => post({ type: "transform", items, merge }),
+  remove: (ids) => post({ type: "delete", ids }),
+  floor: (ids) => post({ type: "floor", ids }),
+  undo: () => post({ type: "undo" }),
   log: (text) => post({ type: "log", text }),
   builderStart: (pose) => post({ type: "builder.start", pose }),
   builderStop: () => post({ type: "builder.stop" }),
@@ -1083,6 +1378,19 @@ var viewport = new Viewport($("view"), {
     $("message").textContent = text;
     $("message").className = "message warn";
   }
+});
+window.addEventListener("keydown", (e) => {
+  if (!e.ctrlKey || e.altKey || e.metaKey) return;
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "RN-INPUT" || viewport.busy) return;
+  const key = e.key.toLowerCase();
+  const ids = selection();
+  if (key === "z" && !e.shiftKey) post({ type: "undo" });
+  else if (key === "y" || key === "z" && e.shiftKey) post({ type: "redo" });
+  else if (key === "d") duplicate();
+  else if (key === "g" && ids.length) post({ type: e.shiftKey ? "ungroup" : "group", ids });
+  else return;
+  e.preventDefault();
 });
 for (const id of ["editorCamera", "hideHud"]) {
   $(id).addEventListener("change", (e) => post({ type: "settings", [id]: !!e.detail.checked }));

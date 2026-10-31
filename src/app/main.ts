@@ -1,6 +1,7 @@
 // The editor page: shows the mod's state and sends requests. No truth lives here.
 import { channel } from "rednode";
-import { AXES, qAxisAngle, qMul, qNorm, qYaw, type Q } from "../math";
+import { applyChange, boxOf, centreOf, membersOf, pickMany, pickSelection, selectionUnits } from "../arrange";
+import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
 import type { AssetEntry, AssetFrom, AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "../protocol";
 import { Viewport } from "./viewport";
 
@@ -17,6 +18,11 @@ let from: AssetFrom = "all";
 let lookedAt: string | undefined;
 let appearance: string | undefined;
 let lastMessage = "";
+/** Groups closed in the Scene list (open by default). */
+const closed = new Set<string>();
+/** Ctrl+D with Edit on: the copies follow the mouse once the mod has made them. */
+let copyAsked = false;
+let lastCopy: number | undefined;
 
 // ---- rendering --------------------------------------------------------------------------------
 
@@ -85,19 +91,31 @@ function render(s: Snapshot): void {
   }
 
   // Scene.
-  const objects = $("objects");
-  objects.innerHTML = s.scene.objects
-    .map((o) => `<rn-item value="${esc(o.id)}"${o.id === s.selected ? " selected" : ""}>${esc(o.id)}<span slot="end">${o.entityId ? o.kind : "not in world"}</span></rn-item>`)
-    .join("");
-  $("sceneCount").textContent = `${s.scene.objects.length} object${s.scene.objects.length === 1 ? "" : "s"}`;
+  $("objects").innerHTML = sceneRows(s);
+  const groupCount = s.scene.groups.length;
+  $("sceneCount").textContent = `${s.scene.objects.length} object${s.scene.objects.length === 1 ? "" : "s"}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
   $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
-  const sel = s.scene.objects.find((o) => o.id === s.selected);
-  renderSelected(sel);
-  $("delete").toggleAttribute("disabled", !sel);
-  $("floor").toggleAttribute("disabled", !sel?.entityId);
-  $("apply").toggleAttribute("disabled", !sel);
+  const sel = s.scene.objects.filter((o) => s.selected.includes(o.id));
+  renderSelected(sel, s);
+  $("delete").toggleAttribute("disabled", !sel.length);
+  $("floor").toggleAttribute("disabled", !sel.some((o) => o.entityId));
+  $("apply").toggleAttribute("disabled", !sel.length);
+  $("duplicate").toggleAttribute("disabled", !sel.length);
+  $("group").toggleAttribute("disabled", !sel.length);
+  $("ungroup").toggleAttribute("disabled", !sel.some((o) => o.group));
+  $("undo").toggleAttribute("disabled", !s.history.undo);
+  $("redo").toggleAttribute("disabled", !s.history.redo);
+  $("undo").title = `Ctrl+Z (${s.history.undo} step${s.history.undo === 1 ? "" : "s"})`;
+  $("redo").title = `Ctrl+Y (${s.history.redo} step${s.history.redo === 1 ? "" : "s"})`;
   viewport.setScene(s.scene.objects, s.selected);
   viewport.setCamera(s.camera?.entityId);
+  // A duplicate asked for with Edit on: its copies are selected now, and follow the mouse.
+  if (lastCopy === undefined) lastCopy = s.duplicated?.seq ?? 0;
+  if (s.duplicated && s.duplicated.seq !== lastCopy) {
+    lastCopy = s.duplicated.seq;
+    if (copyAsked) viewport.moveCopies();
+    copyAsked = false;
+  }
   const missing = s.scene.objects.some((o) => !o.entityId && o.kind !== "light");
   $("rebuild").toggleAttribute("disabled", !missing);
 
@@ -140,12 +158,53 @@ function rowTitle(r: AssetEntry): string {
   return r.source ? `${r.path}\n${r.source.file}` : r.path;
 }
 
+/** The Scene list as a tree: each group (with an arrow to open or close it), then its objects, indented. */
+function sceneRows(s: Snapshot): string {
+  const { objects, groups } = s.scene;
+  const rows: string[] = [];
+  const pad = (depth: number) => ` style="padding-left:${12 + depth * 18}px"`;
+  const walk = (parent: string | null, depth: number) => {
+    for (const g of groups.filter((x) => x.parent === parent)) {
+      const members = membersOf(g.id, objects, groups);
+      const all = members.length > 0 && members.every((o) => s.selected.includes(o.id));
+      rows.push(
+        `<rn-item value="g:${esc(g.id)}"${all ? " selected" : ""}${pad(depth)}><span class="fold" data-group="${esc(g.id)}">${closed.has(g.id) ? "▸" : "▾"}</span>${esc(g.name)}<span slot="end">group of ${members.length}</span></rn-item>`,
+      );
+      if (!closed.has(g.id)) walk(g.id, depth + 1);
+    }
+    for (const o of objects.filter((x) => (x.group ?? null) === parent)) {
+      rows.push(`<rn-item value="o:${esc(o.id)}"${s.selected.includes(o.id) ? " selected" : ""}${pad(depth)}>${esc(o.id)}<span slot="end">${o.entityId ? o.kind : "not in world"}</span></rn-item>`);
+    }
+  };
+  walk(null, 0);
+  return rows.join("");
+}
+
 type Field = HTMLElement & { value: string };
 const fields = ["px", "py", "pz", "yaw", "scale"] as const;
 const field = (id: (typeof fields)[number]) => $<Field>(id);
 
-function renderSelected(o: SceneObject | undefined): void {
+/** The Selected panel: one object's numbers, or for several their middle, a turn and a factor. */
+function renderSelected(sel: SceneObject[], s: Snapshot): void {
   const focused = document.activeElement?.id;
+  const units = selectionUnits(s.selected, s.scene.objects, s.scene.groups);
+  const oneGroup = units.groups.length === 1 && !units.objects.length ? s.scene.groups.find((g) => g.id === units.groups[0]) : undefined;
+  const groupName = $<Field>("groupName");
+  groupName.hidden = !oneGroup;
+  groupName.dataset.group = oneGroup?.id ?? "";
+  if (oneGroup && focused !== "groupName") groupName.value = oneGroup.name;
+  field("yaw").setAttribute("label", sel.length > 1 ? "Turn by" : "Heading");
+  field("scale").setAttribute("label", sel.length > 1 ? "Scale by" : "Scale");
+  if (sel.length > 1) {
+    const c = centreOf(sel.map((o) => o.transform));
+    const values: Record<(typeof fields)[number], string> = { px: c[0].toFixed(2), py: c[1].toFixed(2), pz: c[2].toFixed(2), yaw: "0", scale: "1" };
+    for (const f of fields) if (focused !== f) field(f).value = values[f];
+    field("scale").toggleAttribute("disabled", sel.some((o) => o.kind !== "mesh"));
+    const shown = sel.filter((o) => o.entityId).length;
+    $("selected").textContent = `${oneGroup ? `${oneGroup.name}: ` : ""}${sel.length} objects\nmiddle at ${c.map((n) => n.toFixed(2)).join(", ")}${shown < sel.length ? `\n${sel.length - shown} not in the world` : ""}`;
+    return;
+  }
+  const o = sel[0];
   if (o) {
     const values: Record<(typeof fields)[number], string> = {
       px: o.transform.position[0].toFixed(2),
@@ -162,7 +221,7 @@ function renderSelected(o: SceneObject | undefined): void {
     return;
   }
   const [x, y, z] = o.transform.position;
-  $("selected").textContent = `${o.id}\n${o.resource ?? o.kind}\n${o.appearance ? `appearance ${o.appearance}\n` : ""}at ${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}${o.entityId ? `\nentity ${o.entityId}` : "\nnot in the world"}`;
+  $("selected").textContent = `${oneGroup ? `${oneGroup.name}: ` : ""}${o.id}\n${o.resource ?? o.kind}\n${o.appearance ? `appearance ${o.appearance}\n` : ""}at ${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}${o.entityId ? `\nentity ${o.entityId}` : "\nnot in the world"}`;
 }
 
 // ---- wiring -----------------------------------------------------------------------------------
@@ -230,18 +289,83 @@ $("dropClick").addEventListener("click", () => {
   $("message").textContent = `Click where ${shortName(path)} should go; Esc cancels.`;
   $("message").className = "message";
 });
-$("objects").addEventListener("select", (e) => post({ type: "select", id: (e as CustomEvent<{ value: string }>).detail.value }));
-$("delete").addEventListener("click", () => state?.selected && post({ type: "delete", id: state.selected }));
-$("floor").addEventListener("click", () => state?.selected && post({ type: "floor", id: state.selected }));
+// The Scene list: a group's arrow opens or closes it; a group's row selects the group, an object's
+// row that object; Ctrl adds to the selection or takes out.
+let listCtrl = false;
+$("objects").addEventListener(
+  "click",
+  (e) => {
+    listCtrl = e.ctrlKey;
+    const fold = (e.target as HTMLElement).closest?.(".fold") as HTMLElement | null;
+    if (!fold) return;
+    e.stopPropagation();
+    const g = fold.dataset.group!;
+    if (closed.has(g)) closed.delete(g);
+    else closed.add(g);
+    if (state) render(state);
+  },
+  true,
+);
+$("objects").addEventListener("keydown", () => (listCtrl = false), true);
+$("objects").addEventListener("select", (e) => {
+  if (!state) return;
+  const value = (e as CustomEvent<{ value: string }>).detail.value;
+  const { objects, groups } = state.scene;
+  const ids = value.startsWith("g:") ? membersOf(value.slice(2), objects, groups).map((o) => o.id) : [value.slice(2)];
+  const all = ids.every((id) => state!.selected.includes(id));
+  const next = !listCtrl ? ids : all ? state.selected.filter((id) => !ids.includes(id)) : [...state.selected, ...ids];
+  post({ type: "select", ids: next });
+});
+const selection = () => state?.selected ?? [];
+$("delete").addEventListener("click", () => selection().length && post({ type: "delete", ids: selection() }));
+$("floor").addEventListener("click", () => selection().length && post({ type: "floor", ids: selection() }));
+$("undo").addEventListener("click", () => post({ type: "undo" }));
+$("redo").addEventListener("click", () => post({ type: "redo" }));
+$("group").addEventListener("click", () => selection().length && post({ type: "group", ids: selection() }));
+$("ungroup").addEventListener("click", () => selection().length && post({ type: "ungroup", ids: selection() }));
+$("duplicate").addEventListener("click", () => duplicate());
+$("groupName").addEventListener("submit", () => {
+  const g = $<Field>("groupName");
+  if (g.dataset.group) post({ type: "rename", group: g.dataset.group, name: g.value ?? "" });
+});
 
-/** The numbers in the Selected panel as a transform: position, a new heading, a uniform scale for meshes. */
+/**
+ * Copies the selection. With Edit on the copies follow the mouse until a click places them; with
+ * Edit off they go beside the originals, the selection's width to the east.
+ */
+function duplicate(): void {
+  if (!state || !state.selected.length) return;
+  if (viewport.canDrag) {
+    copyAsked = true;
+    post({ type: "duplicate", ids: state.selected });
+  } else {
+    const b = boxOf(state.scene.objects.filter((o) => state!.selected.includes(o.id)));
+    const width = b ? b.max[0] - b.min[0] : 1;
+    post({ type: "duplicate", ids: state.selected, offset: [width + 0.5, 0, 0] });
+  }
+}
+
+/**
+ * The numbers in the Selected panel. One object: position, a new heading, a uniform scale for meshes.
+ * Several: their middle moves to X, Y, Z; Turn by turns them around it; Scale by scales them from it.
+ */
 function applyFields(): void {
-  const o = state?.scene.objects.find((x) => x.id === state?.selected);
-  if (!o) return;
+  const sel = state?.scene.objects.filter((x) => state!.selected.includes(x.id)) ?? [];
+  if (!sel.length) return;
   const num = (f: (typeof fields)[number], fallback: number) => {
     const n = Number(field(f).value);
     return Number.isFinite(n) ? n : fallback;
   };
+  if (sel.length > 1) {
+    const c = centreOf(sel.map((o) => o.transform));
+    const to: V3 = [num("px", c[0]), num("py", c[1]), num("pz", c[2])];
+    const turn = num("yaw", 0);
+    const f = sel.every((o) => o.kind === "mesh") ? num("scale", 1) || 1 : 1;
+    const change = { move: sub(to, c), turn: Math.abs(turn) > 1e-3 ? qAxisAngle(AXES.z, turn) : undefined, scale: f !== 1 ? ([f, f, f] as V3) : undefined };
+    post({ type: "transform", items: sel.map((o) => ({ id: o.id, transform: applyChange(o.transform, change, c) })) });
+    return;
+  }
+  const o = sel[0];
   const t = o.transform;
   const yawNow = qYaw(t.rotation as Q);
   const turn = num("yaw", yawNow) - yawNow;
@@ -251,21 +375,31 @@ function applyFields(): void {
     rotation: Math.abs(turn) > 1e-3 ? qNorm(qMul(qAxisAngle(AXES.z, turn), t.rotation as Q)) : t.rotation,
     scale: o.kind === "mesh" ? [s, s, s] : t.scale,
   };
-  post({ type: "transform", id: o.id, transform: next });
+  post({ type: "transform", items: [{ id: o.id, transform: next }] });
 }
 $("apply").addEventListener("click", applyFields);
 for (const f of fields) field(f).addEventListener("submit", applyFields);
 
 // ---- the viewport ------------------------------------------------------------------------------
 
+const showSceneTab = () => (document.getElementById("mainTabs") as HTMLElement & { select?(i: number): void }).select?.(1);
 const viewport = new Viewport($<HTMLCanvasElement>("view"), {
-  select(id) {
-    post({ type: "select", id });
-    if (id) (document.getElementById("mainTabs") as HTMLElement & { select?(i: number): void }).select?.(1);
+  pick(id, opts) {
+    if (!state) return;
+    const ids = pickSelection(id, state.selected, state.scene.objects, state.scene.groups, opts);
+    post({ type: "select", ids });
+    if (ids.length) showSceneTab();
   },
-  commit: (id, transform) => post({ type: "transform", id, transform }),
-  remove: (id) => post({ type: "delete", id }),
-  floor: (id) => post({ type: "floor", id }),
+  pickBox(found, opts) {
+    if (!state) return;
+    const ids = pickMany(found, state.selected, state.scene.objects, state.scene.groups, opts);
+    post({ type: "select", ids });
+    if (ids.length) showSceneTab();
+  },
+  commit: (items, merge) => post({ type: "transform", items, merge }),
+  remove: (ids) => post({ type: "delete", ids }),
+  floor: (ids) => post({ type: "floor", ids }),
+  undo: () => post({ type: "undo" }),
   log: (text) => post({ type: "log", text }),
   builderStart: (pose) => post({ type: "builder.start", pose }),
   builderStop: () => post({ type: "builder.stop" }),
@@ -273,6 +407,21 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
     $("message").textContent = text;
     $("message").className = "message warn";
   },
+});
+// Undo, redo, copy and group: Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z), Ctrl+D, Ctrl+G, Ctrl+Shift+G. Not while
+// typing in a field (the field undoes its own text), and not in the middle of a drag or a box.
+window.addEventListener("keydown", (e) => {
+  if (!e.ctrlKey || e.altKey || e.metaKey) return;
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "RN-INPUT" || viewport.busy) return;
+  const key = e.key.toLowerCase();
+  const ids = selection();
+  if (key === "z" && !e.shiftKey) post({ type: "undo" });
+  else if (key === "y" || (key === "z" && e.shiftKey)) post({ type: "redo" });
+  else if (key === "d") duplicate();
+  else if (key === "g" && ids.length) post({ type: e.shiftKey ? "ungroup" : "group", ids });
+  else return;
+  e.preventDefault();
 });
 for (const id of ["editorCamera", "hideHud"] as const) {
   $(id).addEventListener("change", (e) => post({ type: "settings", [id]: !!(e as CustomEvent<{ checked: boolean }>).detail.checked }));
