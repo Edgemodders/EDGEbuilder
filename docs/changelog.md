@@ -10,6 +10,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.4.1 (2026-10-30)
+
+Tested on game 2.5 with REDnode 0.48.1 and REDbridge's build with mod reading (https://github.com/Edgemodders/REDbridge/issues/12, released in REDbridge 0.12.0). 0.4.0 was a test build only.
+
 **New**
 
 - Browse lists the meshes and entities of installed mods (`archive\pc\mod` and REDmod's `mods\<name>\archives`), tagged with the mod's name, and of the project open in REDcode (0.10.5 or later). New tabs: Everywhere, Game, Mods, Project. A mod's name in the search box finds its files. A mod file with a game file's path says it changes that file.
