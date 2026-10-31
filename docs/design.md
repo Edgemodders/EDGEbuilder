@@ -260,6 +260,8 @@ Agreed with the owner on 2026-10-18 (B3b and B4b added the same day). Before the
 | The clean-room review | Nothing in the release drifts into World Builder's shapes (see the notes for Claude sessions); done at each phase, confirmed before a release |
 | Docs | A player guide on the docs site, the changelog, and the Nexus description in the repo, as EDGEdeck keeps its own |
 
+**Before the preview, besides the gates** (agreed with the owner on 2026-10-30, after B2c): ultrawide screens (the page is 1920 x 1080 at the top left; planned in B3); solid meshes (a baked `worldMeshNode` has no collision, found by the bake probe; B4 probes which node type gives a mesh its own collision and adds a Solid switch); REDbridge 0.12.0 released (mod and project sizes, [REDbridge #12](https://github.com/Edgemodders/REDbridge/issues/12)); the Nexus page made by the owner and the release workflow's Nexus step copied from REDnode.
+
 ## Not in v1
 
 Baking NPCs (B3c places them in the running game only), communities and AI spots (beyond B4c's quest places), devices and persistent state, splines, areas, variants, imports from other editors, and anything that needs an engine hook rather than the game API.
