@@ -48,7 +48,7 @@ function render(s: Snapshot): void {
   $("count").textContent =
     s.index.status === "ready" || s.results.length
       ? s.query.text || listsAll
-        ? `${s.results.length}${s.results.length >= 120 ? "+" : ""} found${foundIn(s)}`
+        ? foundText(s)
         : `${total.toLocaleString()} assets: type a name to search`
       : "";
   const mods = s.sources.mods;
@@ -122,14 +122,12 @@ function render(s: Snapshot): void {
   }
 }
 
-/** What the results are filtered by, so an empty list says why: `for "crate", entities only, in the project`. */
-function foundIn(s: Snapshot): string {
+/** The count in the kind's own word, so an empty list says why: `0 entities found`, `1 mesh found for "katana"`. The tab says where. */
+function foundText(s: Snapshot): string {
+  const n = s.results.length;
   const q = s.query;
-  return [
-    q.text ? ` for "${q.text}"` : "",
-    q.kind === "mesh" ? ", meshes only" : q.kind === "entity" ? ", entities only" : "",
-    q.from === "game" ? ", in the game" : q.from === "mods" ? ", in mods" : q.from === "project" ? ", in the project" : "",
-  ].join("");
+  const [one, many] = q.kind === "mesh" ? ["mesh", "meshes"] : q.kind === "entity" ? ["entity", "entities"] : ["asset", "assets"];
+  return `${n}${n >= 120 ? "+" : ""} ${n === 1 ? one : many} found${q.text ? ` for "${q.text}"` : ""}`;
 }
 
 /** The tag at a result's end: the mod or project it comes from, and its kind. */

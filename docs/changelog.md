@@ -10,6 +10,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**Changed**
+
+- The found count is shorter and in the kind's own word: `1 mesh found`, `4 entities found`, `0 assets found for "chair"`. The tab already says where.
+
 ## 0.4.1 (2026-10-30)
 
 Tested on game 2.5 with REDnode 0.48.1 and REDbridge's build with mod reading (https://github.com/Edgemodders/REDbridge/issues/12, released in REDbridge 0.12.0). 0.4.0 was a test build only.
