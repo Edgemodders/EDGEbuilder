@@ -3,6 +3,7 @@ import { channel } from "rednode";
 import { applyChange, boxOf, centreOf, membersOf, pickMany, pickSelection, selectionUnits } from "../arrange";
 import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
 import type { AssetEntry, AssetFrom, AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "../protocol";
+import { held } from "./held";
 import { Viewport } from "./viewport";
 
 declare const RednodeUI: { notify(text: string, options?: Record<string, unknown>): void } | undefined;
@@ -295,7 +296,7 @@ let listCtrl = false;
 $("objects").addEventListener(
   "click",
   (e) => {
-    listCtrl = e.ctrlKey;
+    listCtrl = held(e).ctrl;
     const fold = (e.target as HTMLElement).closest?.(".fold") as HTMLElement | null;
     if (!fold) return;
     e.stopPropagation();

@@ -1525,7 +1525,7 @@ async function remove(ids) {
     await removePreview(o);
     scene.remove(o.id);
   }
-  say(objects.length === 1 ? `Removed ${objects[0].id}. Ctrl+Z brings it back.` : `Removed ${objects.length} objects. Ctrl+Z brings them back.`, "ok");
+  say(objects.length === 1 ? `Removed ${objects[0].id}. Undo brings it back.` : `Removed ${objects.length} objects. Undo brings them back.`, "ok");
 }
 function group(ids) {
   const before = scene.state();
@@ -1595,7 +1595,7 @@ async function clear() {
   for (const o of scene.objects) await removePreview(o);
   scene.clear();
   state.selected = [];
-  say("Scene cleared. Ctrl+Z brings it back.", "ok");
+  say("Scene cleared. Undo brings it back.", "ok");
 }
 function saveSettings(next) {
   settings = { ...settings, ...next };
@@ -1750,7 +1750,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.5.0"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+console.log(`EDGEbuilder ${"0.5.1"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
 if (scene.loadError) {
   state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path5.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);

@@ -965,7 +965,7 @@ async function remove(ids: string[]): Promise<void> {
     await removePreview(o);
     scene.remove(o.id);
   }
-  say(objects.length === 1 ? `Removed ${objects[0].id}. Ctrl+Z brings it back.` : `Removed ${objects.length} objects. Ctrl+Z brings them back.`, "ok");
+  say(objects.length === 1 ? `Removed ${objects[0].id}. Undo brings it back.` : `Removed ${objects.length} objects. Undo brings them back.`, "ok");
 }
 
 /** Groups the selection (Ctrl+G). */
@@ -1044,7 +1044,7 @@ async function clear(): Promise<void> {
   for (const o of scene.objects) await removePreview(o);
   scene.clear();
   state.selected = [];
-  say("Scene cleared. Ctrl+Z brings it back.", "ok");
+  say("Scene cleared. Undo brings it back.", "ok");
 }
 
 function saveSettings(next: Settings): void {

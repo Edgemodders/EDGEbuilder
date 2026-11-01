@@ -1,7 +1,7 @@
 {
   "id": "edgebuilder",
   "name": "EDGEbuilder",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "author": "Edgemodders",
   "description": "A world builder: browse the game's assets, drop them into the live world, move, turn and scale them with a gizmo from a camera of its own, bake them into the world. Also the assets of installed mods and the open REDcode project; B3: several objects at once, groups, copies, undo.",
   "entry": "index.html",

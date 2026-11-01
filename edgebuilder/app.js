@@ -219,6 +219,19 @@ function boxOf(objects) {
   return min && max ? { min, max } : void 0;
 }
 
+// src/app/held.ts
+var down = /* @__PURE__ */ new Set();
+window.addEventListener("keydown", (e) => down.add(e.key), true);
+window.addEventListener("keyup", (e) => down.delete(e.key), true);
+window.addEventListener("blur", () => down.clear());
+function held(e) {
+  return {
+    ctrl: e.ctrlKey || down.has("Control"),
+    shift: e.shiftKey || down.has("Shift"),
+    alt: e.altKey || down.has("Alt")
+  };
+}
+
 // src/app/viewport.ts
 import { api, game, world } from "rednode";
 var COLORS = { x: "#ff4d5e", y: "#5dffa1", z: "#4d9dff", ring: "#fcee0a" };
@@ -660,7 +673,7 @@ var Viewport = class {
     if ((this.rmb || this.mmb) && this.camPos && this.look) {
       if (this.rmb) {
         this.look = { yaw: this.look.yaw - dx * 0.15, pitch: Math.max(-89, Math.min(89, this.look.pitch - dy * 0.15)) };
-      } else if (e.shiftKey) {
+      } else if (held(e).shift) {
         const a = lookAxes(this.look);
         const k = this.pivotDistance() * 15e-4;
         this.camPos = add(this.camPos, add(mul(a.right, -dx * k), mul(a.up, dy * k)));
@@ -676,7 +689,7 @@ var Viewport = class {
     if (this.box) {
       this.box.x1 = this.mouse[0];
       this.box.y1 = this.mouse[1];
-    } else if (this.drag) this.dragTo(this.mouse, e.ctrlKey);
+    } else if (this.drag) this.dragTo(this.mouse, held(e).ctrl);
     else this.hover = this.handleAt(this.mouse);
   }
   /** What the camera orbits and dollies towards: the middle of the selection, else a point 10 m ahead. */
@@ -766,14 +779,15 @@ var Viewport = class {
       return then(rayFrom(this.cam, this.mouse[0], this.mouse[1]));
     }
     if (this.drag?.modal) return this.confirm();
-    const h = e.shiftKey ? void 0 : this.handleAt(this.mouse);
+    const shift = held(e).shift;
+    const h = shift ? void 0 : this.handleAt(this.mouse);
     if (h) {
       this.canvas.setPointerCapture(e.pointerId);
       if (h === "ring") this.begin("rotate", false, void 0, true);
       else this.begin("move", false, h);
       return;
     }
-    if (e.shiftKey) {
+    if (shift) {
       this.canvas.setPointerCapture(e.pointerId);
       this.box = { x0: this.mouse[0], y0: this.mouse[1], x1: this.mouse[0], y1: this.mouse[1] };
       return;
@@ -819,7 +833,7 @@ var Viewport = class {
     });
     this.hooks.pickBox(
       inside.map((o) => o.id),
-      { add: e.ctrlKey, single: e.altKey }
+      { add: held(e).ctrl, single: held(e).alt }
     );
   }
   /** Selects the nearest object under the cursor, or nothing. */
@@ -837,7 +851,8 @@ var Viewport = class {
         best = o;
       }
     }
-    this.hooks.pick(best?.id, { toggle: e.ctrlKey, single: e.altKey });
+    const mods = held(e);
+    this.hooks.pick(best?.id, { toggle: mods.ctrl, single: mods.alt });
   }
   // ---- drags and keys ------------------------------------------------------------------------------
   /**
@@ -1279,7 +1294,7 @@ var listCtrl = false;
 $("objects").addEventListener(
   "click",
   (e) => {
-    listCtrl = e.ctrlKey;
+    listCtrl = held(e).ctrl;
     const fold = e.target.closest?.(".fold");
     if (!fold) return;
     e.stopPropagation();

@@ -5,6 +5,7 @@
 
 import { api, game, world, type GameRef } from "rednode";
 import { applyChange, boxOf, centreOf, type Change } from "../arrange";
+import { held } from "./held";
 import {
   AXES,
   add,
@@ -580,7 +581,7 @@ export class Viewport {
     if ((this.rmb || this.mmb) && this.camPos && this.look) {
       if (this.rmb) {
         this.look = { yaw: this.look.yaw - dx * 0.15, pitch: Math.max(-89, Math.min(89, this.look.pitch - dy * 0.15)) };
-      } else if (e.shiftKey) {
+      } else if (held(e).shift) {
         const a = lookAxes(this.look);
         const k = this.pivotDistance() * 0.0015;
         this.camPos = add(this.camPos, add(mul(a.right, -dx * k), mul(a.up, dy * k)));
@@ -596,7 +597,7 @@ export class Viewport {
     if (this.box) {
       this.box.x1 = this.mouse[0];
       this.box.y1 = this.mouse[1];
-    } else if (this.drag) this.dragTo(this.mouse, e.ctrlKey);
+    } else if (this.drag) this.dragTo(this.mouse, held(e).ctrl);
     else this.hover = this.handleAt(this.mouse);
   }
 
@@ -692,14 +693,15 @@ export class Viewport {
       return then(rayFrom(this.cam, this.mouse[0], this.mouse[1]));
     }
     if (this.drag?.modal) return this.confirm();
-    const h = e.shiftKey ? undefined : this.handleAt(this.mouse);
+    const shift = held(e).shift;
+    const h = shift ? undefined : this.handleAt(this.mouse);
     if (h) {
       this.canvas.setPointerCapture(e.pointerId);
       if (h === "ring") this.begin("rotate", false, undefined, true);
       else this.begin("move", false, h);
       return;
     }
-    if (e.shiftKey) {
+    if (shift) {
       // Shift+drag: a box; what is inside is selected on release.
       this.canvas.setPointerCapture(e.pointerId);
       this.box = { x0: this.mouse[0], y0: this.mouse[1], x1: this.mouse[0], y1: this.mouse[1] };
@@ -749,12 +751,12 @@ export class Viewport {
     });
     this.hooks.pickBox(
       inside.map((o) => o.id),
-      { add: e.ctrlKey, single: e.altKey },
+      { add: held(e).ctrl, single: held(e).alt },
     );
   }
 
   /** Selects the nearest object under the cursor, or nothing. */
-  private pick(p: [number, number], e: { ctrlKey: boolean; altKey: boolean }): void {
+  private pick(p: [number, number], e: { ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): void {
     const cam = this.cam!;
     const ray = rayFrom(cam, p[0], p[1]);
     let best: SceneObject | undefined;
@@ -768,7 +770,8 @@ export class Viewport {
         best = o;
       }
     }
-    this.hooks.pick(best?.id, { toggle: e.ctrlKey, single: e.altKey });
+    const mods = held(e);
+    this.hooks.pick(best?.id, { toggle: mods.ctrl, single: mods.alt });
   }
 
   // ---- drags and keys ------------------------------------------------------------------------------
