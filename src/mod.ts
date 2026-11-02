@@ -487,14 +487,64 @@ async function respawn(o: SceneObject): Promise<void> {
   if (state.selected.includes(o.id)) await highlight(o, true);
 }
 
+/**
+ * How far from V or the editor camera a preview is put in the world. Farther, the game does not stream
+ * the entity in and each spawn waits 10 s for nothing (B3-1 test: 9 objects 4 km away held an Undo and
+ * a Rebuild for 90 s each, and every drop behind them). Those wait for a Rebuild near them.
+ */
+const PreviewRange = 300;
+
+/** Where previews can show: V and, in Edit, the editor camera. */
+async function viewPoints(): Promise<V3[]> {
+  const out: V3[] = [];
+  try {
+    const player = await api.GetPlayer(game.instance);
+    const p = player ? ((await player.GetWorldPosition()) as { X: number; Y: number; Z: number }) : undefined;
+    if (p) out.push([p.X, p.Y, p.Z]);
+  } catch {
+    // No player: no limit from V.
+  }
+  if (editorCam) {
+    try {
+      out.push(basisFromMatrix((await editorCam.component.GetLocalToWorld()) as GameMatrix).pos);
+    } catch {
+      // The camera is going: V alone.
+    }
+  }
+  return out;
+}
+
+/** Spawns the previews of the objects near enough to show; says how many showed and how many are far. */
+async function spawnNear(objects: SceneObject[], logWord = "Preview of"): Promise<{ shown: number; far: number; failed: number }> {
+  const points = await viewPoints();
+  const near = (o: SceneObject) => !points.length || points.some((p) => Math.hypot(...sub(o.transform.position as V3, p)) <= PreviewRange);
+  const out = { shown: 0, far: 0, failed: 0 };
+  for (const o of objects) {
+    if (o.kind === "light") continue;
+    if (!near(o)) {
+      out.far++;
+      continue;
+    }
+    if (await trySpawn(o, logWord)) out.shown++;
+    else out.failed++;
+  }
+  if (out.far) console.log(`${out.far} object${out.far === 1 ? " is" : "s are"} more than ${PreviewRange} m from V and the camera: no preview until a Rebuild near ${out.far === 1 ? "it" : "them"}`);
+  return out;
+}
+
+/** What `spawnNear` left out, for a message. */
+function farNote(far: number): string {
+  return far ? `${far} far away (over ${PreviewRange} m): Rebuild previews near ${far === 1 ? "it" : "them"}` : "";
+}
+
 /** Spawns a preview; the log says why when the game will not. */
-async function trySpawn(o: SceneObject): Promise<boolean> {
+async function trySpawn(o: SceneObject, logWord = "Preview of"): Promise<boolean> {
   if (o.kind === "light" || state.world !== "ready") return false;
   try {
     await spawnPreview(o);
     return true;
   } catch (err) {
-    console.log(`Preview of ${o.id}: ${(err as Error).message}`);
+    console.log(`${logWord} ${o.id}: ${(err as Error).message}`);
     return false;
   }
 }
@@ -529,16 +579,17 @@ async function travel(from: SceneState[], to: SceneState[], word: "Undo" | "Redo
   for (const o of ch.gone) await removePreview(o);
   for (const o of ch.respawn) await respawn(o);
   for (const o of ch.move) await world.move(o.entityId!, toPoint(o.transform.position), toQuat(o.transform.rotation)).catch(() => undefined);
-  let back = 0;
-  for (const o of ch.spawn) if (await trySpawn(o)) back++;
+  const spawned = await spawnNear(ch.spawn);
   scene.save();
   const moved = ch.move.length + ch.respawn.length;
+  const missing = [farNote(spawned.far), spawned.failed ? `${spawned.failed} not in the world: Rebuild previews` : ""].filter(Boolean);
   const what = [
     moved ? `${moved} moved back` : "",
-    ch.spawn.length ? `${ch.spawn.length} back${back < ch.spawn.length ? ` (${ch.spawn.length - back} not in the world: Rebuild previews)` : ""}` : "",
+    ch.spawn.length ? `${ch.spawn.length} back${missing.length ? ` (${missing.join("; ")})` : ""}` : "",
     ch.gone.length ? `${ch.gone.length} taken out` : "",
   ].filter(Boolean);
   state.message = { text: `${word}${what.length ? `: ${what.join(", ")}` : ""}.`, tone: "ok" };
+  console.log(state.message.text);
   const changed = [...ch.spawn, ...ch.respawn, ...ch.move].map((o) => o.id);
   // What changed, to see it; else what was selected then (Esc on a copy: the originals again).
   await select(changed.length ? changed : (s.selected ?? state.selected));
@@ -1024,18 +1075,14 @@ async function duplicate(ids: string[], offset?: V3): Promise<void> {
 async function rebuild(): Promise<void> {
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
-  let n = 0;
-  for (const o of scene.objects) {
-    if (o.entityId || o.kind === "light") continue;
-    try {
-      await spawnPreview(o);
-      n++;
-    } catch (err) {
-      console.log(`Rebuild ${o.id}: ${(err as Error).message}`);
-    }
-  }
+  const r = await spawnNear(
+    scene.objects.filter((o) => !o.entityId),
+    "Rebuild",
+  );
   scene.save();
-  say(`${n} preview${n === 1 ? "" : "s"} back in the world.`, "ok");
+  const n = r.shown;
+  const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place (the log says why)` : ""].filter(Boolean);
+  say(`${n} preview${n === 1 ? "" : "s"} back in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
 }
 
 async function clear(): Promise<void> {

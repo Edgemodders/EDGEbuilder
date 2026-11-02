@@ -22,6 +22,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 **Changed**
 
+- Undo, Redo and Rebuild previews place previews only for objects within 300 m of V or the editor camera. Farther objects stay in the scene, and the message says how many; Rebuild previews near them places them. Before, each one far away held everything else up for 10 seconds, drops included.
 - The found count is shorter and in the kind's own word: `1 mesh found`, `4 entities found`, `0 assets found for "chair"`. The tab already says where.
 
 ## 0.4.1 (2026-10-30)
