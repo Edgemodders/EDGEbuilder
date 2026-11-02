@@ -1129,6 +1129,8 @@ var lastMessage = "";
 var closed = /* @__PURE__ */ new Set();
 var copyAsked = false;
 var lastCopy;
+var dropAsked = false;
+var knownIds = /* @__PURE__ */ new Set();
 var busyNow;
 var busyTick;
 function renderBusy(b) {
@@ -1208,6 +1210,11 @@ function render(s) {
   $("sceneCount").textContent = `${s.scene.objects.length} object${s.scene.objects.length === 1 ? "" : "s"}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
   $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
   const sel = s.scene.objects.filter((o) => s.selected.includes(o.id));
+  if (dropAsked && sel.length === 1 && !knownIds.has(sel[0].id)) {
+    dropAsked = false;
+    showSceneTab();
+  }
+  knownIds = new Set(s.scene.objects.map((o) => o.id));
   renderSelected(sel, s);
   $("delete").toggleAttribute("disabled", !sel.length);
   $("floor").toggleAttribute("disabled", !sel.some((o) => o.entityId));
@@ -1369,7 +1376,10 @@ $("appearances").addEventListener("select", (e) => {
   appearance = e.detail.value;
 });
 $("drop").addEventListener("click", () => {
-  if (lookedAt) post({ type: "drop", path: lookedAt, appearance });
+  if (lookedAt) {
+    dropAsked = true;
+    post({ type: "drop", path: lookedAt, appearance });
+  }
 });
 $("dropClick").addEventListener("click", () => {
   const path = lookedAt;
@@ -1380,7 +1390,10 @@ $("dropClick").addEventListener("click", () => {
     edit.checked = true;
     viewport.setEdit(true);
   }
-  viewport.armDrop((ray) => post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } }));
+  viewport.armDrop((ray) => {
+    dropAsked = true;
+    post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } });
+  });
   $("message").textContent = `Click where ${shortName(path)} should go; Esc or right-click cancels.`;
   $("message").className = "message";
 });
