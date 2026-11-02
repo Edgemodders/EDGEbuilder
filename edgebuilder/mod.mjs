@@ -524,6 +524,7 @@ import * as path4 from "node:path";
 var add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 var sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 var mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+var cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 var len = (a) => Math.hypot(a[0], a[1], a[2]);
 var norm = (a) => {
   const l = len(a);
@@ -543,6 +544,11 @@ function qAxisAngle(axis, degrees) {
   const h = degrees * Math.PI / 360;
   const s = Math.sin(h);
   return [n[0] * s, n[1] * s, n[2] * s, Math.cos(h)];
+}
+function qRotate(q, v2) {
+  const u = [q[0], q[1], q[2]];
+  const t = mul(cross(u, v2), 2);
+  return add(add(v2, mul(t, q[3])), cross(u, t));
 }
 var v = (r) => [r.X, r.Y, r.Z];
 function basisFromMatrix(m) {
@@ -658,14 +664,71 @@ function duplicate(selected, objects, groups, offset = [0, 0, 0]) {
     const id = freshId(o.id, takenObjects);
     takenObjects.add(id);
     const { entityId: _live, ...rest } = o;
-    const copy = JSON.parse(JSON.stringify(rest));
-    copy.id = id;
-    copy.transform.position = add(o.transform.position, offset);
+    const copy2 = JSON.parse(JSON.stringify(rest));
+    copy2.id = id;
+    copy2.transform.position = add(o.transform.position, offset);
     const group2 = o.group && groupMap.get(o.group);
-    if (group2) copy.group = group2;
-    copies.push(copy);
+    if (group2) copy2.group = group2;
+    copies.push(copy2);
   }
   return { objects: copies, groups: newGroups };
+}
+function copyOf(selected, objects, groups) {
+  const c = duplicate(selected, objects, groups);
+  const copied = new Set(c.groups.map((g) => g.id));
+  for (const g of c.groups) if (g.parent && !copied.has(g.parent)) g.parent = null;
+  for (const o of c.objects) if (o.group && !copied.has(o.group)) delete o.group;
+  return c;
+}
+function pasteOf(clip, objects, groups, offset) {
+  const takenObjects = new Set(objects.map((o) => o.id));
+  const takenGroups = new Set(groups.map((g) => g.id));
+  const groupMap = /* @__PURE__ */ new Map();
+  const newGroups = clip.groups.map((g) => {
+    const id = freshId(g.id, takenGroups);
+    takenGroups.add(id);
+    groupMap.set(g.id, id);
+    return { ...g, id };
+  });
+  for (const g of newGroups) g.parent = g.parent ? groupMap.get(g.parent) ?? null : null;
+  const newObjects = clip.objects.map((o) => {
+    const id = freshId(o.id, takenObjects);
+    takenObjects.add(id);
+    const copy2 = JSON.parse(JSON.stringify(o));
+    copy2.id = id;
+    copy2.transform.position = add(o.transform.position, offset);
+    const group2 = o.group && groupMap.get(o.group);
+    if (group2) copy2.group = group2;
+    else delete copy2.group;
+    return copy2;
+  });
+  return { objects: newObjects, groups: newGroups };
+}
+function standPoint(objects) {
+  const b = boxOf(objects);
+  if (!b) return centreOf(objects.map((o) => o.transform));
+  return [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, b.min[2]];
+}
+function centreOf(ts) {
+  if (!ts.length) return [0, 0, 0];
+  let c = [0, 0, 0];
+  for (const t of ts) c = add(c, t.position);
+  return mul(c, 1 / ts.length);
+}
+function boxOf(objects) {
+  let min;
+  let max;
+  for (const o of objects) {
+    const b = o.bounds ?? { min: [-0.5, -0.5, 0], max: [0.5, 0.5, 1] };
+    const t = o.transform;
+    for (let i = 0; i < 8; i++) {
+      const local = [(i & 1 ? b.max[0] : b.min[0]) * t.scale[0], (i & 2 ? b.max[1] : b.min[1]) * t.scale[1], (i & 4 ? b.max[2] : b.min[2]) * t.scale[2]];
+      const p = add(t.position, qRotate(t.rotation, local));
+      min = min ? [Math.min(min[0], p[0]), Math.min(min[1], p[1]), Math.min(min[2], p[2])] : p;
+      max = max ? [Math.max(max[0], p[0]), Math.max(max[1], p[1]), Math.max(max[2], p[2])] : p;
+    }
+  }
+  return min && max ? { min, max } : void 0;
 }
 
 // src/scene.ts
@@ -1626,6 +1689,31 @@ function rename(groupId, name) {
   scene.save();
   say(`Renamed the group ${name}.`, "ok");
 }
+var clipboard;
+function copy(ids) {
+  ids = ids.filter((x) => scene.get(x));
+  if (!ids.length) return say("Select something to copy first.", "warn");
+  clipboard = copyOf(ids, scene.objects, scene.groups);
+  const n = clipboard.objects.length;
+  say(`Copied ${n} object${n === 1 ? "" : "s"}. Ctrl+V pastes ${n === 1 ? "it" : "them"} where the cursor points.`, "ok");
+}
+async function paste(at) {
+  if (!clipboard) return say("Nothing copied yet: select something and press Ctrl+C.", "warn");
+  if (state.world !== "ready") await checkWorld();
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const spot = await dropPlace(at);
+  step();
+  const p = pasteOf(clipboard, scene.objects, scene.groups, sub(spot.position, standPoint(clipboard.objects)));
+  scene.groups.push(...p.groups);
+  scene.objects.push(...p.objects);
+  const r = await spawnNear(p.objects);
+  scene.save();
+  const n = p.objects.length;
+  const missing = n - r.shown;
+  state.message = { text: `Pasted ${n} object${n === 1 ? "" : "s"}${missing ? ` (${missing} not in the world)` : ""}.`, tone: missing ? "warn" : "ok" };
+  console.log(state.message.text);
+  await select(p.objects.map((o) => o.id));
+}
 async function duplicate2(ids, offset) {
   ids = ids.filter((x) => scene.get(x));
   if (!ids.length) return say("Select something to copy first.", "warn");
@@ -1715,6 +1803,12 @@ channel.on((m) => {
         break;
       case "duplicate":
         await inTurn("Copy", () => duplicate2(m.ids, m.offset));
+        break;
+      case "copy":
+        await inTurn("Copy", () => copy(m.ids));
+        break;
+      case "paste":
+        await inTurn("Paste", () => paste(m.at));
         break;
       case "stop":
         if (running) stopAsked = true;
@@ -1822,7 +1916,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.5.6"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+console.log(`EDGEbuilder ${"0.5.7"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
 if (scene.loadError) {
   state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path5.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);

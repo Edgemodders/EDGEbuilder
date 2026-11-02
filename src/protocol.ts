@@ -135,6 +135,10 @@ export type PageMessage =
   | { type: "rename"; group: string; name: string }
   /** Copy the objects, their groups with them; `offset` moves the copies (none: the page moves them next). */
   | { type: "duplicate"; ids: string[]; offset?: [number, number, number] }
+  /** Ctrl+C: keep copies of these for a paste. */
+  | { type: "copy"; ids: string[] }
+  /** Ctrl+V: the copies, standing where the line through the cursor meets a surface (`at`), else where Drop puts things. */
+  | { type: "paste"; at?: { origin: [number, number, number]; dir: [number, number, number] } }
   | { type: "undo" }
   /** Stop placing the running change's previews; changes waiting still run. */
   | { type: "stop" }

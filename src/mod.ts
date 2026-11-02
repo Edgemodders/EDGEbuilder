@@ -11,7 +11,7 @@ import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge } fro
 import { AssetIndex, kindOf } from "./index";
 import { ModSources, modArchives, modFolders, sceneNeeds } from "./sources";
 import { Scene, yawToQuaternion, type SceneState } from "./scene";
-import { duplicate as copySelection, makeGroup, ungroup as openGroups } from "./arrange";
+import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
 import type { AssetEntry, AssetFrom, AssetInfo, AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "./protocol";
 
@@ -1095,6 +1095,36 @@ function rename(groupId: string, name: string): void {
 }
 
 /** Copies the selection (Ctrl+D) and selects the copies; without `offset` the page moves them next. */
+/** What Ctrl+C kept, for Ctrl+V. For the session; a paste can come after the originals are gone. */
+let clipboard: Clip | undefined;
+
+function copy(ids: string[]): void {
+  ids = ids.filter((x) => scene.get(x));
+  if (!ids.length) return say("Select something to copy first.", "warn");
+  clipboard = copyOf(ids, scene.objects, scene.groups);
+  const n = clipboard.objects.length;
+  say(`Copied ${n} object${n === 1 ? "" : "s"}. Ctrl+V pastes ${n === 1 ? "it" : "them"} where the cursor points.`, "ok");
+}
+
+/** Ctrl+V: the copies, their box's bottom middle where the line through the cursor meets a surface. */
+async function paste(at?: { origin: V3; dir: V3 }): Promise<void> {
+  if (!clipboard) return say("Nothing copied yet: select something and press Ctrl+C.", "warn");
+  if (state.world !== "ready") await checkWorld();
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const spot = await dropPlace(at);
+  step();
+  const p = pasteOf(clipboard, scene.objects, scene.groups, sub(spot.position, standPoint(clipboard.objects)));
+  scene.groups.push(...p.groups);
+  scene.objects.push(...p.objects);
+  const r = await spawnNear(p.objects);
+  scene.save();
+  const n = p.objects.length;
+  const missing = n - r.shown;
+  state.message = { text: `Pasted ${n} object${n === 1 ? "" : "s"}${missing ? ` (${missing} not in the world)` : ""}.`, tone: missing ? "warn" : "ok" };
+  console.log(state.message.text);
+  await select(p.objects.map((o) => o.id));
+}
+
 async function duplicate(ids: string[], offset?: V3): Promise<void> {
   ids = ids.filter((x) => scene.get(x));
   if (!ids.length) return say("Select something to copy first.", "warn");
@@ -1188,6 +1218,12 @@ channel.on<PageMessage>((m) => {
         break;
       case "duplicate":
         await inTurn("Copy", () => duplicate(m.ids, m.offset));
+        break;
+      case "copy":
+        await inTurn("Copy", () => copy(m.ids));
+        break;
+      case "paste":
+        await inTurn("Paste", () => paste(m.at));
         break;
       case "stop":
         // Not in turn: it is for the change that is running.

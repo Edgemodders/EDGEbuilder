@@ -27,8 +27,8 @@ let lastCopy: number | undefined;
 
 // ---- rendering --------------------------------------------------------------------------------
 
-// A drop selects what it placed; the page then shows the Scene tab, where the Selected panel is, as a
-// click in the world does (B3-1 test: after Drop at click the panel stayed out of sight).
+// A drop or a paste selects what it placed; the page then shows the Scene tab, where the Selected panel
+// is, as a click in the world does (B3-1 test: after Drop at click the panel stayed out of sight).
 let dropAsked = false;
 let knownIds = new Set<string>();
 
@@ -124,7 +124,7 @@ function render(s: Snapshot): void {
   $("sceneCount").textContent = `${s.scene.objects.length} object${s.scene.objects.length === 1 ? "" : "s"}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
   $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
   const sel = s.scene.objects.filter((o) => s.selected.includes(o.id));
-  if (dropAsked && sel.length === 1 && !knownIds.has(sel[0].id)) {
+  if (dropAsked && sel.length && sel.every((o) => !knownIds.has(o.id))) {
     dropAsked = false;
     showSceneTab();
   }
@@ -456,7 +456,8 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
     $("message").className = "message warn";
   },
 });
-// Undo, redo, copy and group: Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z), Ctrl+D, Ctrl+G, Ctrl+Shift+G. Not while
+// Undo, redo, duplicate, copy, paste and group: Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z), Ctrl+D, Ctrl+C, Ctrl+V,
+// Ctrl+G, Ctrl+Shift+G. Not while
 // typing in a field (the field undoes its own text), and not in the middle of a drag or a box.
 window.addEventListener("keydown", (e) => {
   if (!e.ctrlKey || e.altKey || e.metaKey) return;
@@ -467,6 +468,12 @@ window.addEventListener("keydown", (e) => {
   if (key === "z" && !e.shiftKey) post({ type: "undo" });
   else if (key === "y" || (key === "z" && e.shiftKey)) post({ type: "redo" });
   else if (key === "d") duplicate();
+  else if (key === "c" && ids.length) post({ type: "copy", ids });
+  else if (key === "v") {
+    const ray = viewport.cursorRay();
+    dropAsked = true;
+    post({ type: "paste", at: ray ? { origin: ray.o, dir: ray.d } : undefined });
+  }
   else if (key === "g" && ids.length) post({ type: e.shiftKey ? "ungroup" : "group", ids });
   else return;
   e.preventDefault();

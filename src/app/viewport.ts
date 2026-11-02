@@ -120,6 +120,8 @@ export class Viewport {
   private hover: Handle | undefined;
   /** The mod is busy with a change: shown at the top of the view, so clicks that wait are not a surprise. */
   private busyWith: Busy | undefined;
+  /** The cursor was last over the view, not over a window. */
+  private overView = false;
   private drag: Drag | undefined;
   private mouse: [number, number] = [0, 0];
   /** The drag changed since the last frame: send the previews' new places. */
@@ -149,6 +151,7 @@ export class Viewport {
     // Moves and releases are heard on the whole page: while looking, orbiting or dragging, the
     // cursor may cross the EDGEbuilder window, and the camera should keep following it (B2b test).
     window.addEventListener("pointermove", (e) => {
+      this.overView = e.target === canvas;
       if (e.target === canvas || this.rmb || this.mmb || this.drag || this.box) this.onMove(e);
     });
     canvas.addEventListener("pointerdown", (e) => this.onDown(e));
@@ -169,6 +172,11 @@ export class Viewport {
       if (this.builderAsked) this.hooks.builderStop();
     });
     game.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
+  }
+
+  /** The line through the cursor, for a paste, when the cursor is over the world in Edit. */
+  cursorRay(): Ray | undefined {
+    return this.edit && this.cam && this.overView ? rayFrom(this.cam, this.mouse[0], this.mouse[1]) : undefined;
   }
 
   setBusy(b: Busy | undefined): void {
@@ -465,7 +473,7 @@ export class Viewport {
         : this.box
           ? "Release to select what is inside.  Ctrl: add to the selection."
           : n
-            ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D copy, Ctrl+G group, Ctrl+Z undo.`
+            ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D duplicate, Ctrl+C copy, Ctrl+V paste at the cursor, Ctrl+G group, Ctrl+Z undo.`
             : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
       this.label(help, camHelp);
     }

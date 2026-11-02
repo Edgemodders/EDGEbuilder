@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as core from "../dist/core.mjs";
-import { AssetIndex, BridgeClient, applyChange, centreOf, duplicate, makeGroup, pickMany, pickSelection, pruneGroups, selectionUnits, ungroup, ModSources, NeedsNewerBridge, Scene, findBridge, isGameFolder, kindOf, modArchives, quaternionToYaw, sceneNeeds, yawToQuaternion } from "../dist/core.mjs";
+import { AssetIndex, BridgeClient, applyChange, centreOf, copyOf, duplicate, makeGroup, pasteOf, standPoint, pickMany, pickSelection, pruneGroups, selectionUnits, ungroup, ModSources, NeedsNewerBridge, Scene, findBridge, isGameFolder, kindOf, modArchives, quaternionToYaw, sceneNeeds, yawToQuaternion } from "../dist/core.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
@@ -80,6 +80,24 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   const outerCopy = copy.groups.find((g) => g.parent === null);
   assert.equal(copy.objects[2].group, outerCopy.id);
   assert.equal(copy.groups.find((g) => g.parent === outerCopy.id).name, "Group 1");
+  // Ctrl+C of the inner group and a loose d: the copy keeps the group, d stands alone. Pasting twice gives
+  // new ids each time, moved so the box's bottom middle is at the spot.
+  const clip = copyOf(["a", "b", "d"], objects, groups);
+  assert.equal(clip.groups.length, 1);
+  assert.equal(clip.groups[0].parent, null, "a copied group whose parent was not copied stands at the top");
+  assert.equal(clip.objects.find((o) => o.resource && o.id.startsWith("d")).group, undefined);
+  const at = standPoint(clip.objects);
+  assert.equal(at[2], 0);
+  const p1 = pasteOf(clip, objects, groups, [100, 0, 5]);
+  objects.push(...p1.objects);
+  groups.push(...p1.groups);
+  const p2 = pasteOf(clip, objects, groups, [200, 0, 5]);
+  assert.equal(new Set([...ids(p1.objects), ...ids(p2.objects), ...ids(objects)]).size, ids(objects).length + 3, "each paste has new ids");
+  assert.notEqual(p1.groups[0].id, p2.groups[0].id);
+  assert.equal(p2.objects[0].group, p2.groups[0].id);
+  assert.deepEqual(p2.objects[0].transform.position, [200, 0, 5]);
+  for (const o of p1.objects) objects.splice(objects.indexOf(o), 1);
+  groups.splice(groups.indexOf(p1.groups[0]), 1);
   // Ungrouping the outer group: the inner group and c step up to the top.
   assert.equal(ungroup(["a", "b", "c"], objects, groups), 1);
   assert.equal(groups.length, 1);

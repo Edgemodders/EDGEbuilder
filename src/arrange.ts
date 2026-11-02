@@ -179,6 +179,57 @@ export function duplicate(selected: string[], objects: SceneObject[], groups: Sc
   return { objects: copies, groups: newGroups };
 }
 
+/** What Ctrl+C keeps: copies of the selected objects and of the groups whole in it, without previews. */
+export interface Clip {
+  objects: SceneObject[];
+  groups: SceneGroup[];
+}
+
+/**
+ * A clipboard copy of the selection, as `duplicate` copies it, standing on its own: groups and objects
+ * whose group was not copied go to the top, since a paste can come after that group is gone.
+ */
+export function copyOf(selected: string[], objects: SceneObject[], groups: SceneGroup[]): Clip {
+  const c = duplicate(selected, objects, groups);
+  const copied = new Set(c.groups.map((g) => g.id));
+  for (const g of c.groups) if (g.parent && !copied.has(g.parent)) g.parent = null;
+  for (const o of c.objects) if (o.group && !copied.has(o.group)) delete o.group;
+  return c;
+}
+
+/** A paste of `clip` into the scene: new ids for the objects and groups, moved by `offset`. The caller adds them. */
+export function pasteOf(clip: Clip, objects: SceneObject[], groups: SceneGroup[], offset: V3): Clip {
+  const takenObjects = new Set(objects.map((o) => o.id));
+  const takenGroups = new Set(groups.map((g) => g.id));
+  const groupMap = new Map<string, string>();
+  const newGroups = clip.groups.map((g) => {
+    const id = freshId(g.id, takenGroups);
+    takenGroups.add(id);
+    groupMap.set(g.id, id);
+    return { ...g, id };
+  });
+  for (const g of newGroups) g.parent = g.parent ? (groupMap.get(g.parent) ?? null) : null;
+  const newObjects = clip.objects.map((o) => {
+    const id = freshId(o.id, takenObjects);
+    takenObjects.add(id);
+    const copy: SceneObject = JSON.parse(JSON.stringify(o));
+    copy.id = id;
+    copy.transform.position = add(o.transform.position as V3, offset);
+    const group = o.group && groupMap.get(o.group);
+    if (group) copy.group = group;
+    else delete copy.group;
+    return copy;
+  });
+  return { objects: newObjects, groups: newGroups };
+}
+
+/** The point a paste puts at the cursor: the middle of the copies' box, at its bottom, so they stand on the surface. */
+export function standPoint(objects: SceneObject[]): V3 {
+  const b = boxOf(objects);
+  if (!b) return centreOf(objects.map((o) => o.transform));
+  return [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, b.min[2]];
+}
+
 // ---- several objects at once ----------------------------------------------------------------------
 
 /** The middle of the objects' positions: the gizmo's place and what they turn and scale around. */
