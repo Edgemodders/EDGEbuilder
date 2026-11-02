@@ -1697,6 +1697,14 @@ function copy(ids) {
   const n = clipboard.objects.length;
   say(`Copied ${n} object${n === 1 ? "" : "s"}. Ctrl+V pastes ${n === 1 ? "it" : "them"} where the cursor points.`, "ok");
 }
+async function cut(ids) {
+  ids = ids.filter((x) => scene.get(x));
+  if (!ids.length) return say("Select something to cut first.", "warn");
+  clipboard = copyOf(ids, scene.objects, scene.groups);
+  await remove(ids);
+  const n = clipboard.objects.length;
+  say(`Cut ${n} object${n === 1 ? "" : "s"}. Ctrl+V pastes ${n === 1 ? "it" : "them"} where the cursor points; Ctrl+Z puts ${n === 1 ? "it" : "them"} back.`, "ok");
+}
 async function paste(at) {
   if (!clipboard) return say("Nothing copied yet: select something and press Ctrl+C.", "warn");
   if (state.world !== "ready") await checkWorld();
@@ -1807,6 +1815,9 @@ channel.on((m) => {
       case "copy":
         await inTurn("Copy", () => copy(m.ids));
         break;
+      case "cut":
+        await inTurn("Cut", () => cut(m.ids));
+        break;
       case "paste":
         await inTurn("Paste", () => paste(m.at));
         break;
@@ -1916,7 +1927,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.5.7"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+console.log(`EDGEbuilder ${"0.5.8"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
 if (scene.loadError) {
   state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path5.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);

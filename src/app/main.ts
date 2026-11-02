@@ -456,7 +456,7 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
     $("message").className = "message warn";
   },
 });
-// Undo, redo, duplicate, copy, paste and group: Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z), Ctrl+D, Ctrl+C, Ctrl+V,
+// Undo, redo, duplicate, copy, cut, paste and group: Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z), Ctrl+D, Ctrl+C, Ctrl+X, Ctrl+V,
 // Ctrl+G, Ctrl+Shift+G. Not while
 // typing in a field (the field undoes its own text), and not in the middle of a drag or a box.
 window.addEventListener("keydown", (e) => {
@@ -469,6 +469,7 @@ window.addEventListener("keydown", (e) => {
   else if (key === "y" || (key === "z" && e.shiftKey)) post({ type: "redo" });
   else if (key === "d") duplicate();
   else if (key === "c" && ids.length) post({ type: "copy", ids });
+  else if (key === "x" && ids.length) post({ type: "cut", ids });
   else if (key === "v") {
     const ray = viewport.cursorRay();
     dropAsked = true;

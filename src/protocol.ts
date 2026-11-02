@@ -137,6 +137,8 @@ export type PageMessage =
   | { type: "duplicate"; ids: string[]; offset?: [number, number, number] }
   /** Ctrl+C: keep copies of these for a paste. */
   | { type: "copy"; ids: string[] }
+  /** Ctrl+X: copy these, then delete them. */
+  | { type: "cut"; ids: string[] }
   /** Ctrl+V: the copies, standing where the line through the cursor meets a surface (`at`), else where Drop puts things. */
   | { type: "paste"; at?: { origin: [number, number, number]; dir: [number, number, number] } }
   | { type: "undo" }

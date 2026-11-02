@@ -1106,6 +1106,16 @@ function copy(ids: string[]): void {
   say(`Copied ${n} object${n === 1 ? "" : "s"}. Ctrl+V pastes ${n === 1 ? "it" : "them"} where the cursor points.`, "ok");
 }
 
+/** Ctrl+X: a copy for Ctrl+V, then a delete (one undo step, as Delete is). */
+async function cut(ids: string[]): Promise<void> {
+  ids = ids.filter((x) => scene.get(x));
+  if (!ids.length) return say("Select something to cut first.", "warn");
+  clipboard = copyOf(ids, scene.objects, scene.groups);
+  await remove(ids);
+  const n = clipboard.objects.length;
+  say(`Cut ${n} object${n === 1 ? "" : "s"}. Ctrl+V pastes ${n === 1 ? "it" : "them"} where the cursor points; Ctrl+Z puts ${n === 1 ? "it" : "them"} back.`, "ok");
+}
+
 /** Ctrl+V: the copies, their box's bottom middle where the line through the cursor meets a surface. */
 async function paste(at?: { origin: V3; dir: V3 }): Promise<void> {
   if (!clipboard) return say("Nothing copied yet: select something and press Ctrl+C.", "warn");
@@ -1221,6 +1231,9 @@ channel.on<PageMessage>((m) => {
         break;
       case "copy":
         await inTurn("Copy", () => copy(m.ids));
+        break;
+      case "cut":
+        await inTurn("Cut", () => cut(m.ids));
         break;
       case "paste":
         await inTurn("Paste", () => paste(m.at));

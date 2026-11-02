@@ -593,7 +593,7 @@ var Viewport = class {
     else if (this.edit) {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
       const n = chosen.length;
-      const help = this.placing ? "Click where it should go.  Esc or right-click: cancel." : this.box ? "Release to select what is inside.  Ctrl: add to the selection." : n ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D duplicate, Ctrl+C copy, Ctrl+V paste at the cursor, Ctrl+G group, Ctrl+Z undo.` : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
+      const help = this.placing ? "Click where it should go.  Esc or right-click: cancel." : this.box ? "Release to select what is inside.  Ctrl: add to the selection." : n ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D duplicate, Ctrl+C copy, Ctrl+X cut, Ctrl+V paste at the cursor, Ctrl+G group, Ctrl+Z undo.` : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
       this.label(help, camHelp);
     }
     if (this.busyWith) this.banner(`EDGEbuilder is busy: ${busyText(this.busyWith)}. What you do now waits its turn.`);
@@ -1523,6 +1523,7 @@ window.addEventListener("keydown", (e) => {
   else if (key === "y" || key === "z" && e.shiftKey) post({ type: "redo" });
   else if (key === "d") duplicate();
   else if (key === "c" && ids.length) post({ type: "copy", ids });
+  else if (key === "x" && ids.length) post({ type: "cut", ids });
   else if (key === "v") {
     const ray = viewport.cursorRay();
     dropAsked = true;
