@@ -287,7 +287,7 @@ $("dropClick").addEventListener("click", () => {
     viewport.setEdit(true);
   }
   viewport.armDrop((ray) => post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } }));
-  $("message").textContent = `Click where ${shortName(path)} should go; right-click cancels.`;
+  $("message").textContent = `Click where ${shortName(path)} should go; Esc or right-click cancels.`;
   $("message").className = "message";
 });
 // The Scene list: a group's arrow opens or closes it; a group's row selects the group, an object's
@@ -379,7 +379,12 @@ function applyFields(): void {
   post({ type: "transform", items: [{ id: o.id, transform: next }] });
 }
 $("apply").addEventListener("click", applyFields);
-for (const f of fields) field(f).addEventListener("submit", applyFields);
+// Enter applies and leaves the field, so a Ctrl+Z next undoes the change, not the field's text.
+for (const f of fields)
+  field(f).addEventListener("submit", () => {
+    applyFields();
+    (document.activeElement as HTMLElement | null)?.blur();
+  });
 
 // ---- the viewport ------------------------------------------------------------------------------
 

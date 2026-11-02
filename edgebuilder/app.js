@@ -222,6 +222,17 @@ function boxOf(objects) {
 // src/app/held.ts
 import { game } from "rednode";
 var down = /* @__PURE__ */ new Set();
+var eventsCarry = false;
+for (const type of ["pointerdown", "pointermove", "wheel"]) {
+  window.addEventListener(
+    type,
+    (e) => {
+      const m = e;
+      if (m.ctrlKey || m.shiftKey || m.altKey) eventsCarry = true;
+    },
+    true
+  );
+}
 window.addEventListener(
   "keydown",
   (e) => {
@@ -236,6 +247,7 @@ game.onState((s) => {
   if (s.overlay !== "interactive") down.clear();
 });
 function held(e) {
+  if (eventsCarry) return { ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey };
   return {
     ctrl: e.ctrlKey || down.has("Control"),
     shift: e.shiftKey || down.has("Shift"),
@@ -449,11 +461,13 @@ var Viewport = class {
     this.running = true;
     const tick = async () => {
       if (!this.edit) {
+        this.wantEscape(false);
         this.running = false;
         this.clear();
         return;
       }
       this.frame++;
+      this.wantEscape(!!(this.drag || this.placing || this.box));
       this.flushMove();
       this.flyAndSend();
       const ok = await this.updateCamera();
@@ -466,6 +480,20 @@ var Viewport = class {
       else setTimeout(() => requestAnimationFrame(() => void tick()), 1e3);
     };
     requestAnimationFrame(() => void tick());
+  }
+  escapeHeld = false;
+  /**
+   * Esc for the page while a drag, a Drop at click, a box or a copy is in progress, else Esc leaves
+   * interactive mode as usual. REDnode 0.52.0 gives Esc to a page that asks with the web's Keyboard
+   * Lock (REDnode #34); before that, Esc never reaches the page and a right-click cancels.
+   */
+  wantEscape(on) {
+    if (on === this.escapeHeld) return;
+    this.escapeHeld = on;
+    const keyboard = navigator.keyboard;
+    if (!keyboard) return;
+    if (on) keyboard.lock(["Escape"]).catch(() => void 0);
+    else keyboard.unlock();
   }
   clear() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -548,7 +576,7 @@ var Viewport = class {
     else if (this.edit) {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
       const n = chosen.length;
-      const help = this.placing ? "Click where it should go.  Right-click: cancel." : this.box ? "Release to select what is inside.  Ctrl: add to the selection." : n ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D copy, Ctrl+G group, Ctrl+Z undo.` : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
+      const help = this.placing ? "Click where it should go.  Esc or right-click: cancel." : this.box ? "Release to select what is inside.  Ctrl: add to the selection." : n ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D copy, Ctrl+G group, Ctrl+Z undo.` : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
       this.label(help, camHelp);
     }
   }
@@ -610,7 +638,7 @@ var Viewport = class {
     const typed = d.typed ? `  [${d.typed}]` : "";
     const lock = d.axis ? ` ${d.axis.toUpperCase()}` : "";
     const many = d.ids.length > 1 ? ` ${d.ids.length} objects` : "";
-    const keep = d.copy ? "Enter or click: place the copy \xB7 Right-click: no copy" : "Enter or click: keep \xB7 Right-click: undo";
+    const keep = d.copy ? "Enter or click: place the copy \xB7 Esc or right-click: no copy" : "Enter or click: keep \xB7 Esc or right-click: undo";
     if (d.mode === "move") {
       const dx = d.change.move ?? [0, 0, 0];
       return `Move${many}${lock}  ${dx.map((n) => n.toFixed(2)).join(", ")} m${typed}   ${keep}`;
@@ -1302,7 +1330,7 @@ $("dropClick").addEventListener("click", () => {
     viewport.setEdit(true);
   }
   viewport.armDrop((ray) => post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } }));
-  $("message").textContent = `Click where ${shortName(path)} should go; right-click cancels.`;
+  $("message").textContent = `Click where ${shortName(path)} should go; Esc or right-click cancels.`;
   $("message").className = "message";
 });
 var listCtrl = false;
@@ -1382,7 +1410,11 @@ function applyFields() {
   post({ type: "transform", items: [{ id: o.id, transform: next }] });
 }
 $("apply").addEventListener("click", applyFields);
-for (const f of fields) field(f).addEventListener("submit", applyFields);
+for (const f of fields)
+  field(f).addEventListener("submit", () => {
+    applyFields();
+    document.activeElement?.blur();
+  });
 var showSceneTab = () => document.getElementById("mainTabs").select?.(1);
 var viewport = new Viewport($("view"), {
   pick(id, opts) {

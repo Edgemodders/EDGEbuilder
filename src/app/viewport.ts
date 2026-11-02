@@ -320,11 +320,13 @@ export class Viewport {
     this.running = true;
     const tick = async () => {
       if (!this.edit) {
+        this.wantEscape(false);
         this.running = false;
         this.clear();
         return;
       }
       this.frame++;
+      this.wantEscape(!!(this.drag || this.placing || this.box));
       this.flushMove();
       this.flyAndSend();
       const ok = await this.updateCamera();
@@ -339,6 +341,22 @@ export class Viewport {
       else setTimeout(() => requestAnimationFrame(() => void tick()), 1000);
     };
     requestAnimationFrame(() => void tick());
+  }
+
+  private escapeHeld = false;
+
+  /**
+   * Esc for the page while a drag, a Drop at click, a box or a copy is in progress, else Esc leaves
+   * interactive mode as usual. REDnode 0.52.0 gives Esc to a page that asks with the web's Keyboard
+   * Lock (REDnode #34); before that, Esc never reaches the page and a right-click cancels.
+   */
+  private wantEscape(on: boolean): void {
+    if (on === this.escapeHeld) return;
+    this.escapeHeld = on;
+    const keyboard = (navigator as Navigator & { keyboard?: { lock(keys?: string[]): Promise<void>; unlock(): void } }).keyboard;
+    if (!keyboard) return;
+    if (on) keyboard.lock(["Escape"]).catch(() => undefined);
+    else keyboard.unlock();
   }
 
   private clear(): void {
@@ -427,7 +445,7 @@ export class Viewport {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
       const n = chosen.length;
       const help = this.placing
-        ? "Click where it should go.  Right-click: cancel."
+        ? "Click where it should go.  Esc or right-click: cancel."
         : this.box
           ? "Release to select what is inside.  Ctrl: add to the selection."
           : n
@@ -497,7 +515,7 @@ export class Viewport {
     const typed = d.typed ? `  [${d.typed}]` : "";
     const lock = d.axis ? ` ${d.axis.toUpperCase()}` : "";
     const many = d.ids.length > 1 ? ` ${d.ids.length} objects` : "";
-    const keep = d.copy ? "Enter or click: place the copy · Right-click: no copy" : "Enter or click: keep · Right-click: undo";
+    const keep = d.copy ? "Enter or click: place the copy · Esc or right-click: no copy" : "Enter or click: keep · Esc or right-click: undo";
     if (d.mode === "move") {
       const dx = d.change.move ?? [0, 0, 0];
       return `Move${many}${lock}  ${dx.map((n) => n.toFixed(2)).join(", ")} m${typed}   ${keep}`;
@@ -668,8 +686,8 @@ export class Viewport {
     if (!this.edit || !this.cam) return;
     this.mouse = this.pageXY(e);
     this.last = this.mouse;
-    // Right-click cancels what is in progress: in the game Esc never reaches the page (REDnode takes it
-    // to leave interactive mode; B3-1 test).
+    // Right-click cancels what is in progress, as Esc does: before REDnode 0.52.0 Esc never reaches the
+    // page in the game (REDnode took it to leave interactive mode; B3-1 test).
     if (e.button === 2) {
       if (this.drag) this.cancel();
       else if (this.placing) {
