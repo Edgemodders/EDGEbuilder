@@ -427,7 +427,7 @@ export class Viewport {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
       const n = chosen.length;
       const help = this.placing
-        ? "Click where it should go.  Esc: cancel."
+        ? "Click where it should go.  Right-click: cancel."
         : this.box
           ? "Release to select what is inside.  Ctrl: add to the selection."
           : n
@@ -497,7 +497,7 @@ export class Viewport {
     const typed = d.typed ? `  [${d.typed}]` : "";
     const lock = d.axis ? ` ${d.axis.toUpperCase()}` : "";
     const many = d.ids.length > 1 ? ` ${d.ids.length} objects` : "";
-    const keep = d.copy ? "Enter or click: place the copy · Esc: no copy" : "Enter or click: keep · Esc or right-click: undo";
+    const keep = d.copy ? "Enter or click: place the copy · Right-click: no copy" : "Enter or click: keep · Right-click: undo";
     if (d.mode === "move") {
       const dx = d.change.move ?? [0, 0, 0];
       return `Move${many}${lock}  ${dx.map((n) => n.toFixed(2)).join(", ")} m${typed}   ${keep}`;
@@ -668,8 +668,14 @@ export class Viewport {
     if (!this.edit || !this.cam) return;
     this.mouse = this.pageXY(e);
     this.last = this.mouse;
+    // Right-click cancels what is in progress: in the game Esc never reaches the page (REDnode takes it
+    // to leave interactive mode; B3-1 test).
     if (e.button === 2) {
       if (this.drag) this.cancel();
+      else if (this.placing) {
+        this.disarm();
+        this.hooks.status("Drop at click cancelled.");
+      } else if (this.box) this.box = undefined;
       else if (this.camEntity) {
         this.rmb = true;
         this.canvas.setPointerCapture(e.pointerId);

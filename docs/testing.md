@@ -24,7 +24,7 @@ Last updated 2026-10-30.
 | [0.3.4 check on game 2.5](#034-check-on-game-25) | In the game | B2b | 2026-10-29 (0.3.4) | Pass |
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
-| [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-01 (0.5.0); 0.5.1 built | 0.5.0: Ctrl+click did not add (fixed in 0.5.1); 0.5.1 waiting for the owner |
+| [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-01 (0.5.0); 0.5.1 built | 0.5.0: Ctrl+click did not add (fixed in 0.5.1); 0.5.1: to step 9, three findings (0.5.2); 0.5.2 waiting for the owner |
 
 ## Automated
 
@@ -283,18 +283,26 @@ streaming:
 
 ### B3-1 Arrange
 
-**0.5.0 tested on 2026-11-01: step 2 failed**, Ctrl+click selected only the clicked object. In the game REDnode passes Ctrl, Shift and Alt as keys but not on mouse events, so a click never says Ctrl is held (Shift+drag and Alt+click the same). **0.5.1** keeps those keys from the key events the page hears; REDnode #33 asks for them on mouse events. REDnode also keeps Ctrl+Z and Ctrl+Y for text fields, so step 9 uses the **Undo and Redo buttons** on the Scene tab until #33 is done. **0.5.1 waits for the owner's test, from step 2.** Built on 2026-10-31 as EDGEbuilder 0.5.0, from `npm run package`, added in EDGEdeck. REDnode 0.41.0 or later. B3's first half: several objects at once, groups, duplicates, undo and redo ([design](design.md), B3). Saved scenes, the Library and the service are B3-2. Start somewhere open with Edit on.
+**0.5.0 tested on 2026-11-01: step 2 failed**, Ctrl+click selected only the clicked object. In the game REDnode passes Ctrl, Shift and Alt as keys but not on mouse events, so a click never says Ctrl is held (Shift+drag and Alt+click the same). **0.5.1** keeps those keys from the key events the page hears; REDnode #33 asks for them on mouse events. REDnode also keeps Ctrl+Z and Ctrl+Y for text fields, so step 9 uses the **Undo and Redo buttons** on the Scene tab until #33 is done. **0.5.1 tested on 2026-11-01, to step 9.** Ctrl+click adds (step 2 passed). Found:
+
+| Finding | Cause | Done |
+|---|---|---|
+| A click on one crate of a group selected that crate, not the group (step 5) | Most likely Alt held in the page's eyes: after Alt+Tab the page hears Alt go down but never come up, so every click was an Alt+click | 0.5.2 forgets held keys on Alt+Tab and when interactive mode ends |
+| Ctrl+D, move, Esc: REDnode closed and gave the game back; a right-click cancelled as meant (step 8) | REDnode takes Esc to leave interactive mode; a page never hears it | 0.5.2: a right-click cancels a drag, a Drop at click, a box and a copy, and the help says so; [REDnode #34](https://github.com/Edgemodders/REDnode/issues/34) asks for Esc |
+| Ctrl+Z after typing a scale undid the number in the field, not the crate's scale; Ctrl+Z after a move did nothing (step 9) | REDnode keeps Ctrl+Z for text fields ([REDnode #33](https://github.com/Edgemodders/REDnode/issues/33)), as noted for 0.5.1 | The Undo and Redo buttons until #33 |
+
+**0.5.2 waits for the owner's test, from step 5.** Built on 2026-10-31 as EDGEbuilder 0.5.0, from `npm run package`, added in EDGEdeck. REDnode 0.41.0 or later. B3's first half: several objects at once, groups, duplicates, undo and redo ([design](design.md), B3). Saved scenes, the Library and the service are B3-2. Start somewhere open with Edit on.
 
 | # | Check | Expected |
 |---|---|---|
-| 1 | The log's start line | `EDGEbuilder 0.5.1 starting` |
+| 1 | The log's start line | `EDGEbuilder 0.5.2 starting` |
 | 2 | Drop `cargo_crate_a.mesh` three times, a few metres apart (Drop at click). Click one, then Ctrl+click the other two | Each click adds one: three outlined, three boxes, one gizmo at their middle. The Scene tab says "3 selected", the Selected panel "3 objects" and their middle. A plain click on one selects it alone; a click on empty ground selects nothing |
 | 3 | Shift+drag a box around all three | A dashed yellow box while dragging; on release all three are selected. Shift+drag around nothing selects nothing |
-| 4 | Drag an arrow, then the ring; then G, R, S with X, Y or Z and a typed number; Esc once in the middle of one | They move together, turn together around their middle (the outer ones swing round), and S spreads them and makes them bigger. Esc puts them back |
+| 4 | Drag an arrow, then the ring; then G, R, S with X, Y or Z and a typed number; a right-click once in the middle of one | They move together, turn together around their middle (the outer ones swing round), and S spreads them and makes them bigger. The right-click puts them back |
 | 5 | Ctrl+G | "Grouped 3 objects as Group 1". The Scene list shows Group 1 with the crates under it. Click one crate in the world: all three are selected. Alt+click one: only that one |
 | 6 | Rename the group in Group name, Enter; close and open it with its arrow | The new name in the list; the arrow folds the crates away and back |
 | 7 | With the group selected, Ctrl+D; move the mouse; click | Three copies appear on top of the originals and follow the mouse; the click places them. The Scene list has a second group with the same name and three new crates (`cargo_crate_a_4` and on) |
-| 8 | Ctrl+D again, then Esc | The copies follow the mouse, then go away; the scene is as before |
+| 8 | Ctrl+D again, then a right-click (Esc closes REDnode's interactive mode, REDnode #34) | The copies follow the mouse, then go away; the scene is as before |
 | 9 | Undo several times, then Redo (the Scene tab's buttons; Ctrl+Z and Ctrl+Y wait for REDnode #33) | Each Undo takes one step back: the copies' place, the copies, the name, the group, the moves, the drops. Each Redo does it again. The message says what came back or went; Undo and Redo on the Scene tab show how many steps are left |
 | 10 | Select a group and a crate outside it, Delete; Undo | All selected go; Undo brings them back, in their group and where they were |
 | 11 | Clear scene; Undo | All gone; all back |

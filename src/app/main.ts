@@ -287,7 +287,7 @@ $("dropClick").addEventListener("click", () => {
     viewport.setEdit(true);
   }
   viewport.armDrop((ray) => post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } }));
-  $("message").textContent = `Click where ${shortName(path)} should go; Esc cancels.`;
+  $("message").textContent = `Click where ${shortName(path)} should go; right-click cancels.`;
   $("message").className = "message";
 });
 // The Scene list: a group's arrow opens or closes it; a group's row selects the group, an object's

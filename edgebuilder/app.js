@@ -220,10 +220,21 @@ function boxOf(objects) {
 }
 
 // src/app/held.ts
+import { game } from "rednode";
 var down = /* @__PURE__ */ new Set();
-window.addEventListener("keydown", (e) => down.add(e.key), true);
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key === "Tab" && down.has("Alt")) return down.clear();
+    down.add(e.key);
+  },
+  true
+);
 window.addEventListener("keyup", (e) => down.delete(e.key), true);
 window.addEventListener("blur", () => down.clear());
+game.onState((s) => {
+  if (s.overlay !== "interactive") down.clear();
+});
 function held(e) {
   return {
     ctrl: e.ctrlKey || down.has("Control"),
@@ -233,7 +244,7 @@ function held(e) {
 }
 
 // src/app/viewport.ts
-import { api, game, world } from "rednode";
+import { api, game as game2, world } from "rednode";
 var COLORS = { x: "#ff4d5e", y: "#5dffa1", z: "#4d9dff", ring: "#fcee0a" };
 var HOT = "#ffffff";
 var UNIT_BOX = { min: [-0.5, -0.5, 0], max: [0.5, 0.5, 1] };
@@ -261,7 +272,7 @@ var Viewport = class {
     window.addEventListener("beforeunload", () => {
       if (this.builderAsked) this.hooks.builderStop();
     });
-    game.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
+    game2.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
   }
   ctx;
   edit = false;
@@ -378,10 +389,10 @@ var Viewport = class {
   async updateCamera() {
     try {
       if (!this.fpp || !this.camSys) {
-        const player = await api.GetPlayer(game.instance);
+        const player = await api.GetPlayer(game2.instance);
         if (!player) throw new Error("no player: load a save");
         this.fpp = await player.GetFPPCameraComponent();
-        this.camSys = await api.GameInstance.GetCameraSystem(game.instance);
+        this.camSys = await api.GameInstance.GetCameraSystem(game2.instance);
         if (!this.fpp || !this.camSys) throw new Error("the camera is not available");
       }
       if (this.camEntity && !this.camComp) {
@@ -537,7 +548,7 @@ var Viewport = class {
     else if (this.edit) {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
       const n = chosen.length;
-      const help = this.placing ? "Click where it should go.  Esc: cancel." : this.box ? "Release to select what is inside.  Ctrl: add to the selection." : n ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D copy, Ctrl+G group, Ctrl+Z undo.` : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
+      const help = this.placing ? "Click where it should go.  Right-click: cancel." : this.box ? "Release to select what is inside.  Ctrl: add to the selection." : n ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D copy, Ctrl+G group, Ctrl+Z undo.` : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
       this.label(help, camHelp);
     }
   }
@@ -599,7 +610,7 @@ var Viewport = class {
     const typed = d.typed ? `  [${d.typed}]` : "";
     const lock = d.axis ? ` ${d.axis.toUpperCase()}` : "";
     const many = d.ids.length > 1 ? ` ${d.ids.length} objects` : "";
-    const keep = d.copy ? "Enter or click: place the copy \xB7 Esc: no copy" : "Enter or click: keep \xB7 Esc or right-click: undo";
+    const keep = d.copy ? "Enter or click: place the copy \xB7 Right-click: no copy" : "Enter or click: keep \xB7 Right-click: undo";
     if (d.mode === "move") {
       const dx = d.change.move ?? [0, 0, 0];
       return `Move${many}${lock}  ${dx.map((n) => n.toFixed(2)).join(", ")} m${typed}   ${keep}`;
@@ -756,6 +767,10 @@ var Viewport = class {
     this.last = this.mouse;
     if (e.button === 2) {
       if (this.drag) this.cancel();
+      else if (this.placing) {
+        this.disarm();
+        this.hooks.status("Drop at click cancelled.");
+      } else if (this.box) this.box = void 0;
       else if (this.camEntity) {
         this.rmb = true;
         this.canvas.setPointerCapture(e.pointerId);
@@ -1287,7 +1302,7 @@ $("dropClick").addEventListener("click", () => {
     viewport.setEdit(true);
   }
   viewport.armDrop((ray) => post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } }));
-  $("message").textContent = `Click where ${shortName(path)} should go; Esc cancels.`;
+  $("message").textContent = `Click where ${shortName(path)} should go; right-click cancels.`;
   $("message").className = "message";
 });
 var listCtrl = false;
