@@ -10,6 +10,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.5.8 (2026-11-02)
+
+B3-1 Arrange. Tested on game 2.5 with REDnode 0.52.1. 0.5.0 to 0.5.7 were test builds only. In the game, Ctrl+Z, Ctrl+Y, Ctrl+C, Ctrl+X, Ctrl+V and Esc need REDnode 0.52.0 or later.
+
 **New**
 
 - A busy bar when a scene change takes more than half a second: what it is, how far (`Rebuild previews: 3 of 9`), how long, and how many of your later clicks wait behind it. In Edit it also shows at the top of the view. Stop places no more previews for that change; what waits still runs.
