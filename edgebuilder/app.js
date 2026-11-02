@@ -260,6 +260,11 @@ import { api, game as game2, world } from "rednode";
 var COLORS = { x: "#ff4d5e", y: "#5dffa1", z: "#4d9dff", ring: "#fcee0a" };
 var HOT = "#ffffff";
 var UNIT_BOX = { min: [-0.5, -0.5, 0], max: [0.5, 0.5, 1] };
+function busyText(b) {
+  const step = b.total ? `: ${Math.min(b.total, (b.done ?? 0) + 1)} of ${b.total}` : "";
+  const secs = Math.round((Date.now() - b.since) / 1e3);
+  return `${b.what}${step} \xB7 ${secs} s${b.waiting ? ` \xB7 ${b.waiting} more waiting` : ""}`;
+}
 var Viewport = class {
   constructor(canvas, hooks) {
     this.canvas = canvas;
@@ -300,6 +305,8 @@ var Viewport = class {
   frame = 0;
   running = false;
   hover;
+  /** The mod is busy with a change: shown at the top of the view, so clicks that wait are not a surprise. */
+  busyWith;
   drag;
   mouse = [0, 0];
   /** The drag changed since the last frame: send the previews' new places. */
@@ -320,6 +327,9 @@ var Viewport = class {
   lastTick = 0;
   /** Drop at click: what to do with the line through the next left click. */
   placing;
+  setBusy(b) {
+    this.busyWith = b;
+  }
   setEdit(on) {
     this.edit = on;
     this.canvas.classList.toggle("edit", on);
@@ -579,6 +589,25 @@ var Viewport = class {
       const help = this.placing ? "Click where it should go.  Esc or right-click: cancel." : this.box ? "Release to select what is inside.  Ctrl: add to the selection." : n ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D copy, Ctrl+G group, Ctrl+Z undo.` : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
       this.label(help, camHelp);
     }
+    if (this.busyWith) this.banner(`EDGEbuilder is busy: ${busyText(this.busyWith)}. What you do now waits its turn.`);
+  }
+  /** A line at the top centre of the view, for the busy state. */
+  banner(text) {
+    const ctx = this.ctx;
+    ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
+    const w = ctx.measureText(text).width + 24;
+    const left = this.canvas.width / 2 - w / 2;
+    ctx.fillStyle = "rgba(8,9,13,0.9)";
+    ctx.fillRect(left, 24, w, 32);
+    const b = this.busyWith;
+    const part = b.total ? Math.min(1, (b.done ?? 0) / b.total) : void 0;
+    ctx.fillStyle = "#fcee0a";
+    if (part !== void 0) ctx.fillRect(left, 52, w * part, 4);
+    else {
+      const t = performance.now() / 1200 % 1;
+      ctx.fillRect(left + (w - w / 4) * t, 52, w / 4, 4);
+    }
+    ctx.fillText(text, left + 12, 46);
   }
   drawBox(o) {
     const cam = this.cam;
@@ -1100,6 +1129,27 @@ var lastMessage = "";
 var closed = /* @__PURE__ */ new Set();
 var copyAsked = false;
 var lastCopy;
+var busyNow;
+var busyTick;
+function renderBusy(b) {
+  busyNow = b;
+  viewport.setBusy(b);
+  const row = $("busyRow");
+  row.hidden = !b;
+  if (!b) {
+    if (busyTick) clearInterval(busyTick);
+    busyTick = void 0;
+    return;
+  }
+  const bar = $("busy");
+  if (b.total) {
+    bar.setAttribute("max", String(b.total));
+    bar.setAttribute("value", String(b.done ?? 0));
+  } else bar.removeAttribute("value");
+  const label = () => busyNow && bar.setAttribute("label", `Busy: ${busyText(busyNow)}`);
+  label();
+  busyTick ??= setInterval(label, 1e3);
+}
 function render(s) {
   state = s;
   const worldText = { ready: "World ready", "no-game": "No game", "no-save": "Load a save", "no-codeware": "Needs Codeware 1.14+", unknown: "World: checking" }[s.world];
@@ -1188,6 +1238,7 @@ function render(s) {
   $("settingsFile").textContent = s.settings.settingsFile;
   $("bridgeDetail").textContent = [b.path, b.detail].filter(Boolean).join("\n");
   $("indexDetail").textContent = ix.file ?? "";
+  renderBusy(s.busy);
   if (s.message && s.message.text !== lastMessage) {
     lastMessage = s.message.text;
     $("message").textContent = s.message.text;
@@ -1362,6 +1413,7 @@ var selection = () => state?.selected ?? [];
 $("delete").addEventListener("click", () => selection().length && post({ type: "delete", ids: selection() }));
 $("floor").addEventListener("click", () => selection().length && post({ type: "floor", ids: selection() }));
 $("undo").addEventListener("click", () => post({ type: "undo" }));
+$("stop").addEventListener("click", () => post({ type: "stop" }));
 $("redo").addEventListener("click", () => post({ type: "redo" }));
 $("group").addEventListener("click", () => selection().length && post({ type: "group", ids: selection() }));
 $("ungroup").addEventListener("click", () => selection().length && post({ type: "ungroup", ids: selection() }));

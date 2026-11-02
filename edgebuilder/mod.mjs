@@ -220,7 +220,7 @@ var AssetIndex = class {
     fs2.writeFileSync(this.file, JSON.stringify(data));
   }
   /** Reads the index from the game through the bridge. Pages of 5,000 files per folder prefix. */
-  async build(bridge2, game2, progress) {
+  async build(bridge2, game2, progress2) {
     this.game = game2;
     this.file = path2.join(this.dir, `${game2}.json`);
     const entries = [];
@@ -235,7 +235,7 @@ var AssetIndex = class {
           if (kind) entries.push({ path: f.name, kind, size: f.size });
         }
         offset += page.items.length;
-        progress?.(`${prefix}: ${Math.min(offset, total).toLocaleString()} of ${total.toLocaleString()} files, ${entries.length.toLocaleString()} assets so far`);
+        progress2?.(`${prefix}: ${Math.min(offset, total).toLocaleString()} of ${total.toLocaleString()} files, ${entries.length.toLocaleString()} assets so far`);
         if (page.items.length === 0) break;
       } while (offset < total);
     }
@@ -376,7 +376,7 @@ var ModSources = class {
    * `isGamePath` says whether a path is one of the game's own files (a mod's file then replaces it).
    * Returns whether anything changed. One unreadable archive is skipped and named in `failed`.
    */
-  async refreshMods(bridge2, files, isGamePath, progress) {
+  async refreshMods(bridge2, files, isGamePath, progress2) {
     let changed = false;
     const failed = [];
     const seen = /* @__PURE__ */ new Set();
@@ -390,7 +390,7 @@ var ModSources = class {
       }
       const known = this.archives[file];
       if (known && known.size === stat.size && known.mtime === stat.mtimeMs && known.mod === mod) continue;
-      progress?.(`Reading ${path3.basename(file)}`);
+      progress2?.(`Reading ${path3.basename(file)}`);
       try {
         const archive = await bridge2.openMod(file);
         const entries = [];
@@ -1173,12 +1173,16 @@ async function spawnNear(objects, logWord = "Preview of") {
   const points = await viewPoints();
   const near = (o) => !points.length || points.some((p) => Math.hypot(...sub(o.transform.position, p)) <= PreviewRange);
   const out = { shown: 0, far: 0, failed: 0 };
-  for (const o of objects) {
-    if (o.kind === "light") continue;
-    if (!near(o)) {
-      out.far++;
-      continue;
+  const shown = objects.filter((o) => o.kind !== "light");
+  const todo = shown.filter(near);
+  out.far = shown.length - todo.length;
+  for (const [i, o] of todo.entries()) {
+    if (stopAsked) {
+      out.failed += todo.length - i;
+      console.log(`Stopped: ${todo.length - i} preview${todo.length - i === 1 ? "" : "s"} not placed`);
+      break;
     }
+    progress(i, todo.length);
     if (await trySpawn(o, logWord)) out.shown++;
     else out.failed++;
   }
@@ -1382,10 +1386,42 @@ function queued(op) {
   return builderQueue;
 }
 var sceneQueue = Promise.resolve();
-function inTurn(op) {
-  const run = async () => op();
+var waiting = 0;
+var running;
+var BusyAfter = 500;
+function inTurn(what, op) {
+  waiting++;
+  if (state.busy) showBusy();
+  const run = async () => {
+    running = { what, since: Date.now() };
+    stopAsked = false;
+    const timer = setTimeout(showBusy, BusyAfter);
+    try {
+      await op();
+    } finally {
+      clearTimeout(timer);
+      running = void 0;
+      waiting--;
+      if (state.busy) {
+        state.busy = void 0;
+        publish();
+      }
+    }
+  };
   sceneQueue = sceneQueue.then(run, run);
   return sceneQueue;
+}
+function showBusy() {
+  if (!running) return;
+  state.busy = { ...running, waiting: Math.max(0, waiting - 1) };
+  publish();
+}
+var stopAsked = false;
+function progress(done, total) {
+  if (!running) return;
+  running.done = done;
+  running.total = total;
+  if (state.busy) showBusy();
 }
 async function playerPose() {
   const player = await api.GetPlayer(game.instance);
@@ -1660,37 +1696,40 @@ channel.on((m) => {
         }
         break;
       case "drop":
-        await inTurn(() => drop(m.path, m.appearance, m.at));
+        await inTurn("Drop", () => drop(m.path, m.appearance, m.at));
         break;
       case "select":
-        await inTurn(() => select(m.ids));
+        await inTurn("Select", () => select(m.ids));
         break;
       case "delete":
-        await inTurn(() => remove(m.ids));
+        await inTurn("Delete", () => remove(m.ids));
         break;
       case "group":
-        await inTurn(() => group(m.ids));
+        await inTurn("Group", () => group(m.ids));
         break;
       case "ungroup":
-        await inTurn(() => ungroup2(m.ids));
+        await inTurn("Ungroup", () => ungroup2(m.ids));
         break;
       case "rename":
-        await inTurn(() => rename(m.group, m.name));
+        await inTurn("Rename", () => rename(m.group, m.name));
         break;
       case "duplicate":
-        await inTurn(() => duplicate2(m.ids, m.offset));
+        await inTurn("Copy", () => duplicate2(m.ids, m.offset));
+        break;
+      case "stop":
+        if (running) stopAsked = true;
         break;
       case "undo":
-        await inTurn(() => travel(past, future, "Undo"));
+        await inTurn("Undo", () => travel(past, future, "Undo"));
         break;
       case "redo":
-        await inTurn(() => travel(future, past, "Redo"));
+        await inTurn("Redo", () => travel(future, past, "Redo"));
         break;
       case "rebuild":
-        await inTurn(() => rebuild());
+        await inTurn("Rebuild previews", () => rebuild());
         break;
       case "clear":
-        await inTurn(() => clear());
+        await inTurn("Clear scene", () => clear());
         break;
       case "index.build":
         await buildIndex();
@@ -1705,10 +1744,10 @@ channel.on((m) => {
         await queued(() => builderStop());
         break;
       case "transform":
-        await inTurn(() => setTransforms(m.items, m.merge));
+        await inTurn("Move", () => setTransforms(m.items, m.merge));
         break;
       case "floor":
-        await inTurn(() => dropToFloor(m.ids));
+        await inTurn("Drop to floor", () => dropToFloor(m.ids));
         break;
       case "log":
         console.log(m.text);
@@ -1783,7 +1822,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.5.4"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+console.log(`EDGEbuilder ${"0.5.5"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
 if (scene.loadError) {
   state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path5.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);

@@ -28,6 +28,7 @@
   .fold { display: inline-block; width: 14px; color: var(--rn-dim, #999); cursor: pointer; }
   .row { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
   .message { font-family: var(--rn-body, sans-serif); font-size: 13px; padding: 2px 0 6px; min-height: 1.4em; color: var(--rn-dim, #999); }
+  .busy:not([hidden]) { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; } .busy rn-progress { flex: 1; }
   .message.ok { color: var(--rn-ok, #5dffa1); } .message.warn, .message.error { color: var(--rn-danger, #ff5e5e); }
   .phase { font-family: var(--rn-mono, monospace); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
   pre { margin: 4px 0; font-family: var(--rn-mono, monospace); font-size: 12px; white-space: pre-wrap; word-break: break-all; }
@@ -40,6 +41,7 @@
     <div class="strip"><span id="world" class="pill">World: checking</span><span id="bridge" class="pill">REDbridge off</span><span id="index" class="pill">No index</span></div>
     <div id="progress" class="progress"></div>
     <div id="message" class="message"></div>
+    <div id="busyRow" class="busy" hidden><rn-progress id="busy"></rn-progress><rn-button id="stop" variant="ghost" title="Place no more previews for this change; what waits still runs">Stop</rn-button></div>
     <rn-tabs id="mainTabs">
       <rn-tab label="Assets" active>
         <rn-input id="search" placeholder="Search meshes and entities, e.g. crate"></rn-input>

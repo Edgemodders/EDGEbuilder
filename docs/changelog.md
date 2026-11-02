@@ -12,6 +12,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 **New**
 
+- A busy bar when a scene change takes more than half a second: what it is, how far (`Rebuild previews: 3 of 9`), how long, and how many of your later clicks wait behind it. In Edit it also shows at the top of the view. Stop places no more previews for that change; what waits still runs.
 - Esc or a right-click cancels what is in progress in the viewport: a drag, a Drop at click, a box, a copy's move. In the game Esc needs REDnode 0.52.0 or later; with an older REDnode, Esc leaves interactive mode and a right-click cancels.
 - Enter in a field of the Selected panel applies it and leaves the field, so Ctrl+Z then undoes the change rather than the field's text.
 - Several objects at once: Ctrl+click adds an object to the selection (in the world and in the Scene list), Shift+drag selects everything in a box. Moving, turning and scaling act on all of them, around their middle; G, R, S, the axis keys, typed numbers and Ctrl snapping work as for one. Delete and Drop to floor act on each.

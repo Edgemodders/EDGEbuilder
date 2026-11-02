@@ -4,7 +4,7 @@ import { applyChange, boxOf, centreOf, membersOf, pickMany, pickSelection, selec
 import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
 import type { AssetEntry, AssetFrom, AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "../protocol";
 import { held } from "./held";
-import { Viewport } from "./viewport";
+import { Viewport, busyText } from "./viewport";
 
 declare const RednodeUI: { notify(text: string, options?: Record<string, unknown>): void } | undefined;
 
@@ -26,6 +26,28 @@ let copyAsked = false;
 let lastCopy: number | undefined;
 
 // ---- rendering --------------------------------------------------------------------------------
+
+let busyNow: Snapshot["busy"];
+let busyTick: ReturnType<typeof setInterval> | undefined;
+function renderBusy(b: Snapshot["busy"]): void {
+  busyNow = b;
+  viewport.setBusy(b);
+  const row = $("busyRow");
+  row.hidden = !b;
+  if (!b) {
+    if (busyTick) clearInterval(busyTick);
+    busyTick = undefined;
+    return;
+  }
+  const bar = $("busy");
+  if (b.total) {
+    bar.setAttribute("max", String(b.total));
+    bar.setAttribute("value", String(b.done ?? 0));
+  } else bar.removeAttribute("value");
+  const label = () => busyNow && bar.setAttribute("label", `Busy: ${busyText(busyNow)}`);
+  label();
+  busyTick ??= setInterval(label, 1000);
+}
 
 function render(s: Snapshot): void {
   state = s;
@@ -131,6 +153,9 @@ function render(s: Snapshot): void {
   $("settingsFile").textContent = s.settings.settingsFile;
   $("bridgeDetail").textContent = [b.path, b.detail].filter(Boolean).join("\n");
   $("indexDetail").textContent = ix.file ?? "";
+
+  // Busy: a change that takes a while, and the ones waiting behind it.
+  renderBusy(s.busy);
 
   // Message.
   if (s.message && s.message.text !== lastMessage) {
@@ -321,6 +346,7 @@ const selection = () => state?.selected ?? [];
 $("delete").addEventListener("click", () => selection().length && post({ type: "delete", ids: selection() }));
 $("floor").addEventListener("click", () => selection().length && post({ type: "floor", ids: selection() }));
 $("undo").addEventListener("click", () => post({ type: "undo" }));
+$("stop").addEventListener("click", () => post({ type: "stop" }));
 $("redo").addEventListener("click", () => post({ type: "redo" }));
 $("group").addEventListener("click", () => selection().length && post({ type: "group", ids: selection() }));
 $("ungroup").addEventListener("click", () => selection().length && post({ type: "ungroup", ids: selection() }));

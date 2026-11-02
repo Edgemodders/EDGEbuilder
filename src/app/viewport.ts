@@ -36,7 +36,7 @@ import {
   lookOf,
   qLook,
 } from "../math";
-import type { SceneObject, SceneTransform } from "../protocol";
+import type { SceneObject, SceneTransform, Snapshot } from "../protocol";
 
 type Axis = "x" | "y" | "z";
 type Handle = Axis | "ring";
@@ -93,6 +93,16 @@ interface Drag {
   started: number;
 }
 
+
+type Busy = NonNullable<Snapshot["busy"]>;
+
+/** The busy line: "Rebuild previews: 3 of 9 · 21 s · 2 more waiting". */
+export function busyText(b: Busy): string {
+  const step = b.total ? `: ${Math.min(b.total, (b.done ?? 0) + 1)} of ${b.total}` : "";
+  const secs = Math.round((Date.now() - b.since) / 1000);
+  return `${b.what}${step} · ${secs} s${b.waiting ? ` · ${b.waiting} more waiting` : ""}`;
+}
+
 export class Viewport {
   private ctx: CanvasRenderingContext2D;
   private edit = false;
@@ -108,6 +118,8 @@ export class Viewport {
   private frame = 0;
   private running = false;
   private hover: Handle | undefined;
+  /** The mod is busy with a change: shown at the top of the view, so clicks that wait are not a surprise. */
+  private busyWith: Busy | undefined;
   private drag: Drag | undefined;
   private mouse: [number, number] = [0, 0];
   /** The drag changed since the last frame: send the previews' new places. */
@@ -157,6 +169,10 @@ export class Viewport {
       if (this.builderAsked) this.hooks.builderStop();
     });
     game.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
+  }
+
+  setBusy(b: Busy | undefined): void {
+    this.busyWith = b;
   }
 
   setEdit(on: boolean): void {
@@ -453,6 +469,27 @@ export class Viewport {
             : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
       this.label(help, camHelp);
     }
+    if (this.busyWith) this.banner(`EDGEbuilder is busy: ${busyText(this.busyWith)}. What you do now waits its turn.`);
+  }
+
+  /** A line at the top centre of the view, for the busy state. */
+  private banner(text: string): void {
+    const ctx = this.ctx;
+    ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
+    const w = ctx.measureText(text).width + 24;
+    const left = this.canvas.width / 2 - w / 2;
+    ctx.fillStyle = "rgba(8,9,13,0.9)";
+    ctx.fillRect(left, 24, w, 32);
+    // A bar along the bottom edge: how far, or a sweep when the change cannot say.
+    const b = this.busyWith!;
+    const part = b.total ? Math.min(1, (b.done ?? 0) / b.total) : undefined;
+    ctx.fillStyle = "#fcee0a";
+    if (part !== undefined) ctx.fillRect(left, 52, w * part, 4);
+    else {
+      const t = (performance.now() / 1200) % 1;
+      ctx.fillRect(left + (w - w / 4) * t, 52, w / 4, 4);
+    }
+    ctx.fillText(text, left + 12, 46);
   }
 
   private drawBox(o: SceneObject): void {

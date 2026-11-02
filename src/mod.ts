@@ -519,12 +519,16 @@ async function spawnNear(objects: SceneObject[], logWord = "Preview of"): Promis
   const points = await viewPoints();
   const near = (o: SceneObject) => !points.length || points.some((p) => Math.hypot(...sub(o.transform.position as V3, p)) <= PreviewRange);
   const out = { shown: 0, far: 0, failed: 0 };
-  for (const o of objects) {
-    if (o.kind === "light") continue;
-    if (!near(o)) {
-      out.far++;
-      continue;
+  const shown = objects.filter((o) => o.kind !== "light");
+  const todo = shown.filter(near);
+  out.far = shown.length - todo.length;
+  for (const [i, o] of todo.entries()) {
+    if (stopAsked) {
+      out.failed += todo.length - i;
+      console.log(`Stopped: ${todo.length - i} preview${todo.length - i === 1 ? "" : "s"} not placed`);
+      break;
     }
+    progress(i, todo.length);
     if (await trySpawn(o, logWord)) out.shown++;
     else out.failed++;
   }
@@ -797,10 +801,50 @@ function queued(op: () => Promise<void>): Promise<void> {
  * drag's keep followed by an undo must not interleave. A failed change does not stop the next.
  */
 let sceneQueue: Promise<void> = Promise.resolve();
-function inTurn(op: () => Promise<void> | void): Promise<void> {
-  const run = async () => op();
+/** Changes asked for and not finished, the running one included. */
+let waiting = 0;
+/** The running change, for the page's busy bar once it has run for `BusyAfter` ms. */
+let running: { what: string; done?: number; total?: number; since: number } | undefined;
+const BusyAfter = 500;
+
+function inTurn(what: string, op: () => Promise<void> | void): Promise<void> {
+  waiting++;
+  if (state.busy) showBusy();
+  const run = async () => {
+    running = { what, since: Date.now() };
+    stopAsked = false;
+    const timer = setTimeout(showBusy, BusyAfter);
+    try {
+      await op();
+    } finally {
+      clearTimeout(timer);
+      running = undefined;
+      waiting--;
+      if (state.busy) {
+        state.busy = undefined;
+        publish();
+      }
+    }
+  };
   sceneQueue = sceneQueue.then(run, run);
   return sceneQueue;
+}
+
+function showBusy(): void {
+  if (!running) return;
+  state.busy = { ...running, waiting: Math.max(0, waiting - 1) };
+  publish();
+}
+
+/** Stop asked for: the running change places no more previews. */
+let stopAsked = false;
+
+/** How far the running change is: `done` of `total`. */
+function progress(done: number, total: number): void {
+  if (!running) return;
+  running.done = done;
+  running.total = total;
+  if (state.busy) showBusy();
 }
 
 type Pose = { position: [number, number, number]; rotation: [number, number, number, number]; fov: number };
@@ -1125,37 +1169,41 @@ channel.on<PageMessage>((m) => {
         }
         break;
       case "drop":
-        await inTurn(() => drop(m.path, m.appearance, m.at));
+        await inTurn("Drop", () => drop(m.path, m.appearance, m.at));
         break;
       case "select":
-        await inTurn(() => select(m.ids));
+        await inTurn("Select", () => select(m.ids));
         break;
       case "delete":
-        await inTurn(() => remove(m.ids));
+        await inTurn("Delete", () => remove(m.ids));
         break;
       case "group":
-        await inTurn(() => group(m.ids));
+        await inTurn("Group", () => group(m.ids));
         break;
       case "ungroup":
-        await inTurn(() => ungroup(m.ids));
+        await inTurn("Ungroup", () => ungroup(m.ids));
         break;
       case "rename":
-        await inTurn(() => rename(m.group, m.name));
+        await inTurn("Rename", () => rename(m.group, m.name));
         break;
       case "duplicate":
-        await inTurn(() => duplicate(m.ids, m.offset));
+        await inTurn("Copy", () => duplicate(m.ids, m.offset));
+        break;
+      case "stop":
+        // Not in turn: it is for the change that is running.
+        if (running) stopAsked = true;
         break;
       case "undo":
-        await inTurn(() => travel(past, future, "Undo"));
+        await inTurn("Undo", () => travel(past, future, "Undo"));
         break;
       case "redo":
-        await inTurn(() => travel(future, past, "Redo"));
+        await inTurn("Redo", () => travel(future, past, "Redo"));
         break;
       case "rebuild":
-        await inTurn(() => rebuild());
+        await inTurn("Rebuild previews", () => rebuild());
         break;
       case "clear":
-        await inTurn(() => clear());
+        await inTurn("Clear scene", () => clear());
         break;
       case "index.build":
         await buildIndex();
@@ -1170,10 +1218,10 @@ channel.on<PageMessage>((m) => {
         await queued(() => builderStop());
         break;
       case "transform":
-        await inTurn(() => setTransforms(m.items, m.merge));
+        await inTurn("Move", () => setTransforms(m.items, m.merge));
         break;
       case "floor":
-        await inTurn(() => dropToFloor(m.ids));
+        await inTurn("Drop to floor", () => dropToFloor(m.ids));
         break;
       case "log":
         console.log(m.text);

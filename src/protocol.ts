@@ -95,6 +95,11 @@ export interface Snapshot {
   camera?: { entityId: string; hudHidden: boolean };
   /** The last thing worth telling the player. */
   message?: { text: string; tone: "info" | "ok" | "warn" | "error" };
+  /**
+   * A scene change that has run for more than half a second: what it is, how far (`done` of `total`
+   * when it can say), when it started (ms since 1970), and how many changes wait behind it.
+   */
+  busy?: { what: string; done?: number; total?: number; since: number; waiting: number };
   settings: { bridgePath?: string; gameDir?: string; hideHud?: boolean; editorCamera?: boolean; settingsFile: string };
   /** What is in use when a setting is left empty: the REDbridge found or shared, and the game folder found. */
   inUse: { bridge?: string; gameDir?: string };
@@ -131,6 +136,8 @@ export type PageMessage =
   /** Copy the objects, their groups with them; `offset` moves the copies (none: the page moves them next). */
   | { type: "duplicate"; ids: string[]; offset?: [number, number, number] }
   | { type: "undo" }
+  /** Stop placing the running change's previews; changes waiting still run. */
+  | { type: "stop" }
   | { type: "redo" }
   /** A line for the mod log, so the page's measurements land beside the mod's. */
   | { type: "log"; text: string };
