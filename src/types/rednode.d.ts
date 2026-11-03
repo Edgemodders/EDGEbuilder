@@ -73,6 +73,16 @@ declare module "rednode" {
     components?: GameRef[];
     tags?: string[];
     timeoutMs?: number;
+    /** false: resolve once created, without waiting for it to be in the world (REDnode 0.56.1 and later). */
+    wait?: boolean;
+  }
+  /** What world.load did (REDnode 0.40.1 and later). */
+  export interface LoadResult {
+    name: string;
+    spawned: { object: string; id: EntityId }[];
+    skipped: { object: string; why: string }[];
+    notes: string[];
+    ms: number;
   }
   export interface Spawned {
     id: EntityId;
@@ -89,6 +99,10 @@ declare module "rednode" {
     on(name: EntityEventName, handler: (event: GameEvent) => void): () => void;
     /** After an archive swap, this package's spawns that use a swapped file are spawned again (REDnode 0.40.1 and later). */
     onRespawn(handler: (before: EntityId, after: EntityId) => void): () => void;
+    /** Spawns a scene file's objects (a path, or the parsed scene); loading a name again replaces it (REDnode 0.40.1 and later). */
+    load?(scene: unknown, options?: { name?: string; wait?: boolean }): Promise<LoadResult>;
+    /** Removes what world.load spawned under that name; resolves with how many. */
+    unload?(name: string): Promise<number>;
   };
 
   /** Solo mode needs the "solo" permission (REDnode 0.18.0 and later). */
@@ -106,6 +120,8 @@ declare module "rednode" {
   /** Services between packages (REDnode 0.34.0 and later). */
   export const service: {
     connect<T = Record<string, (...args: any[]) => any>>(id: string): Promise<ServiceHandle<T>>;
+    /** Sends an event to every package connected to this one's service. */
+    emit(name: string, data?: unknown): void;
   };
 
   export const pkg: {

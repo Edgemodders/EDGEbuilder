@@ -6,11 +6,12 @@
 <script src="rednode://ui/rednode-ui.js"></script>
 <script type="importmap">{ "imports": { "rednode": "rednode://sdk/index.js" } }</script>
 <style>
-  /* The page covers the game view (1920 x 1080 reference pixels, scaled with the screen). The viewport
-     canvas is see-through and lets clicks through until Edit is on; then a 4% tint (alpha 10, above
-     REDnode's click-through threshold of 8) makes it take the mouse. */
-  html, body { margin: 0; width: 1920px; height: 1080px; background: transparent; overflow: hidden; }
-  #view { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+  /* The page covers the game view ("fill": "screen": 1080 reference pixels high and as wide as the
+     view, 1920 at 16:9, 2580 at 21:9). The viewport canvas is see-through and lets clicks through until
+     Edit is on; then a 4% tint (alpha 10, above REDnode's click-through threshold of 8) makes it take
+     the mouse. */
+  html, body { margin: 0; width: 100vw; height: 100vh; background: transparent; overflow: hidden; }
+  #view { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
   #view.edit { pointer-events: auto; background: rgba(0, 0, 0, 0.04); }
   rn-window { position: absolute; right: 24px; top: 70px; width: 448px; height: 920px; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
@@ -25,9 +26,14 @@
   rn-list { --rn-list-height: 300px; display: block; }
   #appearances { --rn-list-height: 76px; margin-top: 6px; }
   #objects { --rn-list-height: 200px; }
+  #shelves { --rn-list-height: 380px; }
+  .tag { font-family: var(--rn-mono, monospace); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--rn-ok, #5dffa1); margin-left: 6px; }
+  .section { font-family: var(--rn-mono, monospace); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
   .fold { display: inline-block; width: 14px; color: var(--rn-dim, #999); cursor: pointer; }
   .row { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
-  .message { font-family: var(--rn-body, sans-serif); font-size: 13px; padding: 2px 0 6px; min-height: 1.4em; color: var(--rn-dim, #999); }
+  [hidden] { display: none !important; }
+  /* The window is a flex column of fixed height: a long message keeps its lines (up to four) and pushes the tabs down. */
+  .message { font-family: var(--rn-body, sans-serif); font-size: 13px; padding: 2px 0 6px; min-height: 1.4em; max-height: 5.6em; overflow: auto; flex-shrink: 0; color: var(--rn-dim, #999); }
   .busy:not([hidden]) { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; } .busy rn-progress { flex: 1; }
   .message.ok { color: var(--rn-ok, #5dffa1); } .message.warn, .message.error { color: var(--rn-danger, #ff5e5e); }
   .phase { font-family: var(--rn-mono, monospace); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
@@ -58,6 +64,14 @@
         </rn-panel>
       </rn-tab>
       <rn-tab label="Scene">
+        <rn-input id="sceneName" label="Scene" title="Enter renames the scene and its file"></rn-input>
+        <div id="sceneWhere" class="count"></div>
+        <div class="row">
+          <rn-button id="saveScene" variant="ghost" title="Ctrl+S. EDGEbuilder saves after every change; this confirms it">Save</rn-button>
+          <rn-button id="saveAsScene" variant="ghost" title="Ctrl+Shift+S: a copy under a new name, in a folder you pick">Save as</rn-button>
+          <rn-button id="newScene" variant="ghost" title="An empty scene, in a folder you pick">New</rn-button>
+          <rn-button id="openScene" variant="ghost" title="The Library tab">Open</rn-button>
+        </div>
         <div id="sceneCount" class="count"></div>
         <div id="needs" class="count"></div>
         <div class="row">
@@ -89,6 +103,26 @@
           </div>
         </rn-panel>
       </rn-tab>
+      <rn-tab label="Library">
+        <div id="libraryInfo" class="count"></div>
+        <div class="row" id="libraryMakeRow" hidden><rn-button id="libraryMake">Make the Library</rn-button></div>
+        <rn-list id="shelves"></rn-list>
+        <rn-panel title="Picked">
+          <div id="pickedText" class="detail">Pick a scene or a folder</div>
+          <div class="row">
+            <rn-button id="pickedOpen" disabled>Open</rn-button>
+            <rn-button id="pickedOn" variant="ghost" disabled title="Show its objects in the world beside the open scene; they cannot be selected">Show in world</rn-button>
+            <rn-button id="libraryRefresh" variant="ghost" title="Look at the folders again">Refresh</rn-button>
+          </div>
+          <rn-input id="newName" label="Name" placeholder="A name for a new scene or folder"></rn-input>
+          <div id="newWhere" class="detail"></div>
+          <div class="row">
+            <rn-button id="createScene" variant="ghost" title="An empty scene in this folder, opened">New scene here</rn-button>
+            <rn-button id="saveAsHere" variant="ghost" title="A copy of the open scene in this folder, which becomes the open scene">Save open scene here</rn-button>
+            <rn-button id="createFolder" variant="ghost" title="A folder inside this one (Library only)">New folder</rn-button>
+          </div>
+        </rn-panel>
+      </rn-tab>
       <rn-tab label="Settings">
         <rn-input id="bridgePath" label="REDbridge.exe" placeholder="Empty: the copy EDGEdeck fetched"></rn-input>
         <rn-input id="gameDir" label="Game folder" placeholder="Empty: found from where REDnode runs"></rn-input>
@@ -97,19 +131,25 @@
           <rn-toggle id="editorCamera" label="Use EDGEbuilder's own camera (V stays put)" checked></rn-toggle>
           <rn-toggle id="hideHud" label="Hide the game's HUD" checked></rn-toggle>
         </rn-panel>
+        <rn-panel title="Library">
+          <rn-input id="libraryRoot" label="Library folder"></rn-input>
+          <div class="row"><rn-button id="setLibrary" variant="ghost">Use this folder</rn-button></div>
+          <div class="detail">Shared by every EDGE tool and kept in %APPDATA%\EDGE\library.json. Your scenes go in folders you make there. Scenes can also stay in the REDcode project or on This PC; the Library is never needed.</div>
+        </rn-panel>
         <div class="row"><rn-button id="buildIndex" variant="ghost">Rebuild asset index</rn-button><rn-button id="restartBridge" variant="ghost">Restart REDbridge</rn-button></div>
         <div id="bridgeDetail" class="detail"></div>
         <div id="indexDetail" class="detail"></div>
         <div id="settingsFile" class="detail"></div>
       </rn-tab>
       <rn-tab label="About">
-        <div class="phase">// B3 · arrange</div>
+        <div class="phase">// B3 · arrange and save</div>
         <p>A world builder for the EDGE platform: browse the game's assets, drop them into the world, position, arrange, bake.</p>
         <p>To place an asset: pick it, then <b>Drop where I look</b>, or <b>Drop at click</b> and click the spot in the world (Esc or right-click cancels). On the Assets tab, typing searches.</p>
         <p>Switch <b>Edit</b> on (top of this window) to work in the world: click an object to select it, drag an arrow to move it along that axis, drag the ring to turn it. Keys: G move, R turn, S scale (meshes), then X, Y or Z to lock an axis and a number to type the amount; Enter or a click keeps it, Esc or a right-click undoes it. Ctrl snaps, Ctrl+E drops to the floor, Delete removes. With Edit off the game gets the mouse as usual.</p>
         <p>With Edit on, EDGEbuilder looks through a camera of its own and hides the game's HUD; V stays where V is. Hold the right mouse button to look around and fly with W A S D, Q down, E up (Shift faster, the wheel changes the speed while flying). The middle mouse orbits the selected object, Shift with it pans, the wheel moves closer, F frames the selection. Switch Edit off and the view is V's again. Both can be switched off in Settings, also while Edit is on.</p>
         <p>To arrange: Ctrl+click adds an object to the selection, Shift+drag selects everything in a box, and a move, turn or scale then acts on all of them, around their middle. Ctrl+G groups the selection and Ctrl+Shift+G ungroups; a click on an object in a group selects the group, Alt+click just that object. Ctrl+D duplicates the selection, which then follows the mouse until a click places it (Esc or right-click: no copy). Ctrl+C copies the selection, Ctrl+X cuts it (copies, then deletes), and Ctrl+V pastes it where the cursor points, standing on the surface there, as often as you like. Ctrl+Z undoes, Ctrl+Y redoes, Clear scene included; Undo, Redo, Copy, Group and Ungroup are buttons on the Scene tab too. Groups open and close with the arrow.</p>
-        <p>Next: saved scenes and the Library (B3), the bake (B4).</p>
+        <p>Scenes: the open scene is saved after every change; Ctrl+S confirms it and Ctrl+Shift+S saves a copy under a new name. Its name is at the top of the Scene tab (Enter renames it). The Library tab lists every scene: in the Library (your own folders, shared by the EDGE tools; set it in Settings), in the open REDcode project, and on This PC. Pick one to open it, or <b>Show in world</b> to see it beside the one you are editing (shown, not editable). EDGEbuilder opens the last scene again when it starts.</p>
+        <p>Next: the bake (B4).</p>
         <p>Design and guide: <code>edgemodders.github.io/EDGEbuilder</code></p>
       </rn-tab>
     </rn-tabs>

@@ -2,7 +2,7 @@
 import { channel } from "rednode";
 import { applyChange, boxOf, centreOf, membersOf, pickMany, pickSelection, selectionUnits } from "../arrange";
 import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
-import type { AssetEntry, AssetFrom, AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "../protocol";
+import type { AssetEntry, AssetFrom, AssetKind, PageMessage, Place, SceneEntry, SceneObject, SceneTransform, Snapshot } from "../protocol";
 import { held } from "./held";
 import { Viewport, busyText } from "./viewport";
 
@@ -163,6 +163,9 @@ function render(s: Snapshot): void {
   $("settingsFile").textContent = s.settings.settingsFile;
   $("bridgeDetail").textContent = [b.path, b.detail].filter(Boolean).join("\n");
   $("indexDetail").textContent = ix.file ?? "";
+
+  // Scenes and the Library (B3-2).
+  renderLibrary(s);
 
   // Busy: a change that takes a while, and the ones waiting behind it.
   renderBusy(s.busy);
@@ -428,6 +431,213 @@ for (const f of fields)
     (document.activeElement as HTMLElement | null)?.blur();
   });
 
+// ---- scenes and the Library (B3-2) -------------------------------------------------------------------
+//
+// The Library tab: the three places (Library, the REDcode project, This PC) as one tree of folders and
+// scenes. What is picked there says which scene Open and Show act on, and which folder New, Save as and
+// New folder use.
+
+type Picked = { kind: "scene"; file: string } | { kind: "folder"; place: Place; folder: string };
+let picked: Picked | undefined;
+/** Folders closed in the tree, as `place|folder` (open by default). */
+const closedFolders = new Set<string>();
+const TabLabels = { scene: 1, library: 2 } as const;
+
+const parentOf = (folder: string) => (folder.includes("/") ? folder.slice(0, folder.lastIndexOf("/")) : "");
+const lastPart = (folder: string) => folder.slice(folder.lastIndexOf("/") + 1);
+const sameFile = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+function placeLabel(s: Snapshot, place: Place | undefined): string {
+  return s.library.shelves.find((sh) => sh.place === place)?.label ?? "";
+}
+
+/** "Library > Alleys > Kabuki", "This PC". */
+function whereLabel(s: Snapshot, place: Place | undefined, folder: string | undefined): string {
+  const label = placeLabel(s, place);
+  if (!label) return "";
+  return folder ? `${label} > ${folder.replace(/\//g, " > ")}` : label;
+}
+
+function findScene(s: Snapshot, file: string): SceneEntry | undefined {
+  for (const sh of s.library.shelves) for (const sc of sh.scenes) if (sameFile(sc.file, file)) return sc;
+  return undefined;
+}
+
+/** Where New, Save as and New folder go: the picked folder, the picked scene's folder, else the Library (or This PC). */
+function target(s: Snapshot): { place: Place; folder: string } {
+  const p = picked;
+  if (p?.kind === "folder" && s.library.shelves.some((sh) => sh.place === p.place)) return { place: p.place, folder: p.folder };
+  if (picked?.kind === "scene") {
+    const sc = findScene(s, picked.file);
+    if (sc) return { place: sc.place, folder: sc.folder };
+  }
+  return { place: s.library.root ? "library" : "data", folder: "" };
+}
+
+const when = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })} ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
+};
+
+function libraryRows(s: Snapshot): string {
+  const rows: string[] = [];
+  const pad = (depth: number) => ` style="padding-left:${12 + depth * 18}px"`;
+  const isOn = (file: string) => s.library.on.some((f) => sameFile(f, file));
+  const isPicked = (v: Picked) => !!picked && JSON.stringify(picked) === JSON.stringify(v);
+  for (const sh of s.library.shelves) {
+    const walk = (folder: string, depth: number) => {
+      for (const f of sh.folders.filter((x) => parentOf(x) === folder)) {
+        const key = `${sh.place}|${f}`;
+        rows.push(
+          `<rn-item value="d:${esc(key)}"${isPicked({ kind: "folder", place: sh.place, folder: f }) ? " selected" : ""}${pad(depth)}><span class="fold" data-folder="${esc(key)}">${closedFolders.has(key) ? "▸" : "▾"}</span>${esc(lastPart(f))}</rn-item>`,
+        );
+        if (!closedFolders.has(key)) walk(f, depth + 1);
+      }
+      for (const sc of sh.scenes.filter((x) => x.folder === folder)) {
+        const open = sameFile(sc.file, s.scene.file ?? "");
+        const tags = `${open ? '<span class="tag">open</span>' : ""}${isOn(sc.file) ? '<span class="tag">shown</span>' : ""}`;
+        const end = sc.error ? "cannot be read" : `${open ? s.scene.objects.length : sc.objects} obj · ${when(sc.changed)}`;
+        rows.push(
+          `<rn-item value="f:${esc(sc.file)}" title="${esc(sc.error ? `${sc.file}\n${sc.error}` : sc.file)}"${isPicked({ kind: "scene", file: sc.file }) ? " selected" : ""}${pad(depth)}><span class="fold"></span>${esc(sc.name)}${tags}<span slot="end">${esc(end)}</span></rn-item>`,
+        );
+      }
+    };
+    const key = `${sh.place}|`;
+    rows.push(
+      `<rn-item value="d:${esc(key)}" title="${esc(sh.dir)}"${isPicked({ kind: "folder", place: sh.place, folder: "" }) ? " selected" : ""}${pad(0)}><span class="fold" data-folder="${esc(key)}">${closedFolders.has(key) ? "▸" : "▾"}</span><span class="section">${esc(sh.label)}</span><span slot="end">${sh.scenes.length} scene${sh.scenes.length === 1 ? "" : "s"}</span></rn-item>`,
+    );
+    if (!closedFolders.has(key)) walk("", 1);
+  }
+  return rows.join("");
+}
+
+function renderLibrary(s: Snapshot): void {
+  // The scene at the top of the Scene tab.
+  const name = $<Field>("sceneName");
+  if (document.activeElement?.id !== "sceneName") name.value = s.scene.name;
+  const where = whereLabel(s, s.scene.place, s.scene.folder);
+  $("sceneWhere").textContent = where ? `In ${where}. Saved after every change.` : s.scene.file ? `In ${s.scene.file}. Saved after every change.` : "";
+  $("sceneWhere").title = s.scene.file ?? "";
+
+  // The Library tab.
+  const root = s.library.root;
+  $("libraryInfo").textContent = root ? `Library: ${root}` : `No Library folder yet. Make one at ${s.library.suggested}, or pick another folder in Settings. Scenes can stay in the REDcode project or on This PC meanwhile.`;
+  $("libraryMakeRow").hidden = !!root;
+  $("libraryMake").title = s.library.suggested;
+  if (picked?.kind === "scene" && !findScene(s, picked.file)) picked = undefined;
+  $("shelves").innerHTML = libraryRows(s);
+  const sc = picked?.kind === "scene" ? findScene(s, picked.file) : undefined;
+  const open = !!sc && sameFile(sc.file, s.scene.file ?? "");
+  const on = !!sc && s.library.on.some((f) => sameFile(f, sc.file));
+  if (sc)
+    $("pickedText").textContent = `${sc.name}${open ? " (open)" : on ? " (shown in the world)" : ""}\n${whereLabel(s, sc.place, sc.folder)}\n${sc.error ? `Cannot be read: ${sc.error}` : `${open ? s.scene.objects.length : sc.objects} objects, changed ${when(sc.changed)}`}\n${sc.file}`;
+  else if (picked?.kind === "folder") $("pickedText").textContent = `Folder: ${whereLabel(s, picked.place, picked.folder)}`;
+  else $("pickedText").textContent = "Pick a scene to open or show it, or a folder for a new scene. A double-click opens a scene.";
+  $("pickedOpen").toggleAttribute("disabled", !sc || open || !!sc.error);
+  $("pickedOn").toggleAttribute("disabled", !sc || open || !!sc.error);
+  $("pickedOn").textContent = on ? "Hide from world" : "Show in world";
+  const t = target(s);
+  $("newWhere").textContent = `In ${whereLabel(s, t.place, t.folder)}`;
+  $("createFolder").toggleAttribute("disabled", t.place !== "library");
+  $("createFolder").title = t.place === "library" ? "A folder inside this one" : "Folders are made in the Library";
+
+  // Settings.
+  const rootField = $<Field>("libraryRoot");
+  if (document.activeElement?.id !== "libraryRoot") rootField.value = root ?? "";
+  rootField.setAttribute("placeholder", s.library.suggested);
+}
+
+const mainTabs = () => document.getElementById("mainTabs") as HTMLElement & { select?(i: number): void };
+const newName = () => $<Field>("newName");
+
+/** The Library tab with the name field ready: for Save as (Ctrl+Shift+S) and New. */
+function toLibrary(name: string): void {
+  mainTabs().select?.(TabLabels.library);
+  const f = newName();
+  f.value = name;
+  (f as HTMLElement & { focus(): void }).focus();
+}
+
+$("mainTabs").addEventListener("change", (e) => {
+  if (e.target === $("mainTabs") && (e as CustomEvent<{ label: string }>).detail.label === "Library") post({ type: "library.refresh" });
+});
+$("shelves").addEventListener(
+  "click",
+  (e) => {
+    const fold = (e.target as HTMLElement).closest?.(".fold") as HTMLElement | null;
+    const key = fold?.dataset.folder;
+    if (!key) return;
+    e.stopPropagation();
+    if (closedFolders.has(key)) closedFolders.delete(key);
+    else closedFolders.add(key);
+    if (state) render(state);
+  },
+  true,
+);
+$("shelves").addEventListener("select", (e) => {
+  const value = (e as CustomEvent<{ value: string }>).detail.value;
+  if (value.startsWith("f:")) picked = { kind: "scene", file: value.slice(2) };
+  else {
+    const key = value.slice(2);
+    const bar = key.indexOf("|");
+    picked = { kind: "folder", place: key.slice(0, bar) as Place, folder: key.slice(bar + 1) };
+  }
+  if (state) render(state);
+});
+$("shelves").addEventListener("dblclick", (e) => {
+  const item = (e.target as HTMLElement).closest?.("rn-item");
+  const value = item?.getAttribute("value");
+  if (value?.startsWith("f:") && state && !sameFile(value.slice(2), state.scene.file ?? "")) post({ type: "scene.open", file: value.slice(2) });
+});
+$("pickedOpen").addEventListener("click", () => picked?.kind === "scene" && post({ type: "scene.open", file: picked.file }));
+$("pickedOn").addEventListener("click", () => {
+  if (picked?.kind !== "scene" || !state) return;
+  const file = picked.file;
+  post({ type: "scene.on", file, on: !state.library.on.some((f) => sameFile(f, file)) });
+});
+$("libraryRefresh").addEventListener("click", () => post({ type: "library.refresh" }));
+$("libraryMake").addEventListener("click", () => state && post({ type: "library.root", root: state.library.suggested }));
+$("setLibrary").addEventListener("click", () => {
+  if (!state) return;
+  post({ type: "library.root", root: $<Field>("libraryRoot").value?.trim() || state.library.suggested });
+});
+$("createScene").addEventListener("click", () => {
+  if (!state) return;
+  const name = newName().value?.trim();
+  if (!name) return status("Type a name for the new scene first.");
+  post({ type: "scene.new", name, ...target(state) });
+  newName().value = "";
+});
+$("saveAsHere").addEventListener("click", () => {
+  if (!state) return;
+  const name = newName().value?.trim();
+  if (!name) return status("Type a name for the copy first.");
+  post({ type: "scene.saveAs", name, ...target(state) });
+  newName().value = "";
+});
+$("createFolder").addEventListener("click", () => {
+  if (!state) return;
+  const name = newName().value?.trim();
+  const t = target(state);
+  if (!name) return status("Type a name for the new folder first.");
+  if (t.place !== "library") return status("Folders are made in the Library: pick the Library or a folder in it.");
+  post({ type: "library.folder", folder: t.folder, name });
+  newName().value = "";
+});
+$("sceneName").addEventListener("submit", () => {
+  post({ type: "scene.rename", name: $<Field>("sceneName").value ?? "" });
+  (document.activeElement as HTMLElement | null)?.blur();
+});
+$("saveScene").addEventListener("click", () => post({ type: "scene.save" }));
+$("saveAsScene").addEventListener("click", () => state && toLibrary(`${state.scene.name} copy`));
+$("newScene").addEventListener("click", () => toLibrary(""));
+$("openScene").addEventListener("click", () => mainTabs().select?.(TabLabels.library));
+
+function status(text: string): void {
+  $("message").textContent = text;
+  $("message").className = "message warn";
+}
+
 // ---- the viewport ------------------------------------------------------------------------------
 
 const showSceneTab = () => (document.getElementById("mainTabs") as HTMLElement & { select?(i: number): void }).select?.(1);
@@ -456,8 +666,8 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
     $("message").className = "message warn";
   },
 });
-// Undo, redo, duplicate, copy, cut, paste and group: Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z), Ctrl+D, Ctrl+C, Ctrl+X, Ctrl+V,
-// Ctrl+G, Ctrl+Shift+G. Not while
+// Undo, redo, duplicate, copy, cut, paste, group and save: Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z), Ctrl+D, Ctrl+C, Ctrl+X, Ctrl+V,
+// Ctrl+G, Ctrl+Shift+G, Ctrl+S, Ctrl+Shift+S. Not while
 // typing in a field (the field undoes its own text), and not in the middle of a drag or a box.
 window.addEventListener("keydown", (e) => {
   if (!e.ctrlKey || e.altKey || e.metaKey) return;
@@ -476,6 +686,8 @@ window.addEventListener("keydown", (e) => {
     post({ type: "paste", at: ray ? { origin: ray.o, dir: ray.d } : undefined });
   }
   else if (key === "g" && ids.length) post({ type: e.shiftKey ? "ungroup" : "group", ids });
+  else if (key === "s" && e.shiftKey) state && toLibrary(`${state.scene.name} copy`);
+  else if (key === "s") post({ type: "scene.save" });
   else return;
   e.preventDefault();
 });

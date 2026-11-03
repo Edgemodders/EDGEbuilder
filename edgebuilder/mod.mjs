@@ -1,8 +1,8 @@
 // Built from src/ by build.mjs; edit the TypeScript, not this file.
 
 // src/mod.ts
-import * as fs5 from "node:fs";
-import * as path5 from "node:path";
+import * as fs6 from "node:fs";
+import * as path6 from "node:path";
 import { api, channel, game, kernel, pkg, service, ui, world } from "rednode";
 
 // src/bridge.ts
@@ -86,8 +86,8 @@ var BridgeClient = class {
     if (!this.running) return Promise.reject(new BridgeError("REDbridge is not running"));
     const id = this.nextId++;
     const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id, method, params: params ?? {} }), "utf8");
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+    return new Promise((resolve3, reject) => {
+      this.pending.set(id, { resolve: resolve3, reject });
       this.process.stdin.write(Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r
 \r
 `, "ascii"), body]));
@@ -299,11 +299,11 @@ var AssetIndex = class {
   }
 };
 function unique(entries) {
-  const seen = /* @__PURE__ */ new Set();
+  const seen2 = /* @__PURE__ */ new Set();
   return entries.filter((e) => {
     const key = e.path.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
+    if (seen2.has(key)) return false;
+    seen2.add(key);
     return true;
   });
 }
@@ -379,9 +379,9 @@ var ModSources = class {
   async refreshMods(bridge2, files, isGamePath, progress2) {
     let changed = false;
     const failed = [];
-    const seen = /* @__PURE__ */ new Set();
+    const seen2 = /* @__PURE__ */ new Set();
     for (const { file, mod } of files) {
-      seen.add(file);
+      seen2.add(file);
       let stat;
       try {
         stat = fs3.statSync(file);
@@ -409,7 +409,7 @@ var ModSources = class {
       }
     }
     for (const file of Object.keys(this.archives)) {
-      if (!seen.has(file)) {
+      if (!seen2.has(file)) {
         delete this.archives[file];
         changed = true;
       }
@@ -565,9 +565,9 @@ function lookOf(fwd) {
 // src/arrange.ts
 function groupChain(id, groups) {
   const chain = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (let g = groups.find((x) => x.id === id); g && !seen.has(g.id); g = groups.find((x) => x.id === g.parent)) {
-    seen.add(g.id);
+  const seen2 = /* @__PURE__ */ new Set();
+  for (let g = groups.find((x) => x.id === id); g && !seen2.has(g.id); g = groups.find((x) => x.id === g.parent)) {
+    seen2.add(g.id);
     chain.push(g.id);
   }
   return chain;
@@ -732,11 +732,19 @@ function boxOf(objects) {
 }
 
 // src/scene.ts
+function readSceneFile(file) {
+  const data = JSON.parse(fs4.readFileSync(file, "utf8"));
+  if (data.format !== 1 || !Array.isArray(data.objects)) throw new Error(`not a format 1 scene`);
+  return data;
+}
 var Scene = class {
+  /** The file the scene is saved to after every change; another scene opened (B3-2) changes it. */
   constructor(file) {
     this.file = file;
   }
   name = "Working scene";
+  /** The game version the file says it was made against; kept, not set (B3-2). */
+  game;
   objects = [];
   groups = [];
   /** Where an unreadable scene file was moved, so the next save does not overwrite it. */
@@ -751,10 +759,7 @@ var Scene = class {
     try {
       const data = JSON.parse(text);
       if (data.format !== 1 || !Array.isArray(data.objects)) throw new Error(`not a format 1 scene`);
-      this.name = data.name || this.name;
-      this.objects = data.objects.map((o) => ({ ...o }));
-      this.groups = Array.isArray(data.groups) ? data.groups.map((g) => ({ id: g.id, name: g.name, parent: g.parent ?? null })) : [];
-      for (const o of this.objects) if (o.group && !this.groups.some((g) => g.id === o.group)) delete o.group;
+      this.take(data);
       return true;
     } catch (err) {
       this.setAside = `${this.file}.unreadable-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}`;
@@ -768,15 +773,31 @@ var Scene = class {
     }
   }
   loadError;
-  save() {
-    fs4.mkdirSync(path4.dirname(this.file), { recursive: true });
-    const data = {
+  /** Makes this the scene in `data`, saved to `file` from now on. */
+  take(data, file = this.file) {
+    this.file = file;
+    this.name = data.name || path4.basename(file).replace(/\.scene\.json$/i, "");
+    this.game = typeof data.game === "string" ? data.game : void 0;
+    this.objects = data.objects.map((o) => ({ ...o }));
+    this.groups = Array.isArray(data.groups) ? data.groups.map((g) => ({ id: g.id, name: g.name, parent: g.parent ?? null })) : [];
+    for (const o of this.objects) if (o.group && !this.groups.some((g) => g.id === o.group)) delete o.group;
+  }
+  /** The scene as its file keeps it. */
+  data() {
+    return {
       format: 1,
       name: this.name,
+      ...this.game ? { game: this.game } : {},
       groups: this.groups,
       objects: this.objects.map(({ entityId: _live, ...rest }) => rest)
     };
-    fs4.writeFileSync(this.file, JSON.stringify(data, null, 2));
+  }
+  /** Called after each save, for the service's scene-changed event. */
+  onSave;
+  save() {
+    fs4.mkdirSync(path4.dirname(this.file), { recursive: true });
+    fs4.writeFileSync(this.file, JSON.stringify(this.data(), null, 2));
+    this.onSave?.();
   }
   add(kind, resource, transform, appearance) {
     const base = resource ? path4.basename(resource).replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/gi, "_").toLowerCase() : kind;
@@ -841,24 +862,157 @@ function yawToQuaternion(yawDegrees) {
   return [0, 0, Math.sin(half), Math.cos(half)];
 }
 
+// src/scenes.ts
+import { execFileSync } from "node:child_process";
+import * as fs5 from "node:fs";
+import * as os from "node:os";
+import * as path5 from "node:path";
+var SceneEnding = ".scene.json";
+function libraryConfigFile() {
+  return path5.join(process.env.APPDATA ?? path5.join(os.homedir(), "AppData", "Roaming"), "EDGE", "library.json");
+}
+function readLibraryRoot(file = libraryConfigFile()) {
+  try {
+    const root = JSON.parse(fs5.readFileSync(file, "utf8")).root;
+    return typeof root === "string" && root.trim() ? root.trim() : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function writeLibraryRoot(root, file = libraryConfigFile()) {
+  root = path5.resolve(root);
+  fs5.mkdirSync(root, { recursive: true });
+  let data = {};
+  try {
+    data = JSON.parse(fs5.readFileSync(file, "utf8"));
+  } catch {
+  }
+  fs5.mkdirSync(path5.dirname(file), { recursive: true });
+  fs5.writeFileSync(file, JSON.stringify({ ...data, root }, null, 2));
+}
+function documentsFolder() {
+  const fallback = path5.join(os.homedir(), "Documents");
+  if (process.platform !== "win32") return fallback;
+  try {
+    const out = execFileSync("reg", ["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders", "/v", "Personal"], { encoding: "utf8", windowsHide: true, timeout: 5e3 });
+    const m = /Personal\s+REG_(?:EXPAND_)?SZ\s+(.+)/.exec(out);
+    if (!m) return fallback;
+    return m[1].trim().replace(/%([^%]+)%/g, (all, name) => process.env[name] ?? all);
+  } catch {
+    return fallback;
+  }
+}
+function suggestedLibraryRoot() {
+  return path5.join(documentsFolder(), "EDGE Library");
+}
+function slugOf(name) {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/^_+|_+$/g, "") || "scene";
+}
+function refOf(sceneName, o) {
+  return o.ref ?? `edgebuilder/${slugOf(sceneName)}/${o.id}`;
+}
+function fileNameOf(name) {
+  return slugOf(name) + SceneEnding;
+}
+function folderIn(root, folder) {
+  const full = path5.resolve(root, folder ?? "");
+  const rel = path5.relative(path5.resolve(root), full);
+  if (rel.startsWith("..") || path5.isAbsolute(rel)) throw new Error(`${folder} is outside ${root}`);
+  return full;
+}
+function cleanFolderName(name) {
+  const clean = name.replace(/[<>:"/\\|?*\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/, "");
+  if (!clean || clean === "." || clean === "..") throw new Error("Give the folder a name");
+  return clean;
+}
+function whereIs(file, roots) {
+  for (const r of roots) {
+    const rel = path5.relative(path5.resolve(r.dir), path5.resolve(file));
+    if (!rel.startsWith("..") && !path5.isAbsolute(rel)) return { place: r.place, folder: path5.dirname(rel).replace(/\\/g, "/").replace(/^\.$/, "") };
+  }
+  return void 0;
+}
+var MaxDepth = 8;
+var MaxScenes = 2e3;
+var seen = /* @__PURE__ */ new Map();
+function describe(file, st) {
+  const known = seen.get(file);
+  if (known && known.size === st.size && known.mtime === st.mtimeMs) return known;
+  let out;
+  const fallback = path5.basename(file).slice(0, -SceneEnding.length);
+  try {
+    const data = JSON.parse(fs5.readFileSync(file, "utf8"));
+    if (typeof data.format !== "number" || !Array.isArray(data.objects)) throw new Error("not an EDGEbuilder scene");
+    out = { name: typeof data.name === "string" && data.name.trim() ? data.name : fallback, objects: data.objects.length };
+  } catch (err) {
+    out = { name: fallback, objects: 0, error: err.message };
+  }
+  seen.set(file, { size: st.size, mtime: st.mtimeMs, ...out });
+  return out;
+}
+function scanShelf(root) {
+  const shelf = { ...root, folders: [], scenes: [] };
+  const walk = (dir, rel, depth) => {
+    let names;
+    try {
+      names = fs5.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    names.sort((a, b) => a.name.localeCompare(b.name, void 0, { sensitivity: "base" }));
+    for (const d of names) {
+      if (shelf.scenes.length >= MaxScenes) return;
+      const full = path5.join(dir, d.name);
+      const sub2 = rel ? `${rel}/${d.name}` : d.name;
+      if (d.isDirectory()) {
+        if (d.name.startsWith(".") || d.name.toLowerCase().endsWith(".bake") || d.name === "node_modules" || depth >= MaxDepth) continue;
+        shelf.folders.push(sub2);
+        walk(full, sub2, depth + 1);
+      } else if (d.isFile() && d.name.toLowerCase().endsWith(SceneEnding)) {
+        let st;
+        try {
+          st = fs5.statSync(full);
+        } catch {
+          continue;
+        }
+        shelf.scenes.push({ place: root.place, file: full, folder: rel, changed: st.mtimeMs, ...describe(full, st) });
+      }
+    }
+  };
+  walk(root.dir, "", 0);
+  return shelf;
+}
+
 // src/mod.ts
 var EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
 var SpawnDistance = 3;
 var ResultLimit = 120;
-var settingsFile = path5.join(pkg.dataDir, "settings.json");
+var settingsFile = path6.join(pkg.dataDir, "settings.json");
 var settings = {};
 try {
-  settings = JSON.parse(fs5.readFileSync(settingsFile, "utf8"));
+  settings = JSON.parse(fs6.readFileSync(settingsFile, "utf8"));
 } catch {
 }
-var scene = new Scene(path5.join(pkg.dataDir, "scenes", "working.scene.json"));
+var dataScenes = path6.join(pkg.dataDir, "scenes");
+var WorkingScene = path6.join(dataScenes, "working.scene.json");
+var sessionFile = path6.join(pkg.dataDir, "session.json");
+var session = {};
+try {
+  session = JSON.parse(fs6.readFileSync(sessionFile, "utf8"));
+} catch {
+}
+var lastGone = session.open && !fs6.existsSync(session.open) && path6.resolve(session.open).toLowerCase() !== WorkingScene.toLowerCase() ? session.open : void 0;
+var scene = new Scene(session.open && !lastGone ? session.open : WorkingScene);
 scene.load();
+var onScenes = new Map((session.on ?? []).filter((f) => fs6.existsSync(f) && f !== scene.file).map((f) => [f, 0]));
+var libraryRoot = readLibraryRoot();
+var suggestedRoot = suggestedLibraryRoot();
 var past = [];
 var future = [];
 var HistoryLength = 100;
 var duplicates = 0;
-var index = new AssetIndex(path5.join(pkg.dataDir, "index"));
-var sources = new ModSources(path5.join(pkg.dataDir, "sources", "mods.json"));
+var index = new AssetIndex(path6.join(pkg.dataDir, "index"));
+var sources = new ModSources(path6.join(pkg.dataDir, "sources", "mods.json"));
 index.extra = sources.entries();
 var bridge;
 var blockedRetry;
@@ -873,13 +1027,17 @@ var state = {
   query: { text: "", kind: "all", from: "all" },
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
   scene: { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: [] },
+  library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [] },
   selected: [],
   history: { undo: 0, redo: 0 },
   settings: { ...settings, settingsFile },
   inUse: {}
 };
 function publish() {
-  state.scene = { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra) };
+  const at = whereIs(scene.file, placeRoots());
+  state.scene = { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra), place: at?.place, folder: at?.folder };
+  state.library.root = libraryRoot;
+  state.library.on = [...onScenes.keys()];
   state.selected = state.selected.filter((id) => scene.get(id));
   state.history = { undo: past.length, redo: future.length };
   state.settings = { ...settings, settingsFile };
@@ -895,7 +1053,7 @@ function gameDir() {
   if (isGameFolder(settings.gameDir)) return settings.gameDir;
   let dir = pkg.dir;
   for (let i = 0; i < 6; i++) {
-    dir = path5.dirname(dir);
+    dir = path6.dirname(dir);
     if (isGameFolder(dir)) return dir;
   }
   return void 0;
@@ -1044,7 +1202,7 @@ function watchMods() {
   const changed = debounced(() => void refreshMods());
   for (const folder of modFolders(dir)) {
     try {
-      modWatchers.push(fs5.watch(folder, { recursive: true }, changed));
+      modWatchers.push(fs6.watch(folder, { recursive: true }, changed));
     } catch {
     }
   }
@@ -1063,7 +1221,7 @@ function setProject(next) {
     projectWatch = void 0;
     if (next) {
       try {
-        projectWatch = fs5.watch(next.archive, { recursive: true }, projectChanged);
+        projectWatch = fs6.watch(next.archive, { recursive: true }, projectChanged);
       } catch {
       }
       console.log(`REDcode project: ${next.name} (${next.archive})`);
@@ -1072,6 +1230,7 @@ function setProject(next) {
     }
   }
   project = next;
+  scanLibrary();
   scanProject();
 }
 async function connectRedcode() {
@@ -1130,6 +1289,7 @@ async function checkWorld() {
     say("Builder mode was still on from last time (EDGEbuilder stopped while Edit was on); V's camera and HUD are back.", "info");
     return;
   }
+  if (state.world === "ready" && before !== "ready") void inTurn("Show scenes that are on", () => reloadOn());
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light").length;
   if (state.world === "ready" && before !== "ready" && away) {
     say(`${away} object${away === 1 ? " is" : "s are"} in the scene but not in the world. Press Rebuild previews in the Scene tab to place ${away === 1 ? "it" : "them"}, or delete ${away === 1 ? "it" : "them"} there.`, "info");
@@ -1353,21 +1513,21 @@ async function floorUnder(o) {
   console.log(`Drop to floor ${o.id} from z ${startZ.toFixed(2)}: ${tried.join("; ")}`);
   return floor === void 0 ? void 0 : { ...o.transform, position: [x, y, floor - lowest] };
 }
-var builderFile = path5.join(pkg.dataDir, "builder-mode.json");
+var builderFile = path6.join(pkg.dataDir, "builder-mode.json");
 var CameraName = "edgebuilder_camera";
 var HudHiddenTier = 4;
 var editorCam;
 var tierWatch;
 function readBuilderRecord() {
   try {
-    return JSON.parse(fs5.readFileSync(builderFile, "utf8"));
+    return JSON.parse(fs6.readFileSync(builderFile, "utf8"));
   } catch {
     return void 0;
   }
 }
 function writeBuilderRecord(r) {
-  fs5.mkdirSync(pkg.dataDir, { recursive: true });
-  fs5.writeFileSync(builderFile, JSON.stringify(r));
+  fs6.mkdirSync(pkg.dataDir, { recursive: true });
+  fs6.writeFileSync(builderFile, JSON.stringify(r));
 }
 async function sceneTierBoard() {
   const player = await api.GetPlayer(game.instance);
@@ -1598,7 +1758,7 @@ async function builderStop() {
   await setSolo(false);
   state.camera = void 0;
   try {
-    fs5.rmSync(builderFile, { force: true });
+    fs6.rmSync(builderFile, { force: true });
   } catch {
   }
   if (wasOn) console.log("Builder mode off");
@@ -1635,7 +1795,7 @@ async function drop(assetPath, appearance, at) {
     await select([o.id]);
     const from = sourceOf(assetPath)?.source;
     const note = from?.kind === "project" ? await inGameArchives(assetPath) ? ` From the REDcode project ${from.name}, at a game file's path: the game shows its own version until the project is packed and loaded (REDcode's Pack and Play).` : ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).` : from?.kind === "mod" ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}` : "";
-    say(`Dropped ${path5.basename(assetPath)} in ${Date.now() - started} ms.${note}`, "ok");
+    say(`Dropped ${path6.basename(assetPath)} in ${Date.now() - started} ms.${note}`, "ok");
   } catch (err) {
     if (added) {
       await removePreview(added);
@@ -1762,11 +1922,252 @@ async function clear() {
   state.selected = [];
   say("Scene cleared. Undo brings it back.", "ok");
 }
+function placeRoots() {
+  const out = [];
+  if (libraryRoot) out.push({ place: "library", dir: libraryRoot, label: "Library" });
+  if (project) out.push({ place: "project", dir: path6.join(path6.dirname(project.archive), "scenes"), label: `Project: ${project.name}` });
+  out.push({ place: "data", dir: dataScenes, label: "This PC" });
+  return out;
+}
+function rootOf(place2) {
+  const r = placeRoots().find((x) => x.place === place2);
+  if (r) return r;
+  throw new Error(place2 === "library" ? "Set the Library folder in Settings first." : "No REDcode project is open.");
+}
+function scanLibrary() {
+  state.library.shelves = placeRoots().map(scanShelf);
+}
+function whereText(file) {
+  const roots = placeRoots();
+  const at = whereIs(file, roots);
+  if (!at) return file;
+  const label = roots.find((r) => r.place === at.place).label;
+  return at.folder ? `${label} > ${at.folder.replace(/\//g, " > ")}` : label;
+}
+function writeSession() {
+  try {
+    fs6.mkdirSync(pkg.dataDir, { recursive: true });
+    fs6.writeFileSync(sessionFile, JSON.stringify({ open: scene.file, on: [...onScenes.keys()] }, null, 2));
+  } catch (err) {
+    console.log(`session.json not written: ${err.message}`);
+  }
+}
+var sameFile = (a, b) => path6.resolve(a).toLowerCase() === path6.resolve(b).toLowerCase();
+async function switchTo(data, file) {
+  for (const o of scene.objects) await removePreview(o);
+  state.selected = [];
+  state.duplicated = void 0;
+  past.length = 0;
+  future.length = 0;
+  scene.take(data, file);
+  writeSession();
+}
+async function openScene(file) {
+  if (sameFile(file, scene.file)) return say(`${scene.name} is already open.`, "info");
+  let data;
+  try {
+    data = readSceneFile(file);
+  } catch (err) {
+    return say(`${path6.basename(file)} cannot be opened: ${err.message}.`, "error");
+  }
+  const wasOn = [...onScenes.keys()].find((f) => sameFile(f, file));
+  if (wasOn) await sceneOff(wasOn);
+  await switchTo(data, file);
+  scanLibrary();
+  scene.onSave?.();
+  const n = scene.objects.length;
+  if (state.world !== "ready") return say(`Opened ${scene.name} (${whereText(file)}), ${n} object${n === 1 ? "" : "s"}. Rebuild previews once a save is loaded.`, "ok");
+  const r = await spawnNear(scene.objects);
+  const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place` : ""].filter(Boolean);
+  say(`Opened ${scene.name} (${whereText(file)}): ${r.shown} of ${n} object${n === 1 ? "" : "s"} in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
+}
+function newFile(name, place2, folder) {
+  name = name.trim();
+  if (!name) throw new Error("Give the scene a name.");
+  const dir = folderIn(rootOf(place2).dir, folder);
+  const file = path6.join(dir, fileNameOf(name));
+  if (fs6.existsSync(file)) throw new Error(`${whereText(file)} already has a scene called ${path6.basename(file)}: open it, or pick another name.`);
+  return { name, file };
+}
+function attempt(make) {
+  try {
+    return make();
+  } catch (err) {
+    say(err.message, "warn");
+    return void 0;
+  }
+}
+async function newScene(name, place2, folder) {
+  const t = attempt(() => newFile(name, place2, folder));
+  if (!t) return;
+  const was = scene.name;
+  await switchTo({ format: 1, name: t.name, groups: [], objects: [] }, t.file);
+  scene.save();
+  scanLibrary();
+  say(`New scene ${t.name} in ${whereText(t.file)}. ${was} is saved where it was; the Library tab opens it again.`, "ok");
+}
+function saveAs(name, place2, folder) {
+  const t = attempt(() => newFile(name, place2, folder));
+  if (!t) return;
+  const was = scene.file;
+  scene.file = t.file;
+  scene.name = t.name;
+  scene.save();
+  writeSession();
+  scanLibrary();
+  say(`Saved as ${t.name} in ${whereText(t.file)}; that is the open scene now. The one before is still in ${whereText(was)}.`, "ok");
+}
+function renameScene(name) {
+  name = name.trim();
+  if (!name || name === scene.name) return publish();
+  const was = scene.file;
+  const file = path6.join(path6.dirname(was), fileNameOf(name));
+  const sameName = sameFile(file, was);
+  if (!sameName && fs6.existsSync(file)) return say(`${whereText(file)} already has a scene called ${path6.basename(file)}. Pick another name.`, "warn");
+  scene.name = name;
+  scene.file = file;
+  scene.save();
+  if (!sameName) {
+    try {
+      fs6.rmSync(was, { force: true });
+    } catch (err) {
+      console.log(`The old file ${was} was not removed: ${err.message}`);
+    }
+  }
+  writeSession();
+  scanLibrary();
+  say(`Renamed the scene ${name}${sameName ? "" : ` (${path6.basename(file)})`}.`, "ok");
+}
+function saveNow() {
+  scene.save();
+  scanLibrary();
+  say(`Saved ${scene.name} in ${whereText(scene.file)}. (EDGEbuilder saves after every change.)`, "ok");
+}
+async function loadOn(file) {
+  if (typeof world.load !== "function") throw new Error("Showing other scenes needs REDnode 0.40.1 or later");
+  const r = await world.load(readSceneFile(file), { name: file, wait: false });
+  for (const s of r.skipped) console.log(`${path6.basename(file)}: ${s.object} not shown: ${s.why}`);
+  onScenes.set(file, r.spawned.length);
+  return r.spawned.length;
+}
+async function sceneOn(file) {
+  if (sameFile(file, scene.file)) return say("That is the open scene: its objects are in the world already.", "info");
+  try {
+    readSceneFile(file);
+  } catch (err) {
+    return say(`${path6.basename(file)} cannot be shown: ${err.message}.`, "error");
+  }
+  onScenes.set(file, 0);
+  writeSession();
+  if (state.world !== "ready") return say(`${path6.basename(file)} is on; it shows once a save is loaded.`, "info");
+  const n = await loadOn(file);
+  say(`Showing ${path6.basename(file)}: ${n} object${n === 1 ? "" : "s"}. Those far away come in as V or the camera gets near. They cannot be selected: open the scene to change it.`, "ok");
+}
+async function sceneOff(file) {
+  const known = [...onScenes.keys()].find((f) => sameFile(f, file)) ?? file;
+  onScenes.delete(known);
+  writeSession();
+  if (typeof world.unload === "function") await world.unload(known).catch((err) => console.log(`Unload ${known}: ${err.message}`));
+  publish();
+}
+async function reloadOn() {
+  if (!onScenes.size || state.world !== "ready") return;
+  let n = 0;
+  for (const file of [...onScenes.keys()]) {
+    if (!fs6.existsSync(file)) {
+      onScenes.delete(file);
+      continue;
+    }
+    try {
+      n += await loadOn(file);
+    } catch (err) {
+      console.log(`${path6.basename(file)} not shown: ${err.message}`);
+    }
+  }
+  writeSession();
+  console.log(`Scenes on: ${onScenes.size}, ${n} objects placed`);
+  publish();
+}
+function setLibraryRoot(root) {
+  root = root.trim().replace(/^"(.*)"$/, "$1");
+  if (!root || !path6.isAbsolute(root)) return say(`Give the Library a full folder path, such as ${suggestedRoot}.`, "warn");
+  const inside = (dir) => {
+    if (!dir) return false;
+    const rel = path6.relative(path6.resolve(dir), path6.resolve(root));
+    return !rel.startsWith("..") && !path6.isAbsolute(rel);
+  };
+  if (inside(gameDir()) || inside(pkg.dir) || inside(pkg.dataDir)) return say("The Library cannot be inside the game's folder or EDGEbuilder's own folders: deploys and reloads would touch it. Pick another folder.", "warn");
+  try {
+    writeLibraryRoot(root);
+  } catch (err) {
+    return say(`The Library folder could not be made: ${err.message}`, "error");
+  }
+  libraryRoot = path6.resolve(root);
+  scanLibrary();
+  say(`The Library is ${libraryRoot}. Every EDGE tool uses this folder.`, "ok");
+}
+function newFolder(folder, name) {
+  if (!libraryRoot) return say("Set the Library folder in Settings first.", "warn");
+  const root = libraryRoot;
+  const dir = attempt(() => path6.join(folderIn(root, folder), cleanFolderName(name)));
+  if (!dir) return;
+  fs6.mkdirSync(dir, { recursive: true });
+  scanLibrary();
+  say(`Made the folder ${whereText(path6.join(dir, "x"))}.`, "ok");
+}
+function listScenes() {
+  scanLibrary();
+  publish();
+  return state.library.shelves.flatMap(
+    (sh) => sh.scenes.filter((s) => !s.error).map((s) => ({
+      name: s.name,
+      file: s.file,
+      place: s.place,
+      folder: s.folder,
+      objects: sameFile(s.file, scene.file) ? scene.objects.length : s.objects,
+      changed: new Date(s.changed).toISOString(),
+      open: sameFile(s.file, scene.file),
+      on: [...onScenes.keys()].some((f) => sameFile(f, s.file))
+    }))
+  );
+}
+function sceneRefs(which) {
+  let data;
+  let file = scene.file;
+  if (!which || sameFile(which, scene.file) || which.toLowerCase() === scene.name.toLowerCase()) data = scene.data();
+  else {
+    const all = listScenes();
+    const found = all.find((s) => path6.isAbsolute(which) && sameFile(s.file, which)) ?? all.find((s) => s.name.toLowerCase() === which.toLowerCase());
+    if (!found) throw new Error(`No scene "${which}": scenes() lists them`);
+    file = found.file;
+    data = readSceneFile(file);
+  }
+  return {
+    scene: data.name,
+    file,
+    refs: data.objects.map((o) => ({
+      id: o.id,
+      ref: refOf(data.name, o),
+      kind: o.kind,
+      ...o.resource ? { resource: o.resource } : {},
+      ...o.appearance ? { appearance: o.appearance } : {},
+      ...o.group ? { group: o.group } : {},
+      position: o.transform.position,
+      rotation: o.transform.rotation
+    }))
+  };
+}
+var changedTimer;
+scene.onSave = () => {
+  if (typeof service?.emit !== "function") return;
+  clearTimeout(changedTimer);
+  changedTimer = setTimeout(() => service.emit("scene-changed", { name: scene.name, file: scene.file, objects: scene.objects.length }), 500);
+};
 function saveSettings(next) {
   settings = { ...settings, ...next };
   for (const k of Object.keys(settings)) if (settings[k] === void 0 || settings[k] === "") delete settings[k];
-  fs5.mkdirSync(pkg.dataDir, { recursive: true });
-  fs5.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
+  fs6.mkdirSync(pkg.dataDir, { recursive: true });
+  fs6.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
 }
 channel.on((m) => {
   void (async () => {
@@ -1826,6 +2227,34 @@ channel.on((m) => {
         break;
       case "undo":
         await inTurn("Undo", () => travel(past, future, "Undo"));
+        break;
+      case "scene.open":
+        await inTurn("Open scene", () => openScene(m.file));
+        break;
+      case "scene.new":
+        await inTurn("New scene", () => newScene(m.name, m.place, m.folder));
+        break;
+      case "scene.saveAs":
+        await inTurn("Save as", () => saveAs(m.name, m.place, m.folder));
+        break;
+      case "scene.rename":
+        await inTurn("Rename scene", () => renameScene(m.name));
+        break;
+      case "scene.save":
+        await inTurn("Save", () => saveNow());
+        break;
+      case "scene.on":
+        await inTurn(m.on ? "Show scene" : "Hide scene", () => m.on ? sceneOn(m.file) : sceneOff(m.file));
+        break;
+      case "library.root":
+        setLibraryRoot(m.root);
+        break;
+      case "library.folder":
+        newFolder(m.folder, m.name);
+        break;
+      case "library.refresh":
+        scanLibrary();
+        publish();
         break;
       case "redo":
         await inTurn("Redo", () => travel(future, past, "Redo"));
@@ -1888,7 +2317,7 @@ game.on("PlayerPuppet.OnGameAttached", () => {
     editorCam = void 0;
     state.camera = void 0;
     try {
-      fs5.rmSync(builderFile, { force: true });
+      fs6.rmSync(builderFile, { force: true });
     } catch {
     }
   }
@@ -1897,7 +2326,8 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   scene.forgetPreviews();
   state.selected = [];
   void checkWorld().then(() => {
-    if (scene.objects.length) say(`A save loaded. ${scene.objects.length} object${scene.objects.length === 1 ? "" : "s"} in the scene; press Rebuild previews to see them.`, "info");
+    void inTurn("Show scenes that are on", () => reloadOn());
+    if (scene.objects.length) say(`A save loaded. ${scene.objects.length} object${scene.objects.length === 1 ? "" : "s"} in ${scene.name}; press Rebuild previews to see them.`, "info");
   });
 });
 var gone = /* @__PURE__ */ new Map();
@@ -1927,9 +2357,16 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.5.8"} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+console.log(`EDGEbuilder ${"0.6.0"} starting; data folder ${pkg.dataDir}; scene ${scene.name} (${scene.file}), ${scene.objects.length} objects; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+if (!fs6.existsSync(scene.file) && !scene.loadError) scene.save();
+scanLibrary();
+if (lastGone) {
+  state.message = { text: `The scene open last time (${lastGone}) is no longer there; opened ${scene.name} instead.`, tone: "warn" };
+  console.log(state.message.text);
+}
+writeSession();
 if (scene.loadError) {
-  state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path5.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
+  state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path6.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);
 }
 if (index.loadNewest()) {
@@ -1941,3 +2378,7 @@ void checkWorld();
 void startBridge();
 watchMods();
 void connectRedcode();
+export {
+  listScenes,
+  sceneRefs
+};

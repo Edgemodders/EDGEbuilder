@@ -64,6 +64,38 @@ export interface SceneObject {
   entityId?: string;
 }
 
+// ---- scenes and the Library (B3-2) ----
+
+/** Where a scene file is: a Library folder, the open REDcode project's source/scenes, or This PC (EDGEbuilder's data folder). */
+export type Place = "library" | "project" | "data";
+
+/** One of the three places: where it is on disk and what the Library tab calls it. */
+export interface PlaceRoot {
+  place: Place;
+  dir: string;
+  label: string;
+}
+
+/** A scene file as the Library tab lists it. */
+export interface SceneEntry {
+  place: Place;
+  file: string;
+  /** The folder under the place's root, with forward slashes; "" at the root. */
+  folder: string;
+  name: string;
+  objects: number;
+  /** When the file last changed, ms since 1970. */
+  changed: number;
+  /** Set when the file is not a scene EDGEbuilder can read. */
+  error?: string;
+}
+
+/** A place with its folders and scenes. */
+export interface Shelf extends PlaceRoot {
+  folders: string[];
+  scenes: SceneEntry[];
+}
+
 export interface Snapshot {
   /** The mod has started. */
   ready: boolean;
@@ -84,7 +116,12 @@ export interface Snapshot {
   /** The asset the page last looked at, with what the bridge said about it. */
   looked?: { path: string; info?: AssetInfo };
   /** needs: the mods and the project whose files the scene uses; the game needs them too once baked. */
-  scene: { name: string; objects: SceneObject[]; groups: SceneGroup[]; file?: string; needs: string[] };
+  scene: { name: string; objects: SceneObject[]; groups: SceneGroup[]; file?: string; needs: string[]; place?: Place; folder?: string };
+  /**
+   * B3-2: the Library root (absent until the player sets one) and the folder offered for it; the
+   * three places with their folders and scenes; the scenes switched on (shown, not edited), by file.
+   */
+  library: { root?: string; suggested: string; shelves: Shelf[]; on: string[] };
   /** The selected objects (B3: several at once; a group selects all its objects). */
   selected: string[];
   /** How many steps Undo and Redo can take. */
@@ -141,6 +178,23 @@ export type PageMessage =
   | { type: "cut"; ids: string[] }
   /** Ctrl+V: the copies, standing where the line through the cursor meets a surface (`at`), else where Drop puts things. */
   | { type: "paste"; at?: { origin: [number, number, number]; dir: [number, number, number] } }
+  /** B3-2: a new empty scene, opened; `folder` under the place's root ("" at its root). */
+  | { type: "scene.new"; name: string; place: Place; folder?: string }
+  | { type: "scene.open"; file: string }
+  /** A copy of the open scene under a new name and place, which becomes the open scene. */
+  | { type: "scene.saveAs"; name: string; place: Place; folder?: string }
+  /** A new name for the open scene; its file is renamed to match. */
+  | { type: "scene.rename"; name: string }
+  /** Ctrl+S: the scene is saved after every change; this writes it once more and says so. */
+  | { type: "scene.save" }
+  /** Show a scene that is not open in the world (`on`), or take it away. */
+  | { type: "scene.on"; file: string; on: boolean }
+  /** Set the Library root (made when missing), for every EDGE tool. */
+  | { type: "library.root"; root: string }
+  /** A new folder `name` inside `folder` of the Library. */
+  | { type: "library.folder"; folder: string; name: string }
+  /** Look at the folders again (a file changed outside EDGEbuilder). */
+  | { type: "library.refresh" }
   | { type: "undo" }
   /** Stop placing the running change's previews; changes waiting still run. */
   | { type: "stop" }

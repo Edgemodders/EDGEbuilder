@@ -270,6 +270,16 @@ var Viewport = class {
     this.canvas = canvas;
     this.hooks = hooks;
     this.ctx = canvas.getContext("2d");
+    const fit = () => {
+      const w = Math.max(1, Math.round(window.innerWidth));
+      const h = Math.max(1, Math.round(window.innerHeight));
+      if (canvas.width === w && canvas.height === h) return;
+      canvas.width = w;
+      canvas.height = h;
+      this.calib = void 0;
+    };
+    fit();
+    window.addEventListener("resize", fit);
     window.addEventListener("pointermove", (e) => {
       this.overView = e.target === canvas;
       if (e.target === canvas || this.rmb || this.mmb || this.drag || this.box) this.onMove(e);
@@ -1252,6 +1262,7 @@ function render(s) {
   $("settingsFile").textContent = s.settings.settingsFile;
   $("bridgeDetail").textContent = [b.path, b.detail].filter(Boolean).join("\n");
   $("indexDetail").textContent = ix.file ?? "";
+  renderLibrary(s);
   renderBusy(s.busy);
   if (s.message && s.message.text !== lastMessage) {
     lastMessage = s.message.text;
@@ -1487,6 +1498,188 @@ for (const f of fields)
     applyFields();
     document.activeElement?.blur();
   });
+var picked;
+var closedFolders = /* @__PURE__ */ new Set();
+var TabLabels = { scene: 1, library: 2 };
+var parentOf = (folder) => folder.includes("/") ? folder.slice(0, folder.lastIndexOf("/")) : "";
+var lastPart = (folder) => folder.slice(folder.lastIndexOf("/") + 1);
+var sameFile = (a, b) => a.toLowerCase() === b.toLowerCase();
+function placeLabel(s, place) {
+  return s.library.shelves.find((sh) => sh.place === place)?.label ?? "";
+}
+function whereLabel(s, place, folder) {
+  const label = placeLabel(s, place);
+  if (!label) return "";
+  return folder ? `${label} > ${folder.replace(/\//g, " > ")}` : label;
+}
+function findScene(s, file) {
+  for (const sh of s.library.shelves) for (const sc of sh.scenes) if (sameFile(sc.file, file)) return sc;
+  return void 0;
+}
+function target(s) {
+  const p = picked;
+  if (p?.kind === "folder" && s.library.shelves.some((sh) => sh.place === p.place)) return { place: p.place, folder: p.folder };
+  if (picked?.kind === "scene") {
+    const sc = findScene(s, picked.file);
+    if (sc) return { place: sc.place, folder: sc.folder };
+  }
+  return { place: s.library.root ? "library" : "data", folder: "" };
+}
+var when = (ms) => {
+  const d = new Date(ms);
+  return `${d.toLocaleDateString(void 0, { day: "numeric", month: "short" })} ${d.toLocaleTimeString(void 0, { hour: "2-digit", minute: "2-digit" })}`;
+};
+function libraryRows(s) {
+  const rows = [];
+  const pad = (depth) => ` style="padding-left:${12 + depth * 18}px"`;
+  const isOn = (file) => s.library.on.some((f) => sameFile(f, file));
+  const isPicked = (v2) => !!picked && JSON.stringify(picked) === JSON.stringify(v2);
+  for (const sh of s.library.shelves) {
+    const walk = (folder, depth) => {
+      for (const f of sh.folders.filter((x) => parentOf(x) === folder)) {
+        const key2 = `${sh.place}|${f}`;
+        rows.push(
+          `<rn-item value="d:${esc(key2)}"${isPicked({ kind: "folder", place: sh.place, folder: f }) ? " selected" : ""}${pad(depth)}><span class="fold" data-folder="${esc(key2)}">${closedFolders.has(key2) ? "\u25B8" : "\u25BE"}</span>${esc(lastPart(f))}</rn-item>`
+        );
+        if (!closedFolders.has(key2)) walk(f, depth + 1);
+      }
+      for (const sc of sh.scenes.filter((x) => x.folder === folder)) {
+        const open = sameFile(sc.file, s.scene.file ?? "");
+        const tags = `${open ? '<span class="tag">open</span>' : ""}${isOn(sc.file) ? '<span class="tag">shown</span>' : ""}`;
+        const end = sc.error ? "cannot be read" : `${open ? s.scene.objects.length : sc.objects} obj \xB7 ${when(sc.changed)}`;
+        rows.push(
+          `<rn-item value="f:${esc(sc.file)}" title="${esc(sc.error ? `${sc.file}
+${sc.error}` : sc.file)}"${isPicked({ kind: "scene", file: sc.file }) ? " selected" : ""}${pad(depth)}><span class="fold"></span>${esc(sc.name)}${tags}<span slot="end">${esc(end)}</span></rn-item>`
+        );
+      }
+    };
+    const key = `${sh.place}|`;
+    rows.push(
+      `<rn-item value="d:${esc(key)}" title="${esc(sh.dir)}"${isPicked({ kind: "folder", place: sh.place, folder: "" }) ? " selected" : ""}${pad(0)}><span class="fold" data-folder="${esc(key)}">${closedFolders.has(key) ? "\u25B8" : "\u25BE"}</span><span class="section">${esc(sh.label)}</span><span slot="end">${sh.scenes.length} scene${sh.scenes.length === 1 ? "" : "s"}</span></rn-item>`
+    );
+    if (!closedFolders.has(key)) walk("", 1);
+  }
+  return rows.join("");
+}
+function renderLibrary(s) {
+  const name = $("sceneName");
+  if (document.activeElement?.id !== "sceneName") name.value = s.scene.name;
+  const where = whereLabel(s, s.scene.place, s.scene.folder);
+  $("sceneWhere").textContent = where ? `In ${where}. Saved after every change.` : s.scene.file ? `In ${s.scene.file}. Saved after every change.` : "";
+  $("sceneWhere").title = s.scene.file ?? "";
+  const root = s.library.root;
+  $("libraryInfo").textContent = root ? `Library: ${root}` : `No Library folder yet. Make one at ${s.library.suggested}, or pick another folder in Settings. Scenes can stay in the REDcode project or on This PC meanwhile.`;
+  $("libraryMakeRow").hidden = !!root;
+  $("libraryMake").title = s.library.suggested;
+  if (picked?.kind === "scene" && !findScene(s, picked.file)) picked = void 0;
+  $("shelves").innerHTML = libraryRows(s);
+  const sc = picked?.kind === "scene" ? findScene(s, picked.file) : void 0;
+  const open = !!sc && sameFile(sc.file, s.scene.file ?? "");
+  const on = !!sc && s.library.on.some((f) => sameFile(f, sc.file));
+  if (sc)
+    $("pickedText").textContent = `${sc.name}${open ? " (open)" : on ? " (shown in the world)" : ""}
+${whereLabel(s, sc.place, sc.folder)}
+${sc.error ? `Cannot be read: ${sc.error}` : `${open ? s.scene.objects.length : sc.objects} objects, changed ${when(sc.changed)}`}
+${sc.file}`;
+  else if (picked?.kind === "folder") $("pickedText").textContent = `Folder: ${whereLabel(s, picked.place, picked.folder)}`;
+  else $("pickedText").textContent = "Pick a scene to open or show it, or a folder for a new scene. A double-click opens a scene.";
+  $("pickedOpen").toggleAttribute("disabled", !sc || open || !!sc.error);
+  $("pickedOn").toggleAttribute("disabled", !sc || open || !!sc.error);
+  $("pickedOn").textContent = on ? "Hide from world" : "Show in world";
+  const t = target(s);
+  $("newWhere").textContent = `In ${whereLabel(s, t.place, t.folder)}`;
+  $("createFolder").toggleAttribute("disabled", t.place !== "library");
+  $("createFolder").title = t.place === "library" ? "A folder inside this one" : "Folders are made in the Library";
+  const rootField = $("libraryRoot");
+  if (document.activeElement?.id !== "libraryRoot") rootField.value = root ?? "";
+  rootField.setAttribute("placeholder", s.library.suggested);
+}
+var mainTabs = () => document.getElementById("mainTabs");
+var newName = () => $("newName");
+function toLibrary(name) {
+  mainTabs().select?.(TabLabels.library);
+  const f = newName();
+  f.value = name;
+  f.focus();
+}
+$("mainTabs").addEventListener("change", (e) => {
+  if (e.target === $("mainTabs") && e.detail.label === "Library") post({ type: "library.refresh" });
+});
+$("shelves").addEventListener(
+  "click",
+  (e) => {
+    const fold = e.target.closest?.(".fold");
+    const key = fold?.dataset.folder;
+    if (!key) return;
+    e.stopPropagation();
+    if (closedFolders.has(key)) closedFolders.delete(key);
+    else closedFolders.add(key);
+    if (state) render(state);
+  },
+  true
+);
+$("shelves").addEventListener("select", (e) => {
+  const value = e.detail.value;
+  if (value.startsWith("f:")) picked = { kind: "scene", file: value.slice(2) };
+  else {
+    const key = value.slice(2);
+    const bar = key.indexOf("|");
+    picked = { kind: "folder", place: key.slice(0, bar), folder: key.slice(bar + 1) };
+  }
+  if (state) render(state);
+});
+$("shelves").addEventListener("dblclick", (e) => {
+  const item = e.target.closest?.("rn-item");
+  const value = item?.getAttribute("value");
+  if (value?.startsWith("f:") && state && !sameFile(value.slice(2), state.scene.file ?? "")) post({ type: "scene.open", file: value.slice(2) });
+});
+$("pickedOpen").addEventListener("click", () => picked?.kind === "scene" && post({ type: "scene.open", file: picked.file }));
+$("pickedOn").addEventListener("click", () => {
+  if (picked?.kind !== "scene" || !state) return;
+  const file = picked.file;
+  post({ type: "scene.on", file, on: !state.library.on.some((f) => sameFile(f, file)) });
+});
+$("libraryRefresh").addEventListener("click", () => post({ type: "library.refresh" }));
+$("libraryMake").addEventListener("click", () => state && post({ type: "library.root", root: state.library.suggested }));
+$("setLibrary").addEventListener("click", () => {
+  if (!state) return;
+  post({ type: "library.root", root: $("libraryRoot").value?.trim() || state.library.suggested });
+});
+$("createScene").addEventListener("click", () => {
+  if (!state) return;
+  const name = newName().value?.trim();
+  if (!name) return status("Type a name for the new scene first.");
+  post({ type: "scene.new", name, ...target(state) });
+  newName().value = "";
+});
+$("saveAsHere").addEventListener("click", () => {
+  if (!state) return;
+  const name = newName().value?.trim();
+  if (!name) return status("Type a name for the copy first.");
+  post({ type: "scene.saveAs", name, ...target(state) });
+  newName().value = "";
+});
+$("createFolder").addEventListener("click", () => {
+  if (!state) return;
+  const name = newName().value?.trim();
+  const t = target(state);
+  if (!name) return status("Type a name for the new folder first.");
+  if (t.place !== "library") return status("Folders are made in the Library: pick the Library or a folder in it.");
+  post({ type: "library.folder", folder: t.folder, name });
+  newName().value = "";
+});
+$("sceneName").addEventListener("submit", () => {
+  post({ type: "scene.rename", name: $("sceneName").value ?? "" });
+  document.activeElement?.blur();
+});
+$("saveScene").addEventListener("click", () => post({ type: "scene.save" }));
+$("saveAsScene").addEventListener("click", () => state && toLibrary(`${state.scene.name} copy`));
+$("newScene").addEventListener("click", () => toLibrary(""));
+$("openScene").addEventListener("click", () => mainTabs().select?.(TabLabels.library));
+function status(text) {
+  $("message").textContent = text;
+  $("message").className = "message warn";
+}
 var showSceneTab = () => document.getElementById("mainTabs").select?.(1);
 var viewport = new Viewport($("view"), {
   pick(id, opts) {
@@ -1529,6 +1722,8 @@ window.addEventListener("keydown", (e) => {
     dropAsked = true;
     post({ type: "paste", at: ray ? { origin: ray.o, dir: ray.d } : void 0 });
   } else if (key === "g" && ids.length) post({ type: e.shiftKey ? "ungroup" : "group", ids });
+  else if (key === "s" && e.shiftKey) state && toLibrary(`${state.scene.name} copy`);
+  else if (key === "s") post({ type: "scene.save" });
   else return;
   e.preventDefault();
 });

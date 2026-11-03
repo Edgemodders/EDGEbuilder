@@ -1,17 +1,19 @@
 {
   "id": "edgebuilder",
   "name": "EDGEbuilder",
-  "version": "0.5.8",
+  "version": "0.6.0",
   "author": "Edgemodders",
-  "description": "A world builder: browse the game's assets, drop them into the live world, move, turn and scale them with a gizmo from a camera of its own, bake them into the world. Also the assets of installed mods and the open REDcode project; B3: several objects at once, groups, copies, undo.",
+  "description": "A world builder: browse the game's assets, drop them into the live world, move, turn and scale them with a gizmo from a camera of its own, bake them into the world. Also the assets of installed mods and the open REDcode project; B3: several objects at once, groups, copies, undo; named scenes in the Library, the REDcode project or this PC, other scenes shown beside the open one, and a service other packages and assistants call for scenes and their objects.",
   "entry": "index.html",
   "main": "mod.mjs",
+  "service": "service.mjs",
   "kind": "window",
   "width": 1920,
   "height": 1080,
   "anchor": "top-left",
   "x": 0,
   "y": 0,
+  "fill": "screen",
   "permissions": [
     "bridge",
     "solo"

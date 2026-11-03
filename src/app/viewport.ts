@@ -148,6 +148,18 @@ export class Viewport {
     private readonly hooks: ViewportHooks,
   ) {
     this.ctx = canvas.getContext("2d")!;
+    // The page covers the game view at any width ("fill": "screen", REDnode 0.50.0): 1080 high and
+    // 2580 wide at 21:9. The canvas follows it, and a new shape means learning the screen again.
+    const fit = () => {
+      const w = Math.max(1, Math.round(window.innerWidth));
+      const h = Math.max(1, Math.round(window.innerHeight));
+      if (canvas.width === w && canvas.height === h) return;
+      canvas.width = w;
+      canvas.height = h;
+      this.calib = undefined;
+    };
+    fit();
+    window.addEventListener("resize", fit);
     // Moves and releases are heard on the whole page: while looking, orbiting or dragging, the
     // cursor may cross the EDGEbuilder window, and the camera should keep following it (B2b test).
     window.addEventListener("pointermove", (e) => {

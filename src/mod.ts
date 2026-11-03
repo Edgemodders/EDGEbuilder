@@ -3,6 +3,7 @@
 // B1: browse the game's assets, drop one in front of V, select it, delete it.
 // B2a: move, turn and scale with the page's gizmo and keys, drop to the floor.
 // B2c: Browse also lists installed mods' and the open REDcode project's meshes and entities.
+// B3-2: named scenes in the Library, the REDcode project or This PC; other scenes shown; a service.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -10,10 +11,11 @@ import { api, channel, game, kernel, pkg, service, ui, world, type GameRef } fro
 import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge } from "./bridge";
 import { AssetIndex, kindOf } from "./index";
 import { ModSources, modArchives, modFolders, sceneNeeds } from "./sources";
-import { Scene, yawToQuaternion, type SceneState } from "./scene";
+import { Scene, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
+import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
-import type { AssetEntry, AssetFrom, AssetInfo, AssetKind, PageMessage, SceneObject, SceneTransform, Snapshot } from "./protocol";
+import type { AssetEntry, AssetFrom, AssetInfo, AssetKind, PageMessage, Place, PlaceRoot, SceneObject, SceneTransform, Snapshot } from "./protocol";
 
 /** A base-game entity template that is a bare entity: no components, no appearances. The editor camera is this with a camera component attached. */
 const EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
@@ -39,8 +41,29 @@ try {
   // First run.
 }
 
-const scene = new Scene(path.join(pkg.dataDir, "scenes", "working.scene.json"));
+/** This PC: scenes in EDGEbuilder's data folder; the working scene is the one B1 to B3-1 had. */
+const dataScenes = path.join(pkg.dataDir, "scenes");
+const WorkingScene = path.join(dataScenes, "working.scene.json");
+/** B3-2: the open scene and the scenes that are on, so the next start is back where this one was. */
+const sessionFile = path.join(pkg.dataDir, "session.json");
+interface Session {
+  open?: string;
+  on?: string[];
+}
+let session: Session = {};
+try {
+  session = JSON.parse(fs.readFileSync(sessionFile, "utf8"));
+} catch {
+  // First start with B3-2.
+}
+// A Library or project scene moved or deleted since; a working scene not written yet is no news.
+const lastGone = session.open && !fs.existsSync(session.open) && path.resolve(session.open).toLowerCase() !== WorkingScene.toLowerCase() ? session.open : undefined;
+const scene = new Scene(session.open && !lastGone ? session.open : WorkingScene);
 scene.load();
+/** Scenes shown but not edited (B3-2), by file: how many objects REDnode's world.load placed, once the world is ready. */
+const onScenes = new Map<string, number>((session.on ?? []).filter((f) => fs.existsSync(f) && f !== scene.file).map((f) => [f, 0]));
+let libraryRoot = readLibraryRoot();
+const suggestedRoot = suggestedLibraryRoot();
 /** Undo and redo (B3): the scene before each change, for this session, the last 100. */
 const past: SceneState[] = [];
 const future: SceneState[] = [];
@@ -66,6 +89,7 @@ const state: Snapshot = {
   query: { text: "", kind: "all", from: "all" },
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
   scene: { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: [] },
+  library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [] },
   selected: [],
   history: { undo: 0, redo: 0 },
   settings: { ...settings, settingsFile },
@@ -73,7 +97,10 @@ const state: Snapshot = {
 };
 
 function publish(): void {
-  state.scene = { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra) };
+  const at = whereIs(scene.file, placeRoots());
+  state.scene = { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra), place: at?.place, folder: at?.folder };
+  state.library.root = libraryRoot;
+  state.library.on = [...onScenes.keys()];
   state.selected = state.selected.filter((id) => scene.get(id));
   state.history = { undo: past.length, redo: future.length };
   state.settings = { ...settings, settingsFile };
@@ -300,6 +327,7 @@ function setProject(next: RedcodeProject | null): void {
     }
   }
   project = next;
+  scanLibrary();
   scanProject();
 }
 
@@ -374,6 +402,7 @@ async function checkWorld(): Promise<void> {
     say("Builder mode was still on from last time (EDGEbuilder stopped while Edit was on); V's camera and HUD are back.", "info");
     return;
   }
+  if (state.world === "ready" && before !== "ready") void inTurn("Show scenes that are on", () => reloadOn());
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light").length;
   if (state.world === "ready" && before !== "ready" && away) {
     say(`${away} object${away === 1 ? " is" : "s are"} in the scene but not in the world. Press Rebuild previews in the Scene tab to place ${away === 1 ? "it" : "them"}, or delete ${away === 1 ? "it" : "them"} there.`, "info");
@@ -1178,6 +1207,319 @@ async function clear(): Promise<void> {
   say("Scene cleared. Undo brings it back.", "ok");
 }
 
+// ---- scenes and the Library (B3-2) -----------------------------------------------------------------
+//
+// The open scene is a file in one of three places; every change is saved to it at once. Other scenes
+// can be on: REDnode's world.load places them, and EDGEbuilder neither selects nor changes them.
+
+/** The places scenes live, the Library first when it has a root. */
+function placeRoots(): PlaceRoot[] {
+  const out: PlaceRoot[] = [];
+  if (libraryRoot) out.push({ place: "library", dir: libraryRoot, label: "Library" });
+  // REDcode gives source\archive; scenes sit beside it, in source\scenes.
+  if (project) out.push({ place: "project", dir: path.join(path.dirname(project.archive), "scenes"), label: `Project: ${project.name}` });
+  out.push({ place: "data", dir: dataScenes, label: "This PC" });
+  return out;
+}
+
+function rootOf(place: Place): PlaceRoot {
+  const r = placeRoots().find((x) => x.place === place);
+  if (r) return r;
+  throw new Error(place === "library" ? "Set the Library folder in Settings first." : "No REDcode project is open.");
+}
+
+/** Reads the three places again, for the Library tab. */
+function scanLibrary(): void {
+  state.library.shelves = placeRoots().map(scanShelf);
+}
+
+/** Where a scene file is, for messages: "Library > Alleys", "This PC", or the file itself. */
+function whereText(file: string): string {
+  const roots = placeRoots();
+  const at = whereIs(file, roots);
+  if (!at) return file;
+  const label = roots.find((r) => r.place === at.place)!.label;
+  return at.folder ? `${label} > ${at.folder.replace(/\//g, " > ")}` : label;
+}
+
+function writeSession(): void {
+  try {
+    fs.mkdirSync(pkg.dataDir, { recursive: true });
+    fs.writeFileSync(sessionFile, JSON.stringify({ open: scene.file, on: [...onScenes.keys()] }, null, 2));
+  } catch (err) {
+    console.log(`session.json not written: ${(err as Error).message}`);
+  }
+}
+
+const sameFile = (a: string, b: string) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+
+/** Takes the open scene's previews out and makes `data` the open scene, saved to `file`, with a fresh history. */
+async function switchTo(data: SceneFile, file: string): Promise<void> {
+  for (const o of scene.objects) await removePreview(o);
+  state.selected = [];
+  state.duplicated = undefined;
+  past.length = 0;
+  future.length = 0;
+  scene.take(data, file);
+  writeSession();
+}
+
+async function openScene(file: string): Promise<void> {
+  if (sameFile(file, scene.file)) return say(`${scene.name} is already open.`, "info");
+  let data: SceneFile;
+  try {
+    data = readSceneFile(file);
+  } catch (err) {
+    return say(`${path.basename(file)} cannot be opened: ${(err as Error).message}.`, "error");
+  }
+  // A scene that is on becomes the open one: its shown copy goes, its previews come.
+  const wasOn = [...onScenes.keys()].find((f) => sameFile(f, file));
+  if (wasOn) await sceneOff(wasOn);
+  await switchTo(data, file);
+  scanLibrary();
+  scene.onSave?.();
+  const n = scene.objects.length;
+  if (state.world !== "ready") return say(`Opened ${scene.name} (${whereText(file)}), ${n} object${n === 1 ? "" : "s"}. Rebuild previews once a save is loaded.`, "ok");
+  const r = await spawnNear(scene.objects);
+  const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place` : ""].filter(Boolean);
+  say(`Opened ${scene.name} (${whereText(file)}): ${r.shown} of ${n} object${n === 1 ? "" : "s"} in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
+}
+
+/** The file a new or saved-as scene goes to; refuses a name another scene there already has. */
+function newFile(name: string, place: Place, folder: string | undefined): { name: string; file: string } {
+  name = name.trim();
+  if (!name) throw new Error("Give the scene a name.");
+  const dir = folderIn(rootOf(place).dir, folder);
+  const file = path.join(dir, fileNameOf(name));
+  if (fs.existsSync(file)) throw new Error(`${whereText(file)} already has a scene called ${path.basename(file)}: open it, or pick another name.`);
+  return { name, file };
+}
+
+/** A refusal the player can act on (a name taken, no Library yet): a warning, not an error. */
+function attempt<T>(make: () => T): T | undefined {
+  try {
+    return make();
+  } catch (err) {
+    say((err as Error).message, "warn");
+    return undefined;
+  }
+}
+
+async function newScene(name: string, place: Place, folder?: string): Promise<void> {
+  const t = attempt(() => newFile(name, place, folder));
+  if (!t) return;
+  const was = scene.name;
+  await switchTo({ format: 1, name: t.name, groups: [], objects: [] }, t.file);
+  scene.save();
+  scanLibrary();
+  say(`New scene ${t.name} in ${whereText(t.file)}. ${was} is saved where it was; the Library tab opens it again.`, "ok");
+}
+
+/** A copy of the open scene, which becomes the open scene; its previews and history stay. */
+function saveAs(name: string, place: Place, folder?: string): void {
+  const t = attempt(() => newFile(name, place, folder));
+  if (!t) return;
+  const was = scene.file;
+  scene.file = t.file;
+  scene.name = t.name;
+  scene.save();
+  writeSession();
+  scanLibrary();
+  say(`Saved as ${t.name} in ${whereText(t.file)}; that is the open scene now. The one before is still in ${whereText(was)}.`, "ok");
+}
+
+/** A new name, and the file renamed to match (in the same folder). */
+function renameScene(name: string): void {
+  name = name.trim();
+  if (!name || name === scene.name) return publish();
+  const was = scene.file;
+  const file = path.join(path.dirname(was), fileNameOf(name));
+  const sameName = sameFile(file, was);
+  if (!sameName && fs.existsSync(file)) return say(`${whereText(file)} already has a scene called ${path.basename(file)}. Pick another name.`, "warn");
+  scene.name = name;
+  scene.file = file;
+  scene.save();
+  if (!sameName) {
+    try {
+      fs.rmSync(was, { force: true });
+    } catch (err) {
+      console.log(`The old file ${was} was not removed: ${(err as Error).message}`);
+    }
+  }
+  writeSession();
+  scanLibrary();
+  say(`Renamed the scene ${name}${sameName ? "" : ` (${path.basename(file)})`}.`, "ok");
+}
+
+/** Ctrl+S. Every change is saved already; this writes the file once more and says where it is. */
+function saveNow(): void {
+  scene.save();
+  scanLibrary();
+  say(`Saved ${scene.name} in ${whereText(scene.file)}. (EDGEbuilder saves after every change.)`, "ok");
+}
+
+/** Places a scene that is on, through REDnode. Far objects are created at once and come into the world when V or the camera gets near. */
+async function loadOn(file: string): Promise<number> {
+  if (typeof world.load !== "function") throw new Error("Showing other scenes needs REDnode 0.40.1 or later");
+  const r = await world.load(readSceneFile(file), { name: file, wait: false });
+  for (const s of r.skipped) console.log(`${path.basename(file)}: ${s.object} not shown: ${s.why}`);
+  onScenes.set(file, r.spawned.length);
+  return r.spawned.length;
+}
+
+async function sceneOn(file: string): Promise<void> {
+  if (sameFile(file, scene.file)) return say("That is the open scene: its objects are in the world already.", "info");
+  try {
+    readSceneFile(file);
+  } catch (err) {
+    return say(`${path.basename(file)} cannot be shown: ${(err as Error).message}.`, "error");
+  }
+  onScenes.set(file, 0);
+  writeSession();
+  if (state.world !== "ready") return say(`${path.basename(file)} is on; it shows once a save is loaded.`, "info");
+  const n = await loadOn(file);
+  say(`Showing ${path.basename(file)}: ${n} object${n === 1 ? "" : "s"}. Those far away come in as V or the camera gets near. They cannot be selected: open the scene to change it.`, "ok");
+}
+
+async function sceneOff(file: string): Promise<void> {
+  const known = [...onScenes.keys()].find((f) => sameFile(f, file)) ?? file;
+  onScenes.delete(known);
+  writeSession();
+  if (typeof world.unload === "function") await world.unload(known).catch((err) => console.log(`Unload ${known}: ${(err as Error).message}`));
+  publish();
+}
+
+/** After the world becomes ready, or a save loads: the scenes that are on, placed again. */
+async function reloadOn(): Promise<void> {
+  if (!onScenes.size || state.world !== "ready") return;
+  let n = 0;
+  for (const file of [...onScenes.keys()]) {
+    if (!fs.existsSync(file)) {
+      onScenes.delete(file);
+      continue;
+    }
+    try {
+      n += await loadOn(file);
+    } catch (err) {
+      console.log(`${path.basename(file)} not shown: ${(err as Error).message}`);
+    }
+  }
+  writeSession();
+  console.log(`Scenes on: ${onScenes.size}, ${n} objects placed`);
+  publish();
+}
+
+/** Sets the Library root for every EDGE tool; never inside the game or a package folder (deploys and hot reload must not touch it). */
+function setLibraryRoot(root: string): void {
+  root = root.trim().replace(/^"(.*)"$/, "$1");
+  if (!root || !path.isAbsolute(root)) return say(`Give the Library a full folder path, such as ${suggestedRoot}.`, "warn");
+  const inside = (dir: string | undefined) => {
+    if (!dir) return false;
+    const rel = path.relative(path.resolve(dir), path.resolve(root));
+    return !rel.startsWith("..") && !path.isAbsolute(rel);
+  };
+  if (inside(gameDir()) || inside(pkg.dir) || inside(pkg.dataDir)) return say("The Library cannot be inside the game's folder or EDGEbuilder's own folders: deploys and reloads would touch it. Pick another folder.", "warn");
+  try {
+    writeLibraryRoot(root);
+  } catch (err) {
+    return say(`The Library folder could not be made: ${(err as Error).message}`, "error");
+  }
+  libraryRoot = path.resolve(root);
+  scanLibrary();
+  say(`The Library is ${libraryRoot}. Every EDGE tool uses this folder.`, "ok");
+}
+
+function newFolder(folder: string, name: string): void {
+  if (!libraryRoot) return say("Set the Library folder in Settings first.", "warn");
+  const root = libraryRoot;
+  const dir = attempt(() => path.join(folderIn(root, folder), cleanFolderName(name)));
+  if (!dir) return;
+  fs.mkdirSync(dir, { recursive: true });
+  scanLibrary();
+  say(`Made the folder ${whereText(path.join(dir, "x"))}.`, "ok");
+}
+
+// ---- EDGEbuilder's service (B3-2): service.mjs imports these -----------------------------------------
+
+/** A scene for other packages and assistants. */
+export interface ServiceScene {
+  name: string;
+  file: string;
+  place: Place;
+  folder: string;
+  objects: number;
+  changed: string;
+  open: boolean;
+  on: boolean;
+}
+
+export function listScenes(): ServiceScene[] {
+  scanLibrary();
+  publish();
+  return state.library.shelves.flatMap((sh) =>
+    sh.scenes
+      .filter((s) => !s.error)
+      .map((s) => ({
+        name: s.name,
+        file: s.file,
+        place: s.place,
+        folder: s.folder,
+        objects: sameFile(s.file, scene.file) ? scene.objects.length : s.objects,
+        changed: new Date(s.changed).toISOString(),
+        open: sameFile(s.file, scene.file),
+        on: [...onScenes.keys()].some((f) => sameFile(f, s.file)),
+      })),
+  );
+}
+
+/** One object of a scene, with the node reference the bake gives it. */
+export interface ServiceRef {
+  id: string;
+  ref: string;
+  kind: string;
+  resource?: string;
+  appearance?: string;
+  group?: string;
+  position: [number, number, number];
+  rotation: [number, number, number, number];
+}
+
+/** The open scene's objects, or another scene's by file or name. */
+export function sceneRefs(which?: string): { scene: string; file: string; refs: ServiceRef[] } {
+  let data: SceneFile;
+  let file = scene.file;
+  if (!which || sameFile(which, scene.file) || which.toLowerCase() === scene.name.toLowerCase()) data = scene.data();
+  else {
+    const all = listScenes();
+    const found = all.find((s) => path.isAbsolute(which) && sameFile(s.file, which)) ?? all.find((s) => s.name.toLowerCase() === which.toLowerCase());
+    if (!found) throw new Error(`No scene "${which}": scenes() lists them`);
+    file = found.file;
+    data = readSceneFile(file);
+  }
+  return {
+    scene: data.name,
+    file,
+    refs: data.objects.map((o) => ({
+      id: o.id,
+      ref: refOf(data.name, o),
+      kind: o.kind,
+      ...(o.resource ? { resource: o.resource } : {}),
+      ...(o.appearance ? { appearance: o.appearance } : {}),
+      ...(o.group ? { group: o.group } : {}),
+      position: o.transform.position,
+      rotation: o.transform.rotation,
+    })),
+  };
+}
+
+/** scene-changed for connected packages, half a second after the last save. */
+let changedTimer: ReturnType<typeof setTimeout> | undefined;
+scene.onSave = () => {
+  if (typeof service?.emit !== "function") return;
+  clearTimeout(changedTimer);
+  changedTimer = setTimeout(() => service.emit("scene-changed", { name: scene.name, file: scene.file, objects: scene.objects.length }), 500);
+};
+
 function saveSettings(next: Settings): void {
   settings = { ...settings, ...next };
   for (const k of Object.keys(settings) as (keyof Settings)[]) if (settings[k] === undefined || settings[k] === "") delete settings[k];
@@ -1244,6 +1586,34 @@ channel.on<PageMessage>((m) => {
         break;
       case "undo":
         await inTurn("Undo", () => travel(past, future, "Undo"));
+        break;
+      case "scene.open":
+        await inTurn("Open scene", () => openScene(m.file));
+        break;
+      case "scene.new":
+        await inTurn("New scene", () => newScene(m.name, m.place, m.folder));
+        break;
+      case "scene.saveAs":
+        await inTurn("Save as", () => saveAs(m.name, m.place, m.folder));
+        break;
+      case "scene.rename":
+        await inTurn("Rename scene", () => renameScene(m.name));
+        break;
+      case "scene.save":
+        await inTurn("Save", () => saveNow());
+        break;
+      case "scene.on":
+        await inTurn(m.on ? "Show scene" : "Hide scene", () => (m.on ? sceneOn(m.file) : sceneOff(m.file)));
+        break;
+      case "library.root":
+        setLibraryRoot(m.root);
+        break;
+      case "library.folder":
+        newFolder(m.folder, m.name);
+        break;
+      case "library.refresh":
+        scanLibrary();
+        publish();
         break;
       case "redo":
         await inTurn("Redo", () => travel(future, past, "Redo"));
@@ -1322,7 +1692,9 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   scene.forgetPreviews();
   state.selected = [];
   void checkWorld().then(() => {
-    if (scene.objects.length) say(`A save loaded. ${scene.objects.length} object${scene.objects.length === 1 ? "" : "s"} in the scene; press Rebuild previews to see them.`, "info");
+    // The scenes that are on went with the old session's entities: place them again.
+    void inTurn("Show scenes that are on", () => reloadOn());
+    if (scene.objects.length) say(`A save loaded. ${scene.objects.length} object${scene.objects.length === 1 ? "" : "s"} in ${scene.name}; press Rebuild previews to see them.`, "info");
   });
 });
 
@@ -1365,7 +1737,15 @@ if (typeof ui?.onSolo === "function") {
   });
 }
 
-console.log(`EDGEbuilder ${__VERSION__} starting; data folder ${pkg.dataDir}; ${scene.objects.length} objects in the working scene`);
+console.log(`EDGEbuilder ${__VERSION__} starting; data folder ${pkg.dataDir}; scene ${scene.name} (${scene.file}), ${scene.objects.length} objects; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+// The open scene is always a file, so the Library tab lists it from the start.
+if (!fs.existsSync(scene.file) && !scene.loadError) scene.save();
+scanLibrary();
+if (lastGone) {
+  state.message = { text: `The scene open last time (${lastGone}) is no longer there; opened ${scene.name} instead.`, tone: "warn" };
+  console.log(state.message.text);
+}
+writeSession();
 if (scene.loadError) {
   state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);
