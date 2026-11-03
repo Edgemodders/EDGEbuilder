@@ -25,6 +25,7 @@ Last updated 2026-10-30.
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
+| [B3-2 Save](#b3-2-save) | In the game | B3 | Not run yet (0.6.0 built 2026-11-03) | Waiting |
 
 ## Automated
 
@@ -312,3 +313,26 @@ streaming:
 | 15 | 0.5.7: on the Assets tab, Drop at click, then Drop where I look | After each drop the Scene tab shows, with the new object in the Selected panel |
 | 16 | 0.5.7: select a group, Ctrl+C; point at the ground somewhere else, Ctrl+V; point elsewhere, Ctrl+V again; delete the originals, Ctrl+V once more; Ctrl+Z | "Copied N objects". Each Ctrl+V puts a copy of the group standing on the ground under the cursor, selected, the Scene tab showing it as a new group with the same name; the last works with the originals gone. Ctrl+Z takes the last paste back. With the cursor over the EDGEbuilder window, Ctrl+V pastes where the camera looks |
 | 17 | 0.5.8: select a group, Ctrl+X; Ctrl+V somewhere else; Ctrl+Z twice | "Cut N objects": the group goes. Ctrl+V pastes it under the cursor. The first Ctrl+Z takes the paste back, the second brings the cut group back where it was |
+
+### B3-2 Save
+
+Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck). Needs REDnode 0.56.1 or later (scenes that are shown use `world.load` with `wait: false`). Named scenes saved after every change, in the Library, the open REDcode project or This PC; the Library tab; the last scene reopened at start; other scenes shown beside the open one; EDGEbuilder's service; the page on any screen width ([design](design.md#scenes-and-the-library-b3-2)). Checked before the game in REDnode's host on 2026-11-03: the tab, the folders, New, Save as, Rename, Open, the refusals (a name taken, a folder outside the Library), `scenes()` and `refs()` through the MCP server, and the page at 2580 x 1080. Start somewhere open with Edit on.
+
+| # | Check | Expected |
+|---|---|---|
+| 1 | The log's start line | `EDGEbuilder 0.6.0 starting; ... scene Working scene (...), N objects; 0 other scenes on; Library not set`, then `Service ready: refs, scenes`. REDnode 0.56.1 or later |
+| 2 | The Scene tab; Ctrl+S | The top shows **Scene: Working scene** and "In This PC. Saved after every change." Ctrl+S: "Saved Working scene in This PC" |
+| 3 | The Library tab; **Make the Library** | Before: "No Library folder yet. Make one at ...\Documents\EDGE Library". After: "The Library is ...\EDGE Library"; the button goes; the tree shows LIBRARY (0 scenes) and THIS PC with Working scene marked OPEN. `%APPDATA%\EDGE\library.json` says `{ "root": ... }` and the folder is there in Explorer |
+| 4 | Pick LIBRARY, type `Alleys` in Name, **New folder**; pick Alleys, type `Kabuki`, **New folder** | Both folders in the tree and in Explorer. "In Library > Alleys > Kabuki" under Name once Kabuki is picked |
+| 5 | With Kabuki picked, type `Market`, **Save open scene here** | "Saved as Market in Library > Alleys > Kabuki; that is the open scene now". The Scene tab says Scene: Market. Working scene is still under THIS PC, no longer OPEN |
+| 6 | Drop three crates. On the Scene tab, change the name to `Market Corner`, Enter | "Renamed the scene Market Corner (market_corner.scene.json)"; Explorer shows `market_corner.scene.json` and no `market.scene.json` |
+| 7 | Library tab: pick Alleys, type `Yard`, **New scene here** | Market Corner's crates leave the world; "New scene Yard in Library > Alleys". The Scene list is empty, Undo is greyed out |
+| 8 | Pick Market Corner, **Show in world** | Its three crates appear where they were; the row is marked SHOWN; with Edit on, a click on them selects nothing. **Hide from world** takes them away; show them again |
+| 9 | Drop a crate in Yard. Then double-click Market Corner | Yard's crate leaves the world, Market Corner's crates come back as previews you can select and move ("Opened Market Corner ..."); its SHOWN mark goes. Undo starts empty |
+| 10 | Pick Yard, **Show in world**. Quit the game, start it, load a save | The log: `scene Market Corner (...)`, `1 other scene on`. Yard's crate shows by itself once the save is in; the message says to Rebuild previews for Market Corner; Rebuild previews brings its crates. **The gate: a scene saved in a Library sub-folder reopens after a restart, with another shown beside it** |
+| 11 | Ctrl+Shift+S | The Library tab, with "Market Corner copy" in Name: **Save open scene here** saves a copy that becomes the open scene |
+| 12 | A name taken: in Alleys, New scene here with the name `Yard` | A warning, "Library > Alleys already has a scene called yard.scene.json", and nothing changes |
+| 13 | Far away: show a scene whose objects are more than 300 m away (or fly the camera 500 m off, then show Market Corner) | It answers at once, no busy bar that hangs; the crates appear when the camera or V gets near |
+| 14 | With a REDcode project open (REDcode 0.10.5 or later) | A PROJECT: name section in the tree; New scene here in it writes `source\scenes\<name>.scene.json` in the project |
+| 15 | The service: in Claude Code with REDnode's MCP server, ask for EDGEbuilder's scenes, then for Market Corner's refs | `edgebuilder__scenes` runs without asking and lists the scenes with place, folder, object count, open and on. `edgebuilder__refs` gives the three crates with refs `edgebuilder/market_corner/cargo_crate_a` and on, positions and rotations |
+| 16 | Your usual screen: Edit on, select a crate | The gizmo sits on the crate as before; the window at the right edge. On a 21:9 or wider screen (or the game windowed at such a size), the same, and the view's tint covers the whole width |

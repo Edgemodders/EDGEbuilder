@@ -179,7 +179,7 @@ Agreed with the owner on 2026-11-03. Until B3-1 there is one scene, `scenes/work
 
 | Part | What |
 |---|---|
-| **Named scenes, saved as you go** | The Scene tab shows the open scene's name, with **New**, **Open**, **Save as** and **Rename**. Every change is still written to the file at once, so nothing is ever unsaved; Ctrl+S says "Saved", Ctrl+Shift+S is Save as. Undo history belongs to the open scene: opening another starts a new one. A saved file carries the game version (`game`) |
+| **Named scenes, saved as you go** | The Scene tab shows the open scene's name, with **New**, **Open**, **Save as** and **Rename**. Every change is still written to the file at once, so nothing is ever unsaved; Ctrl+S says "Saved", Ctrl+Shift+S is Save as. Undo history belongs to the open scene: opening another starts a new one. A `game` the file already has is kept (EDGEbuilder cannot read the game's version yet) |
 | **Three places** | The **Library** (any folder under its root), the **open REDcode project** (`source/scenes`), and **This PC** (`scenes/` in `pkg.dataDir`, always there). The Library is never forced: without a root, scenes go to the project or This PC |
 | **The Library root** | Shared by the EDGE tools, kept in `%APPDATA%\EDGE\library.json` as `{ "root": ... }` ([Library](library.md)). Settings offers `Documents\EDGE Library` (the real Documents folder, wherever Windows keeps it) and a **Change** button. Relocate waits for later |
 | **The Library tab** | One tree with three sections: Library (the modder's folders), Project: name, This PC. A click opens a scene; each row shows the object count and when it last changed. **New folder** inside the Library. Scenes are found by their `.scene.json` ending, in any folder |

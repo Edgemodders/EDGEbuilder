@@ -10,6 +10,20 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**New**
+
+- Named scenes. The Scene tab shows the open scene's name (Enter renames it and its file) and where it is, with Save, Save as, New and Open. Every change is still saved at once; Ctrl+S confirms it and Ctrl+Shift+S saves a copy under a new name, which becomes the open scene.
+- The Library: one folder for the EDGE tools' work, kept in `%APPDATA%\EDGE\library.json`, offered at `Documents\EDGE Library` (Make the Library on the Library tab, or any folder in Settings). Make your own folders in it and keep scenes there. The Library is never needed: scenes can stay in the open REDcode project (`source\scenes`) or on This PC.
+- The Library tab: every scene in the Library, the open REDcode project and This PC as one tree of folders, with each scene's object count and when it changed. Pick a scene to open it (or double-click), a folder for New scene here, Save open scene here or New folder.
+- Show a scene in the world beside the one you are editing (Show in world on the Library tab). Its objects cannot be selected; open the scene to change it. Far objects cost no time: they come in as V or the camera gets near. Needs REDnode 0.56.1 or later.
+- EDGEbuilder opens the scene you had open last time when it starts, and shows again the scenes that were shown, once a save is loaded.
+- A service for other packages and AI assistants: `scenes()` lists every scene with its place, folder, object count and whether it is open or shown; `refs(scene)` gives a scene's objects with the node references the bake gives them (`edgebuilder/<scene>/<id>`), kinds, positions and rotations, for EDGEquest (https://github.com/Edgemodders/EDGEbuilder/issues/3). Both read without asking (`edgebuilder__scenes`, `edgebuilder__refs`). The event `scene-changed` follows the open scene.
+
+**Changed**
+
+- The page covers the whole game view at any width (REDnode's `"fill": "screen"`, REDnode 0.50.0 and later), so the viewport and gizmo work on 21:9 and wider screens; the window stays at the right edge.
+- A long message keeps its lines and pushes the tabs down instead of running into them.
+
 ## 0.5.8 (2026-11-02)
 
 B3-1 Arrange. Tested on game 2.5 with REDnode 0.52.1. 0.5.0 to 0.5.7 were test builds only. In the game, Ctrl+Z, Ctrl+Y, Ctrl+C, Ctrl+X, Ctrl+V and Esc need REDnode 0.52.0 or later.

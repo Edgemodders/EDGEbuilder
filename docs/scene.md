@@ -4,7 +4,7 @@ title: Scene format
 
 # The scene file
 
-A scene is the contract between EDGEbuilder's two halves and the input to REDbridge's `sector.build`. Format 1, pinned 2026-10-13. It lives at `source/scenes/<name>.scene.json` in a REDcode project, or in EDGEbuilder's data folder when there is no project.
+A scene is the contract between EDGEbuilder's two halves and the input to REDbridge's `sector.build`. Format 1, pinned 2026-10-13. It lives in any folder of the [Library](library.md), at `source/scenes/<name>.scene.json` in a REDcode project, or in EDGEbuilder's data folder ("This PC"); B3-2 lets the player choose. The file name is the scene's name by the bake's rule (lowercase, every character but a letter or digit an `_`).
 
 ```json
 {
