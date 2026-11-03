@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://edgemodders.github.io/EDGEbuilder/"><img src="docs/assets/brand/badges/docs.svg" alt="docs: read the docs"></a>
-  <img src="docs/assets/brand/badges/status.svg" alt="status: design, B0">
+  <img src="docs/assets/brand/badges/status.svg" alt="status: 0.5.8 released">
   <img src="docs/assets/brand/badges/game.svg" alt="game: Cyberpunk 2077">
   <img src="docs/assets/brand/badges/runtime.svg" alt="runs on: REDnode">
   <a href="LICENSE"><img src="docs/assets/brand/badges/license.svg" alt="license: MIT"></a>
@@ -17,7 +17,7 @@ EDGEbuilder is the first mod built on the EDGE platform end to end: the editor i
 **[Read the design](https://edgemodders.github.io/EDGEbuilder/design.html)** &middot; [REDnode](https://github.com/Edgemodders/REDnode) &middot; [REDbridge](https://github.com/Edgemodders/REDbridge) &middot; [REDcode](https://github.com/Edgemodders/REDcode) &middot; [EDGEdeck](https://github.com/Edgemodders/EDGEdeck)
 
 > [!NOTE]
-> **Status: B1, B2a and B2b passed in game; test builds only.** EDGEbuilder reads an index of your game's meshes and entities through REDbridge, searches it, and drops a picked asset into the world through REDnode's world API. With **Edit** on it flies a camera of its own, hides the game's HUD, and moves, turns and scales objects with a gizmo or the keys G, R and S. Nothing it places outlasts the session yet: saving scenes (B3) and baking them into the world (B4) come next, and the first public release follows B4. Results: [Tests](https://edgemodders.github.io/EDGEbuilder/testing.html). Test builds are on the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases) once their in-game test passed; install them with EDGEdeck. Runs on game 2.5 (0.3.4 passed its check there on 2026-10-29), like REDnode 0.38.1 and later. The [design](https://edgemodders.github.io/EDGEbuilder/design.html) says where it goes.
+> **Status: 0.5.8 released on 2026-11-02, for game 2.5; test builds only.** B1 Browse and drop, B2a Position, B2b Camera, B2c Mod assets and B3-1 Arrange passed in game. EDGEbuilder reads an index of the meshes and entities in your game, your installed mods and the project open in REDcode through REDbridge, searches it, and drops a picked asset into the world through REDnode's world API. With **Edit** on it flies a camera of its own, hides the game's HUD (and other packages' windows, with Solo allowed), and moves, turns and scales objects with a gizmo or the keys G, R and S. It handles several objects at once, groups, duplicates, copies, cuts and pastes, and undoes and redoes the last 100 changes; in the game its Ctrl keys and Esc need REDnode 0.52.0 or later. Nothing it places outlasts the session yet: saving scenes (B3-2) and baking them into the world (B4) come next, and the first public release follows B4. A bake probe already loaded a baked sector in game 2.5. Results: [Tests](https://edgemodders.github.io/EDGEbuilder/testing.html). Test builds are on the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases) once their in-game test passed; install them with EDGEdeck. The [design](https://edgemodders.github.io/EDGEbuilder/design.html) says where it goes.
 
 ## How it works
 
