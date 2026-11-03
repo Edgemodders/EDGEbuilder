@@ -8,7 +8,9 @@
 #                                               (raise "version" in edgebuilder/rednode-app.json and
 #                                               package.json), if it is not run on main, or if
 #                                               docs/changelog.md has no section for the version
-#                                               (tools/release/notes.mjs)
+#                                               (tools/release/notes.mjs), or if README.md's status
+#                                               line and badge do not say the version
+#                                               (tools/release/readme-check.mjs)
 #
 # No Nexus Mods step yet: EDGEbuilder's builds are test builds until the public preview after B4
 # (docs/design.md, "Release stages"). The preview adds nexus/ and the "Update Nexus Mods" input,
@@ -70,6 +72,10 @@ jobs:
             echo "::error::v${VERSION} is already released. Raise \"version\" in edgebuilder/rednode-app.json and package.json."
             exit 1
           fi
+
+      - name: The README says this release
+        if: inputs.release
+        run: node tools/release/readme-check.mjs --version "${VERSION}"
 
       - name: Release notes from docs/changelog.md
         if: inputs.release
