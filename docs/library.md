@@ -121,5 +121,5 @@ E0 can run early, beside B2c or B3, since it touches only REDbridge and a script
 ## Open
 
 - **The rules' home** (agreed): this page keeps the shared Library rules (the root and `library.json`, self-describing items, the "came from" note) until a second tool uses the Library; then they move to the platform's wiki.
-- **The default folder**: `Documents\EDGE Library` as offered above, unless the owner prefers another; Relocate makes the first choice cheap to change.
+- **The default folder** (agreed 2026-11-03): `Documents\EDGE Library`, as offered above. B3-2 builds the root setting, saving into and opening from Library folders, the Library tab and scenes on; see the design's [Scenes and the Library](design.md#scenes-and-the-library-b3-2). Relocate comes later.
 - EDGEscene, an empty repo of 2026-10-27, was deleted by the owner: residue of early ideas, not a home for this.
