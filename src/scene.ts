@@ -22,12 +22,22 @@ export interface SceneState {
   selected?: string[];
 }
 
+/** Reads a scene file, or throws why it is not one EDGEbuilder can open. */
+export function readSceneFile(file: string): SceneFile {
+  const data = JSON.parse(fs.readFileSync(file, "utf8")) as SceneFile;
+  if (data.format !== 1 || !Array.isArray(data.objects)) throw new Error(`not a format 1 scene`);
+  return data;
+}
+
 export class Scene {
   name = "Working scene";
+  /** The game version the file says it was made against; kept, not set (B3-2). */
+  game: string | undefined;
   objects: SceneObject[] = [];
   groups: SceneGroup[] = [];
 
-  constructor(readonly file: string) {}
+  /** The file the scene is saved to after every change; another scene opened (B3-2) changes it. */
+  constructor(public file: string) {}
 
   /** Where an unreadable scene file was moved, so the next save does not overwrite it. */
   setAside: string | undefined;
@@ -42,11 +52,7 @@ export class Scene {
     try {
       const data = JSON.parse(text) as SceneFile;
       if (data.format !== 1 || !Array.isArray(data.objects)) throw new Error(`not a format 1 scene`);
-      this.name = data.name || this.name;
-      this.objects = data.objects.map((o) => ({ ...o }));
-      this.groups = Array.isArray(data.groups) ? data.groups.map((g) => ({ id: g.id, name: g.name, parent: g.parent ?? null })) : [];
-      // An object in a group the file does not have stands on its own.
-      for (const o of this.objects) if (o.group && !this.groups.some((g) => g.id === o.group)) delete o.group;
+      this.take(data);
       return true;
     } catch (err) {
       // A damaged or hand-edited file: keep it beside, start empty, and let the mod say so.
@@ -63,15 +69,35 @@ export class Scene {
 
   loadError: string | undefined;
 
-  save(): void {
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    const data: SceneFile = {
+  /** Makes this the scene in `data`, saved to `file` from now on. */
+  take(data: SceneFile, file = this.file): void {
+    this.file = file;
+    this.name = data.name || path.basename(file).replace(/\.scene\.json$/i, "");
+    this.game = typeof data.game === "string" ? data.game : undefined;
+    this.objects = data.objects.map((o) => ({ ...o }));
+    this.groups = Array.isArray(data.groups) ? data.groups.map((g) => ({ id: g.id, name: g.name, parent: g.parent ?? null })) : [];
+    // An object in a group the file does not have stands on its own.
+    for (const o of this.objects) if (o.group && !this.groups.some((g) => g.id === o.group)) delete o.group;
+  }
+
+  /** The scene as its file keeps it. */
+  data(): SceneFile {
+    return {
       format: 1,
       name: this.name,
+      ...(this.game ? { game: this.game } : {}),
       groups: this.groups,
       objects: this.objects.map(({ entityId: _live, ...rest }) => rest),
     };
-    fs.writeFileSync(this.file, JSON.stringify(data, null, 2));
+  }
+
+  /** Called after each save, for the service's scene-changed event. */
+  onSave: (() => void) | undefined;
+
+  save(): void {
+    fs.mkdirSync(path.dirname(this.file), { recursive: true });
+    fs.writeFileSync(this.file, JSON.stringify(this.data(), null, 2));
+    this.onSave?.();
   }
 
   add(kind: SceneObject["kind"], resource: string | undefined, transform: SceneTransform, appearance?: string): SceneObject {

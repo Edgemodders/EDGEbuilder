@@ -8,6 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as core from "../dist/core.mjs";
+import { cleanFolderName, fileNameOf, folderIn, freeFileName, readLibraryRoot, readSceneFile, refOf, scanShelf, slugOf, whereIs, writeLibraryRoot } from "../dist/core.mjs";
 import { AssetIndex, BridgeClient, applyChange, centreOf, copyOf, duplicate, makeGroup, pasteOf, standPoint, pickMany, pickSelection, pruneGroups, selectionUnits, ungroup, ModSources, NeedsNewerBridge, Scene, findBridge, isGameFolder, kindOf, modArchives, quaternionToYaw, sceneNeeds, yawToQuaternion } from "../dist/core.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -46,6 +47,62 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   damaged.add("mesh", "base/a.mesh", { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
   assert.ok(fs.readFileSync(damaged.setAside, "utf8").includes("broken"), "the next save did not touch it");
   console.log("scene: ok");
+}
+
+// Scenes and the Library (B3-2): names as the bake writes them, the three places, the Library's root file.
+{
+  assert.equal(slugOf("My Alley"), "my_alley");
+  assert.equal(slugOf("  Kabuki -- Market!  "), "kabuki____market", "each character but a letter or digit is one _, as REDbridge's SafeName");
+  assert.equal(slugOf("***"), "scene");
+  assert.equal(fileNameOf("My Alley"), "my_alley.scene.json");
+  assert.equal(refOf("My Alley", { id: "crate_a" }), "edgebuilder/my_alley/crate_a");
+  assert.equal(refOf("My Alley", { id: "crate_a", ref: "quest/spot" }), "quest/spot");
+  assert.equal(cleanFolderName(" Kabuki: market? "), "Kabuki market");
+  assert.throws(() => cleanFolderName(" .. "));
+  const lib = path.join(tmp, "Library");
+  assert.throws(() => folderIn(lib, "../outside"), /outside/);
+  assert.equal(folderIn(lib, "Alleys/Kabuki"), path.join(lib, "Alleys", "Kabuki"));
+  // The root file every EDGE tool reads; other fields in it are kept.
+  const conf = path.join(tmp, "EDGE", "library.json");
+  assert.equal(readLibraryRoot(conf), undefined);
+  fs.mkdirSync(path.dirname(conf), { recursive: true });
+  fs.writeFileSync(conf, JSON.stringify({ other: 1 }));
+  writeLibraryRoot(lib, conf);
+  assert.equal(readLibraryRoot(conf), lib);
+  assert.equal(JSON.parse(fs.readFileSync(conf, "utf8")).other, 1);
+  assert.ok(fs.statSync(lib).isDirectory(), "the root is made");
+  // Scenes in folders; bakes and hidden folders are not scene folders; a damaged file is listed with why.
+  const a = new Scene(path.join(lib, "Alleys", "Kabuki", "market.scene.json"));
+  a.name = "Market";
+  a.game = "2.5";
+  a.add("mesh", "base/a.mesh", { position: [1, 2, 3], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
+  fs.mkdirSync(path.join(lib, "Old.bake"), { recursive: true });
+  fs.writeFileSync(path.join(lib, "Old.bake", "x.scene.json"), "{}");
+  fs.mkdirSync(path.join(lib, "Empty"), { recursive: true });
+  fs.writeFileSync(path.join(lib, "broken.scene.json"), "{ nope");
+  const shelf = scanShelf({ place: "library", dir: lib, label: "Library" });
+  assert.deepEqual(shelf.folders, ["Alleys", "Alleys/Kabuki", "Empty"]);
+  assert.deepEqual(shelf.scenes.map((x) => [x.folder, x.name, x.objects, !!x.error]).sort(), [["", "broken", 0, true], ["Alleys/Kabuki", "Market", 1, false]]);
+  assert.equal(scanShelf({ place: "data", dir: path.join(tmp, "nowhere"), label: "This PC" }).scenes.length, 0, "a missing place is an empty shelf");
+  assert.deepEqual(whereIs(a.file, [{ place: "library", dir: lib, label: "Library" }]), { place: "library", folder: "Alleys/Kabuki" });
+  assert.equal(whereIs(path.join(tmp, "x.scene.json"), [{ place: "library", dir: lib, label: "Library" }]), undefined);
+  assert.equal(path.basename(freeFileName(path.join(lib, "Alleys", "Kabuki"), "Market")), "market_2.scene.json");
+  // take() and data(): another file becomes the scene; game is kept, previews are not saved.
+  const data = readSceneFile(a.file);
+  assert.equal(data.game, "2.5");
+  const b = new Scene(path.join(tmp, "scenes", "working.scene.json"));
+  b.take(data, path.join(lib, "Empty", "copy.scene.json"));
+  b.objects[0].entityId = "1";
+  let saved = 0;
+  b.onSave = () => saved++;
+  b.save();
+  assert.equal(saved, 1);
+  const copy = readSceneFile(b.file);
+  assert.equal(copy.name, "Market");
+  assert.equal(copy.game, "2.5");
+  assert.equal(copy.objects[0].entityId, undefined);
+  assert.throws(() => readSceneFile(path.join(lib, "broken.scene.json")));
+  console.log("scenes and the Library: ok");
 }
 
 // Arrange (B3): what a click selects, groups, duplicates, several objects around their middle, undo's restore.
