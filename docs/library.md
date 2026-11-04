@@ -27,7 +27,7 @@ The name stays **Library**, as a real library holds books and tapes on every sub
 
 ## Shared rules
 
-These rules are the same for every EDGE tool that uses the Library. EDGEbuilder keeps them here. EDGEfab became the second tool to use the Library on 2026-10-31, so by draft 2's plan they move to the platform's wiki; until the owner moves them, this section is where tools link (`library.html#shared-rules`).
+These rules are the same for every EDGE tool that uses the Library. Since 2026-11-04 the platform's wiki explains them for modders, [The EDGE Library](https://edgemodders.ai/wiki/library.html), as draft 2 planned once a second tool (EDGEfab) used the Library. This section stays the technical reference the wiki links to (`library.html#shared-rules`): the exact shapes of items and notes. A change here goes to the wiki page too.
 
 | Rule | Why |
 |---|---|
@@ -183,7 +183,7 @@ E0 can run early, beside B2c or B3, since it touches only REDbridge and a script
 
 ## Open
 
-- **The rules' home** (agreed): this page keeps the [shared rules](#shared-rules) until a second tool uses the Library; then they move to the platform's wiki. EDGEfab is the second (2026-10-31), so the move is due; the owner moves them, and this section stays as a pointer.
+- **The rules' home** (agreed): this page keeps the [shared rules](#shared-rules) until a second tool uses the Library; then they move to the platform's wiki. Done on 2026-11-04: the wiki's [The EDGE Library](https://edgemodders.ai/wiki/library.html) explains them for modders, and this page keeps the exact shapes for tool makers.
 - **Assets in the rules** (draft 3, 2026-11-04, [issue #4](https://github.com/Edgemodders/EDGEbuilder/issues/4)): EDGEfab's asset item and its `source/library.json` adopted for every tool, EDGEwave's `sound` kind, Use the game path, Desks. Browse and the sector view listing Library assets come later, with the "not in the game yet" flag.
 - **The default folder** (agreed 2026-11-03): `Documents\EDGE Library`, as offered above. B3-2 builds the root setting, saving into and opening from Library folders, the Library tab and scenes on; see the design's [Scenes and the Library](design.md#scenes-and-the-library-b3-2). Relocate comes later.
 - EDGEscene, an empty repo of 2026-10-27, was deleted by the owner: residue of early ideas, not a home for this.
