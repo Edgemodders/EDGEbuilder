@@ -25,7 +25,7 @@ Last updated 2026-10-30.
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
-| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.0), 0.6.2 built for the retest | Waiting: step 10 not met on 0.6.0; steps 14 and 15 passed |
+| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.0), 0.6.2 built for the retest | Waiting: step 10 not met on 0.6.0; steps 13, 14 and 15 passed |
 
 ## Automated
 
@@ -325,9 +325,9 @@ streaming:
 | Step 10: Yard was not shown after the restart (`0 other scenes on`) | Yard's crate left within a second of each Show (18:17:21, 18:19:21) and the session then listed nothing. The only route without an Open is a second press on the button, which logged nothing. One click held in the host, where no world is loaded | Open. 0.6.1 takes a double-click on the button as one press and logs `No longer showing <file>`: retest |
 | Step 11 made an empty scene | The log says New scene, not Save as: **New scene here** was pressed, with the name Ctrl+Shift+S fills in. No objects lost | 0.6.2: after Save as only **Save open scene here** is offered. Checked in the host |
 
-The owner reports the other steps done on 0.6.0. Step 13 not yet covered: flying far from the open scene's three crates, they went out of sight, a box selected them from afar, and flying back they showed with no pop-in; but the log has no Show in world since 18:19, so showing a scene from far away waits for the retest. Asked for at the same test: an **Objects** drawer, built as 0.6.2 (steps 17 to 22). Checked in REDnode's host with real mouse events on 2026-11-04: the drawer, the confirm row, a delete from the open scene and from one not open, two clicks opening a scene, Save as. Not checkable there, since no world is loaded: the flight, the outline, previews.
+The owner reports the other steps done on 0.6.0. Step 13 passed on 0.6.0: with the camera far off, Show in world on Market Corner answered at once (a brief busy bar; the log's `Showing market_corner.scene.json: 25 objects` at 18:54:19), and the crates appeared as the camera got near. That press stayed shown (`session.json` still lists the scene), so one press does hold in game, which points to a second press in step 10's two quick hides. Asked for at the same test: an **Objects** drawer, built as 0.6.2 (steps 17 to 22). Checked in REDnode's host with real mouse events on 2026-11-04: the drawer, the confirm row, a delete from the open scene and from one not open, two clicks opening a scene, Save as. Not checkable there, since no world is loaded: the flight, the outline, previews.
 
-**Retest on 0.6.2:** steps 9, 10, 11 and 13, then 17 to 23.
+**Retest on 0.6.2:** steps 9, 10 and 11, then 17 to 23.
 
 Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck). Needs REDnode 0.56.1 or later (scenes that are shown use `world.load` with `wait: false`). Named scenes saved after every change, in the Library, the open REDcode project or This PC; the Library tab; the last scene reopened at start; other scenes shown beside the open one; EDGEbuilder's service; the page on any screen width ([design](design.md#scenes-and-the-library-b3-2)). Checked before the game in REDnode's host on 2026-11-03: the tab, the folders, New, Save as, Rename, Open, the refusals (a name taken, a folder outside the Library), `scenes()` and `refs()` through the MCP server, and the page at 2580 x 1080. Start somewhere open with Edit on.
 
