@@ -542,8 +542,8 @@ async function viewPoints(): Promise<V3[]> {
 }
 
 /** Spawns the previews of the objects near enough to show; says how many showed and how many are far. */
-async function spawnNear(objects: SceneObject[], logWord = "Preview of"): Promise<{ shown: number; far: number; failed: number }> {
-  const points = await viewPoints();
+async function spawnNear(objects: SceneObject[], logWord = "Preview of", also: V3[] = []): Promise<{ shown: number; far: number; failed: number }> {
+  const points = [...(await viewPoints()), ...also];
   const near = (o: SceneObject) => !points.length || points.some((p) => Math.hypot(...sub(o.transform.position as V3, p)) <= PreviewRange);
   const out = { shown: 0, far: 0, failed: 0 };
   const shown = objects.filter((o) => o.kind !== "light");
@@ -1223,6 +1223,63 @@ async function previewsBack(): Promise<void> {
   say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
 }
 
+/**
+ * The Objects drawer's two clicks: the object selected and in the world. The page moves the camera
+ * (it owns the pose). Previews near the object come too, since the camera is on its way there.
+ */
+async function goTo(id: string): Promise<void> {
+  const o = scene.get(id);
+  if (!o) return;
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const noCamera = state.settings.editorCamera === false ? " The editor camera is off in Settings, so the view stayed where it is." : "";
+  if (!o.entityId && o.kind !== "light") {
+    try {
+      await spawnPreview(o);
+    } catch (err) {
+      console.log(`Go to ${id}: ${(err as Error).message}`);
+      await select([id]);
+      return say(`${id} is selected, but the game did not place its preview: the world loads around V, and it may be too far from V. You can still move it.${noCamera}`, "warn");
+    }
+  }
+  await select([id]);
+  await highlight(o, true);
+  await spawnNear(
+    scene.objects.filter((x) => !x.entityId),
+    "Preview of",
+    [o.transform.position as V3],
+  );
+  say(`${id} is selected.${noCamera}`, "ok");
+}
+
+/** The Objects drawer's view of a scene that is not open. */
+function peek(file: string): void {
+  try {
+    const d = readSceneFile(file);
+    state.library.peek = { file, name: d.name, objects: d.objects, groups: d.groups ?? [] };
+  } catch (err) {
+    delete state.library.peek;
+    say(`${path.basename(file)} cannot be read: ${(err as Error).message}.`, "error");
+  }
+  publish();
+}
+
+/** The drawer's trash: from the open scene with Undo, from another scene's file without. */
+async function removeFromScene(file: string, id: string): Promise<void> {
+  if (sameFile(file, scene.file)) return remove([id]);
+  const other = new Scene(file);
+  try {
+    other.load();
+    if (!other.remove(id)) return peek(file);
+  } catch (err) {
+    return say(`${path.basename(file)}: ${(err as Error).message}.`, "error");
+  }
+  const shown = [...onScenes.keys()].find((f) => sameFile(f, file));
+  if (shown && state.world === "ready") await loadOn(shown).catch((err) => console.log(`${path.basename(shown)} not shown: ${(err as Error).message}`));
+  scanLibrary();
+  peek(file);
+  say(`Removed ${id} from ${other.name}. That scene is not open, so Undo cannot bring it back.`, "ok");
+}
+
 async function clear(): Promise<void> {
   if (!scene.objects.length && !scene.groups.length) return say("The scene is already empty.", "info");
   step();
@@ -1630,6 +1687,15 @@ channel.on<PageMessage>((m) => {
         break;
       case "scene.on":
         await inTurn(m.on ? "Show scene" : "Hide scene", () => (m.on ? sceneOn(m.file) : sceneOff(m.file)));
+        break;
+      case "scene.peek":
+        peek(m.file);
+        break;
+      case "scene.goTo":
+        await inTurn("Go to object", () => goTo(m.id));
+        break;
+      case "scene.removeFrom":
+        await inTurn("Delete", () => removeFromScene(m.file, m.id));
         break;
       case "library.root":
         setLibraryRoot(m.root);

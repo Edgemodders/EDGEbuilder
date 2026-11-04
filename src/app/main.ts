@@ -141,6 +141,7 @@ function render(s: Snapshot): void {
   $("undo").title = `Ctrl+Z (${s.history.undo} step${s.history.undo === 1 ? "" : "s"})`;
   $("redo").title = `Ctrl+Y (${s.history.redo} step${s.history.redo === 1 ? "" : "s"})`;
   viewport.setScene(s.scene.objects, s.selected);
+  renderDrawer(s);
   viewport.setCamera(s.camera?.entityId);
   // A duplicate asked for with Edit on: its copies are selected now, and follow the mouse.
   if (lastCopy === undefined) lastCopy = s.duplicated?.seq ?? 0;
@@ -538,6 +539,8 @@ function renderLibrary(s: Snapshot): void {
   $("pickedOn").textContent = on ? "Hide from world" : "Show in world";
   const t = target(s);
   $("newWhere").textContent = `In ${whereLabel(s, t.place, t.folder)}`;
+  $("createScene").hidden = saveAsAsked;
+  $("createFolder").hidden = saveAsAsked;
   $("createFolder").toggleAttribute("disabled", t.place !== "library");
   $("createFolder").title = t.place === "library" ? "A folder inside this one" : "Folders are made in the Library";
 
@@ -551,15 +554,30 @@ const mainTabs = () => document.getElementById("mainTabs") as HTMLElement & { se
 const newName = () => $<Field>("newName");
 
 /** The Library tab with the name field ready: for Save as (Ctrl+Shift+S) and New. */
-function toLibrary(name: string): void {
+function toLibrary(name: string, asCopy = false): void {
+  saveAsAsked = asCopy;
   mainTabs().select?.(TabLabels.library);
   const f = newName();
   f.value = name;
   (f as HTMLElement & { focus(): void }).focus();
+  if (state) render(state);
+}
+
+/**
+ * Save as came here (Ctrl+Shift+S or the button): only Save open scene here is offered, since New scene
+ * here with the copy's name makes an empty scene (B3-2 test, step 11).
+ */
+let saveAsAsked = false;
+function leaveSaveAs(): void {
+  if (!saveAsAsked) return;
+  saveAsAsked = false;
+  newName().value = "";
 }
 
 $("mainTabs").addEventListener("change", (e) => {
-  if (e.target === $("mainTabs") && (e as CustomEvent<{ label: string }>).detail.label === "Library") post({ type: "library.refresh" });
+  if (e.target !== $("mainTabs")) return;
+  if ((e as CustomEvent<{ label: string }>).detail.label === "Library") post({ type: "library.refresh" });
+  else leaveSaveAs();
 });
 $("shelves").addEventListener(
   "click",
@@ -625,6 +643,7 @@ $("saveAsHere").addEventListener("click", () => {
   if (!name) return status("Type a name for the copy first.");
   post({ type: "scene.saveAs", name, ...target(state) });
   newName().value = "";
+  saveAsAsked = false;
 });
 $("createFolder").addEventListener("click", () => {
   if (!state) return;
@@ -640,9 +659,132 @@ $("sceneName").addEventListener("submit", () => {
   (document.activeElement as HTMLElement | null)?.blur();
 });
 $("saveScene").addEventListener("click", () => post({ type: "scene.save" }));
-$("saveAsScene").addEventListener("click", () => state && toLibrary(`${state.scene.name} copy`));
-$("newScene").addEventListener("click", () => toLibrary(""));
+$("saveAsScene").addEventListener("click", () => state && toLibrary(`${state.scene.name} copy`, true));
+$("newScene").addEventListener("click", () => {
+  leaveSaveAs();
+  toLibrary("");
+});
 $("openScene").addEventListener("click", () => mainTabs().select?.(TabLabels.library));
+
+// ---- the Objects drawer -------------------------------------------------------------------------------
+//
+// Every object of the picked scene (or the open one), beside the window. Two clicks on a row put the
+// camera in front of the object and select it, opening its scene first when another is open. The trash
+// asks, then deletes, wherever the object and the camera are.
+
+let drawerOpen = false;
+let peekAsked = "";
+let confirming: string | undefined;
+let lastDrawerRow = { id: "", at: 0 };
+let pendingGo: { file: string; id: string } | undefined;
+let drawerHtml = "";
+const TrashIcon = `<svg viewBox="0 0 16 16"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.8 9.5h6.4L12 4M6.7 6.5v4.5M9.3 6.5v4.5"/></svg>`;
+
+function drawerFile(s: Snapshot): string {
+  const sc = picked?.kind === "scene" ? findScene(s, picked.file) : undefined;
+  return sc && !sc.error ? sc.file : (s.scene.file ?? "");
+}
+
+function renderDrawer(s: Snapshot): void {
+  if (pendingGo && sameFile(pendingGo.file, s.scene.file ?? "")) {
+    const id = pendingGo.id;
+    pendingGo = undefined;
+    goToObject(s, id);
+  }
+  $("drawer").classList.toggle("open", drawerOpen);
+  if (!drawerOpen) return;
+  const file = drawerFile(s);
+  const isOpen = sameFile(file, s.scene.file ?? "");
+  const peeked = s.library.peek && sameFile(s.library.peek.file, file) ? s.library.peek : undefined;
+  if (isOpen) peekAsked = "";
+  else if (peekAsked !== file) {
+    peekAsked = file;
+    post({ type: "scene.peek", file });
+  }
+  const shown = isOpen ? s.scene : peeked;
+  $("drawerTitle").textContent = shown ? `Objects: ${shown.name}` : "Objects";
+  $("drawerTitle").title = file;
+  if (!shown) {
+    $("drawerInfo").textContent = "Reading the scene...";
+    $("drawerList").innerHTML = drawerHtml = "";
+    return;
+  }
+  const n = shown.objects.length;
+  $("drawerInfo").textContent = `${n} object${n === 1 ? "" : "s"}. ${isOpen ? "Two clicks fly the camera to an object and select it." : "Not the open scene: two clicks open it and fly there. A delete here has no Undo."}`;
+  const groupName = (id: string | undefined) => shown.groups.find((g) => g.id === id)?.name;
+  const html = shown.objects
+    .map((o) => {
+      const end =
+        confirming === o.id
+          ? `<span slot="end" class="confirm">${isOpen ? "Delete?" : "Delete for good?"}<button data-act="yes" data-id="${esc(o.id)}">Yes</button><button data-act="no">No</button></span>`
+          : `<span slot="end">${o.group ? `<span class="grouptag">${esc(groupName(o.group) ?? "")}</span>` : ""}<button class="act" data-act="trash" data-id="${esc(o.id)}" title="Delete">${TrashIcon}</button></span>`;
+      const [x, y, z] = o.transform.position.map((v) => v.toFixed(1));
+      return `<rn-item value="${esc(o.id)}" title="${esc(`${o.resource}\n${x}, ${y}, ${z}`)}"${isOpen && s.selected.includes(o.id) ? " selected" : ""}>${esc(o.id)}${end}</rn-item>`;
+    })
+    .join("");
+  if (html !== drawerHtml) $("drawerList").innerHTML = drawerHtml = html;
+}
+
+/** Edit on, the camera on its way (the page owns it), and the mod selects the object and places its preview. */
+function goToObject(s: Snapshot, id: string): void {
+  const o = s.scene.objects.find((x) => x.id === id);
+  if (!o) return;
+  if (s.world === "ready") {
+    const edit = $("edit") as HTMLElement & { checked: boolean };
+    if (!edit.checked) {
+      edit.checked = true;
+      viewport.setEdit(true);
+    }
+    if (s.settings.editorCamera !== false) viewport.flyTo(o);
+  }
+  post({ type: "scene.goTo", id });
+}
+
+$("pickedObjects").addEventListener("click", () => {
+  drawerOpen = !drawerOpen;
+  peekAsked = "";
+  confirming = undefined;
+  if (state) render(state);
+});
+$("drawerClose").addEventListener("click", () => {
+  drawerOpen = false;
+  if (state) render(state);
+});
+$("drawerList").addEventListener(
+  "click",
+  (e) => {
+    if (!state) return;
+    const file = drawerFile(state);
+    const isOpen = sameFile(file, state.scene.file ?? "");
+    const target = e.target as HTMLElement;
+    const act = target.closest?.("[data-act]") as HTMLElement | null;
+    if (act) {
+      e.stopPropagation();
+      const id = act.dataset.id;
+      lastDrawerRow = { id: "", at: 0 };
+      if (act.dataset.act === "trash") confirming = id;
+      else {
+        confirming = undefined;
+        if (act.dataset.act === "yes" && id) post(isOpen ? { type: "delete", ids: [id] } : { type: "scene.removeFrom", file, id });
+      }
+      render(state);
+      return;
+    }
+    const id = target.closest?.("rn-item")?.getAttribute("value");
+    if (!id) return;
+    // Not the browser's dblclick: a selection redraws the rows between the clicks, as in the Library tab.
+    const twice = id === lastDrawerRow.id && performance.now() - lastDrawerRow.at < 500;
+    lastDrawerRow = twice ? { id: "", at: 0 } : { id, at: performance.now() };
+    if (!twice) {
+      if (isOpen) post({ type: "select", ids: [id] });
+    } else if (isOpen) goToObject(state, id);
+    else {
+      pendingGo = { file, id };
+      post({ type: "scene.open", file });
+    }
+  },
+  true,
+);
 
 function status(text: string): void {
   $("message").textContent = text;

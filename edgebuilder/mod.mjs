@@ -1390,8 +1390,8 @@ async function viewPoints() {
   }
   return out;
 }
-async function spawnNear(objects, logWord = "Preview of") {
-  const points = await viewPoints();
+async function spawnNear(objects, logWord = "Preview of", also = []) {
+  const points = [...await viewPoints(), ...also];
   const near = (o) => !points.length || points.some((p) => Math.hypot(...sub(o.transform.position, p)) <= PreviewRange);
   const out = { shown: 0, far: 0, failed: 0 };
   const shown = objects.filter((o) => o.kind !== "light");
@@ -1930,6 +1930,54 @@ async function previewsBack() {
   const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place (the log says why)` : ""].filter(Boolean);
   say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
 }
+async function goTo(id) {
+  const o = scene.get(id);
+  if (!o) return;
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const noCamera = state.settings.editorCamera === false ? " The editor camera is off in Settings, so the view stayed where it is." : "";
+  if (!o.entityId && o.kind !== "light") {
+    try {
+      await spawnPreview(o);
+    } catch (err) {
+      console.log(`Go to ${id}: ${err.message}`);
+      await select([id]);
+      return say(`${id} is selected, but the game did not place its preview: the world loads around V, and it may be too far from V. You can still move it.${noCamera}`, "warn");
+    }
+  }
+  await select([id]);
+  await highlight(o, true);
+  await spawnNear(
+    scene.objects.filter((x) => !x.entityId),
+    "Preview of",
+    [o.transform.position]
+  );
+  say(`${id} is selected.${noCamera}`, "ok");
+}
+function peek(file) {
+  try {
+    const d = readSceneFile(file);
+    state.library.peek = { file, name: d.name, objects: d.objects, groups: d.groups ?? [] };
+  } catch (err) {
+    delete state.library.peek;
+    say(`${path6.basename(file)} cannot be read: ${err.message}.`, "error");
+  }
+  publish();
+}
+async function removeFromScene(file, id) {
+  if (sameFile(file, scene.file)) return remove([id]);
+  const other = new Scene(file);
+  try {
+    other.load();
+    if (!other.remove(id)) return peek(file);
+  } catch (err) {
+    return say(`${path6.basename(file)}: ${err.message}.`, "error");
+  }
+  const shown = [...onScenes.keys()].find((f) => sameFile(f, file));
+  if (shown && state.world === "ready") await loadOn(shown).catch((err) => console.log(`${path6.basename(shown)} not shown: ${err.message}`));
+  scanLibrary();
+  peek(file);
+  say(`Removed ${id} from ${other.name}. That scene is not open, so Undo cannot bring it back.`, "ok");
+}
 async function clear() {
   if (!scene.objects.length && !scene.groups.length) return say("The scene is already empty.", "info");
   step();
@@ -2263,6 +2311,15 @@ channel.on((m) => {
       case "scene.on":
         await inTurn(m.on ? "Show scene" : "Hide scene", () => m.on ? sceneOn(m.file) : sceneOff(m.file));
         break;
+      case "scene.peek":
+        peek(m.file);
+        break;
+      case "scene.goTo":
+        await inTurn("Go to object", () => goTo(m.id));
+        break;
+      case "scene.removeFrom":
+        await inTurn("Delete", () => removeFromScene(m.file, m.id));
+        break;
       case "library.root":
         setLibraryRoot(m.root);
         break;
@@ -2374,7 +2431,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.6.1"} starting; data folder ${pkg.dataDir}; scene ${scene.name} (${scene.file}), ${scene.objects.length} objects; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.6.2"} starting; data folder ${pkg.dataDir}; scene ${scene.name} (${scene.file}), ${scene.objects.length} objects; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs6.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

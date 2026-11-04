@@ -25,7 +25,7 @@ Last updated 2026-10-30.
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
-| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.0), 0.6.1 built for the retest | Waiting: step 10 not met on 0.6.0; steps 14 and 15 passed |
+| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.0), 0.6.2 built for the retest | Waiting: step 10 not met on 0.6.0; steps 14 and 15 passed |
 
 ## Automated
 
@@ -323,9 +323,11 @@ streaming:
 | Double-clicking a scene did not open it | The first click's `select` rebuilds the rows, so the browser never fires `dblclick` (2 clicks, 0 `dblclick` events, with real mouse events in REDnode's host; the first host check posted messages and missed it) | 0.6.1: two clicks on one row within 500 ms open it. Checked in the host |
 | A save loaded and the open scene's crates did not come back | As built: a message asked for Rebuild previews, while shown scenes came back by themselves | 0.6.1: previews within 300 m come back by themselves 2 s after the save is in, far ones still wait for a Rebuild near them. Any earlier preview still standing is removed first, since OnGameAttached came twice at a game start, 14 s apart. Not checked outside the game |
 | Step 10: Yard was not shown after the restart (`0 other scenes on`) | Yard's crate left within a second of each Show (18:17:21, 18:19:21) and the session then listed nothing. The only route without an Open is a second press on the button, which logged nothing. One click held in the host, where no world is loaded | Open. 0.6.1 takes a double-click on the button as one press and logs `No longer showing <file>`: retest |
-| Step 11 made an empty scene | The log says New scene, not Save as: **New scene here** was pressed, with the name Ctrl+Shift+S fills in. No objects lost | Open: asked the owner whether only **Save open scene here** should be offered after Ctrl+Shift+S |
+| Step 11 made an empty scene | The log says New scene, not Save as: **New scene here** was pressed, with the name Ctrl+Shift+S fills in. No objects lost | 0.6.2: after Save as only **Save open scene here** is offered. Checked in the host |
 
-**Retest on 0.6.1:** steps 9, 10 and 11, then a save loaded with the scene open.
+The owner reports the other steps done on 0.6.0 (13 being run again). Asked for at the same test: an **Objects** drawer, built as 0.6.2 (steps 17 to 22). Checked in REDnode's host with real mouse events on 2026-11-04: the drawer, the confirm row, a delete from the open scene and from one not open, two clicks opening a scene, Save as. Not checkable there, since no world is loaded: the flight, the outline, previews.
+
+**Retest on 0.6.2:** steps 9, 10, 11 and 13, then 17 to 23.
 
 Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck). Needs REDnode 0.56.1 or later (scenes that are shown use `world.load` with `wait: false`). Named scenes saved after every change, in the Library, the open REDcode project or This PC; the Library tab; the last scene reopened at start; other scenes shown beside the open one; EDGEbuilder's service; the page on any screen width ([design](design.md#scenes-and-the-library-b3-2)). Checked before the game in REDnode's host on 2026-11-03: the tab, the folders, New, Save as, Rename, Open, the refusals (a name taken, a folder outside the Library), `scenes()` and `refs()` through the MCP server, and the page at 2580 x 1080. Start somewhere open with Edit on.
 
@@ -341,9 +343,16 @@ Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck).
 | 8 | Pick Market Corner, **Show in world** | Its three crates appear where they were; the row is marked SHOWN; with Edit on, a click on them selects nothing. **Hide from world** takes them away; show them again |
 | 9 | Drop a crate in Yard. Then double-click Market Corner | Yard's crate leaves the world, Market Corner's crates come back as previews you can select and move ("Opened Market Corner ..."); its SHOWN mark goes. Undo starts empty |
 | 10 | Pick Yard, **Show in world**. Quit the game, start it, load a save | The log: `scene Market Corner (...)`, `1 other scene on`. Once the save is in, Yard's crate shows and Market Corner's near crates come back by themselves (0.6.1), with "Market Corner: 3 of 25 objects back in the world; 22 far away" as the message. **The gate: a scene saved in a Library sub-folder reopens after a restart, with another shown beside it** |
-| 11 | Ctrl+Shift+S | The Library tab, with "Market Corner copy" in Name: **Save open scene here** saves a copy that becomes the open scene |
+| 11 | Ctrl+Shift+S | The Library tab, with "Market Corner copy" in Name and only **Save open scene here** offered (0.6.2): it saves a copy with all the objects, which becomes the open scene. Leaving the tab brings the other buttons back |
 | 12 | A name taken: in Alleys, New scene here with the name `Yard` | A warning, "Library > Alleys already has a scene called yard.scene.json", and nothing changes |
 | 13 | Far away: show a scene whose objects are more than 300 m away (or fly the camera 500 m off, then show Market Corner) | It answers at once, no busy bar that hangs; the crates appear when the camera or V gets near |
 | 14 | With a REDcode project open (REDcode 0.10.5 or later) | A PROJECT: name section in the tree; New scene here in it writes `source\scenes\<name>.scene.json` in the project |
 | 15 | The service: in Claude Code with REDnode's MCP server, ask for EDGEbuilder's scenes, then for Market Corner's refs | `edgebuilder__scenes` runs without asking and lists the scenes with place, folder, object count, open and on. `edgebuilder__refs` gives the three crates with refs `edgebuilder/market_corner/cargo_crate_a` and on, positions and rotations |
 | 16 | Your usual screen: Edit on, select a crate | The gizmo sits on the crate as before; the window at the right edge. On a 21:9 or wider screen (or the game windowed at such a size), the same, and the view's tint covers the whole width |
+| 17 | 0.6.2. The Library tab, with one scene open: pick another scene, **Objects** | A drawer slides out to the left of the window: that scene's objects, group names, a small trash icon at the right of each row. Pick another scene: the list follows. **Objects** again, or its X, closes it |
+| 18 | Open Market Corner. Edit off. Two quick clicks on a crate near you in the drawer | Edit goes on, the camera lands in front of the crate, looking slightly down; the crate has the outline and the gizmo, and it moves as usual |
+| 19 | Two quick clicks on a crate over 300 m away (the `grp_1` crates, from where the `grp_4` ones are) | The camera goes there; its preview and those near it appear; it is selected. Very far from V the game may not place the preview: then a message says so, and it is still selected and can be moved |
+| 20 | Pick a scene that is not open, **Objects**, two quick clicks on an object | That scene opens, then the camera flies to the object |
+| 21 | The open scene: the trash on an object that is not selected and out of view; **No**; the trash again, **Yes**; Ctrl+Z | "Delete?" in the row; No changes nothing; Yes takes it from the list and the world, with the camera staying put; Ctrl+Z brings it back |
+| 22 | A scene that is not open: the trash, **Yes** | "Delete for good?"; "Removed ... Undo cannot bring it back"; the open scene unchanged; the scene's count in the tree one less. If that scene is shown in the world, its object goes too |
+| 23 | Load a save with a scene open (0.6.1) | Its crates within 300 m come back by themselves about 2 s after the save is in; the message counts those far away. No crate twice |

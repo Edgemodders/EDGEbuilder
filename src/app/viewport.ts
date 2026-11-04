@@ -132,6 +132,7 @@ export class Viewport {
   private camComp: GameRef | null = null;
   private camPos: V3 | undefined;
   private look: Look | undefined;
+  private flyAsk: { object: SceneObject; until: number } | undefined;
   private camDirty = false;
   private builderAsked = false;
   private rmb = false;
@@ -364,6 +365,7 @@ export class Viewport {
       this.frame++;
       this.wantEscape(!!(this.drag || this.placing || this.box));
       this.flushMove();
+      this.flyWhenReady();
       this.flyAndSend();
       const ok = await this.updateCamera();
       if (ok && this.edit && !this.builderAsked && this.cam) {
@@ -730,13 +732,36 @@ export class Viewport {
 
   /** Puts the selection in front of the camera, at a distance that fits it. */
   private frameSelected(): void {
-    const b = boxOf(this.chosen());
+    this.frameObjects(this.chosen());
+  }
+
+  private frameObjects(objects: SceneObject[]): void {
+    const b = boxOf(objects);
     if (!b || !this.camPos || !this.look) return;
     const size = Math.max(...[0, 1, 2].map((i) => b.max[i] - b.min[i]));
     const centre = mul(add(b.min, b.max), 0.5);
     const fwd = lookAxes(this.look).fwd;
     this.camPos = sub(centre, mul(fwd, Math.max(2, size * 2.5)));
     this.camDirty = true;
+  }
+
+  /**
+   * The Objects drawer: the camera in front of this object, keeping its heading and looking slightly
+   * down. Waits for the camera, since Edit may just have gone on.
+   */
+  flyTo(object: SceneObject): void {
+    this.flyAsk = { object, until: performance.now() + 8000 };
+    this.kick();
+  }
+
+  private flyWhenReady(): void {
+    if (!this.flyAsk) return;
+    if (performance.now() > this.flyAsk.until) this.flyAsk = undefined;
+    else if (this.camEntity && this.camPos && this.look) {
+      this.look = { yaw: this.look.yaw, pitch: Math.max(-35, Math.min(-5, this.look.pitch)) };
+      this.frameObjects([this.flyAsk.object]);
+      this.flyAsk = undefined;
+    }
   }
 
   private onDown(e: PointerEvent): void {

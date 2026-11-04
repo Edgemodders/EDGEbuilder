@@ -96,6 +96,14 @@ export interface Shelf extends PlaceRoot {
   scenes: SceneEntry[];
 }
 
+/** The Objects drawer's view of a scene that is not the open one, read from its file. */
+export interface ScenePeek {
+  file: string;
+  name: string;
+  objects: SceneObject[];
+  groups: SceneGroup[];
+}
+
 export interface Snapshot {
   /** The mod has started. */
   ready: boolean;
@@ -121,7 +129,7 @@ export interface Snapshot {
    * B3-2: the Library root (absent until the player sets one) and the folder offered for it; the
    * three places with their folders and scenes; the scenes switched on (shown, not edited), by file.
    */
-  library: { root?: string; suggested: string; shelves: Shelf[]; on: string[] };
+  library: { root?: string; suggested: string; shelves: Shelf[]; on: string[]; peek?: ScenePeek };
   /** The selected objects (B3: several at once; a group selects all its objects). */
   selected: string[];
   /** How many steps Undo and Redo can take. */
@@ -189,6 +197,9 @@ export type PageMessage =
   | { type: "scene.save" }
   /** Show a scene that is not open in the world (`on`), or take it away. */
   | { type: "scene.on"; file: string; on: boolean }
+  | { type: "scene.peek"; file: string }
+  | { type: "scene.goTo"; id: string }
+  | { type: "scene.removeFrom"; file: string; id: string }
   /** Set the Library root (made when missing), for every EDGE tool. */
   | { type: "library.root"; root: string }
   /** A new folder `name` inside `folder` of the Library. */

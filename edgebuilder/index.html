@@ -14,6 +14,20 @@
   #view { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
   #view.edit { pointer-events: auto; background: rgba(0, 0, 0, 0.04); }
   rn-window { position: absolute; right: 24px; top: 70px; width: 448px; height: 920px; }
+  /* The Objects drawer slides out from under the window, to its left. */
+  #drawer { position: absolute; right: 480px; top: 70px; width: 380px; height: 920px; box-sizing: border-box; padding: 10px; background: var(--rn-bg, #08090d); border: 1px solid var(--rn-line, #333); border-top: 2px solid var(--rn-accent, #fcee0a); opacity: 0; visibility: hidden; transform: translateX(60px); transition: transform .16s ease-out, opacity .16s, visibility .16s; }
+  #drawer.open { opacity: 1; visibility: visible; transform: none; }
+  #drawerHead { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  #drawerTitle { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rn-fg, #eee); }
+  #drawerInfo { margin-bottom: 6px; word-break: normal; }
+  #drawerList { --rn-list-height: 800px; }
+  .act { background: none; border: none; color: var(--rn-dim, #999); cursor: pointer; padding: 2px 4px; line-height: 0; }
+  .act:hover { color: var(--rn-danger, #ff5e5e); }
+  .act svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+  .confirm { font-family: var(--rn-mono, monospace); font-size: 11px; color: var(--rn-danger, #ff5e5e); }
+  .confirm button { background: none; border: 1px solid var(--rn-line, #333); color: var(--rn-fg, #eee); cursor: pointer; font: inherit; padding: 0 6px; margin-left: 4px; }
+  .confirm button:hover { border-color: var(--rn-danger, #ff5e5e); }
+  .grouptag { font-family: var(--rn-mono, monospace); font-size: 10px; color: var(--rn-dim, #999); margin-right: 6px; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .strip { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
@@ -42,6 +56,11 @@
 </head>
 <body>
   <canvas id="view" width="1920" height="1080"></canvas>
+  <div id="drawer">
+    <div id="drawerHead"><span id="drawerTitle" class="section"></span><button id="drawerClose" class="act" title="Close"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+    <div id="drawerInfo" class="count"></div>
+    <rn-list id="drawerList"></rn-list>
+  </div>
   <rn-window title="EDGEbuilder">
     <rn-toggle id="edit" slot="status" label="Edit"></rn-toggle>
     <div class="strip"><span id="world" class="pill">World: checking</span><span id="bridge" class="pill">REDbridge off</span><span id="index" class="pill">No index</span></div>
@@ -112,6 +131,7 @@
           <div class="row">
             <rn-button id="pickedOpen" disabled>Open</rn-button>
             <rn-button id="pickedOn" variant="ghost" disabled title="Show its objects in the world beside the open scene; they cannot be selected">Show in world</rn-button>
+            <rn-button id="pickedObjects" variant="ghost" title="The objects of the picked scene (or the open one), in a drawer beside this window">Objects</rn-button>
             <rn-button id="libraryRefresh" variant="ghost" title="Look at the folders again">Refresh</rn-button>
           </div>
           <rn-input id="newName" label="Name" placeholder="A name for a new scene or folder"></rn-input>
@@ -148,7 +168,7 @@
         <p>Switch <b>Edit</b> on (top of this window) to work in the world: click an object to select it, drag an arrow to move it along that axis, drag the ring to turn it. Keys: G move, R turn, S scale (meshes), then X, Y or Z to lock an axis and a number to type the amount; Enter or a click keeps it, Esc or a right-click undoes it. Ctrl snaps, Ctrl+E drops to the floor, Delete removes. With Edit off the game gets the mouse as usual.</p>
         <p>With Edit on, EDGEbuilder looks through a camera of its own and hides the game's HUD; V stays where V is. Hold the right mouse button to look around and fly with W A S D, Q down, E up (Shift faster, the wheel changes the speed while flying). The middle mouse orbits the selected object, Shift with it pans, the wheel moves closer, F frames the selection. Switch Edit off and the view is V's again. Both can be switched off in Settings, also while Edit is on.</p>
         <p>To arrange: Ctrl+click adds an object to the selection, Shift+drag selects everything in a box, and a move, turn or scale then acts on all of them, around their middle. Ctrl+G groups the selection and Ctrl+Shift+G ungroups; a click on an object in a group selects the group, Alt+click just that object. Ctrl+D duplicates the selection, which then follows the mouse until a click places it (Esc or right-click: no copy). Ctrl+C copies the selection, Ctrl+X cuts it (copies, then deletes), and Ctrl+V pastes it where the cursor points, standing on the surface there, as often as you like. Ctrl+Z undoes, Ctrl+Y redoes, Clear scene included; Undo, Redo, Copy, Group and Ungroup are buttons on the Scene tab too. Groups open and close with the arrow.</p>
-        <p>Scenes: the open scene is saved after every change; Ctrl+S confirms it and Ctrl+Shift+S saves a copy under a new name. Its name is at the top of the Scene tab (Enter renames it). The Library tab lists every scene: in the Library (your own folders, shared by the EDGE tools; set it in Settings), in the open REDcode project, and on This PC. Pick one to open it, or <b>Show in world</b> to see it beside the one you are editing (shown, not editable). EDGEbuilder opens the last scene again when it starts.</p>
+        <p>Scenes: the open scene is saved after every change; Ctrl+S confirms it and Ctrl+Shift+S saves a copy under a new name. Its name is at the top of the Scene tab (Enter renames it). <b>Objects</b> on the Library tab lists a scene's objects beside this window: two clicks fly the camera to one and select it, and its trash icon deletes it wherever it is. The Library tab lists every scene: in the Library (your own folders, shared by the EDGE tools; set it in Settings), in the open REDcode project, and on This PC. Pick one to open it, or <b>Show in world</b> to see it beside the one you are editing (shown, not editable). EDGEbuilder opens the last scene again when it starts.</p>
         <p>Next: the bake (B4).</p>
         <p>Design and guide: <code>edgemodders.github.io/EDGEbuilder</code></p>
       </rn-tab>

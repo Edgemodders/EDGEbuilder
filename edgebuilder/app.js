@@ -330,6 +330,7 @@ var Viewport = class {
   camComp = null;
   camPos;
   look;
+  flyAsk;
   camDirty = false;
   builderAsked = false;
   rmb = false;
@@ -496,6 +497,7 @@ var Viewport = class {
       this.frame++;
       this.wantEscape(!!(this.drag || this.placing || this.box));
       this.flushMove();
+      this.flyWhenReady();
       this.flyAndSend();
       const ok = await this.updateCamera();
       if (ok && this.edit && !this.builderAsked && this.cam) {
@@ -827,13 +829,33 @@ var Viewport = class {
   }
   /** Puts the selection in front of the camera, at a distance that fits it. */
   frameSelected() {
-    const b = boxOf(this.chosen());
+    this.frameObjects(this.chosen());
+  }
+  frameObjects(objects) {
+    const b = boxOf(objects);
     if (!b || !this.camPos || !this.look) return;
     const size = Math.max(...[0, 1, 2].map((i) => b.max[i] - b.min[i]));
     const centre = mul(add(b.min, b.max), 0.5);
     const fwd = lookAxes(this.look).fwd;
     this.camPos = sub(centre, mul(fwd, Math.max(2, size * 2.5)));
     this.camDirty = true;
+  }
+  /**
+   * The Objects drawer: the camera in front of this object, keeping its heading and looking slightly
+   * down. Waits for the camera, since Edit may just have gone on.
+   */
+  flyTo(object) {
+    this.flyAsk = { object, until: performance.now() + 8e3 };
+    this.kick();
+  }
+  flyWhenReady() {
+    if (!this.flyAsk) return;
+    if (performance.now() > this.flyAsk.until) this.flyAsk = void 0;
+    else if (this.camEntity && this.camPos && this.look) {
+      this.look = { yaw: this.look.yaw, pitch: Math.max(-35, Math.min(-5, this.look.pitch)) };
+      this.frameObjects([this.flyAsk.object]);
+      this.flyAsk = void 0;
+    }
   }
   onDown(e) {
     if (!this.edit || !this.cam) return;
@@ -1244,6 +1266,7 @@ function render(s) {
   $("undo").title = `Ctrl+Z (${s.history.undo} step${s.history.undo === 1 ? "" : "s"})`;
   $("redo").title = `Ctrl+Y (${s.history.redo} step${s.history.redo === 1 ? "" : "s"})`;
   viewport.setScene(s.scene.objects, s.selected);
+  renderDrawer(s);
   viewport.setCamera(s.camera?.entityId);
   if (lastCopy === void 0) lastCopy = s.duplicated?.seq ?? 0;
   if (s.duplicated && s.duplicated.seq !== lastCopy) {
@@ -1588,6 +1611,8 @@ ${sc.file}`;
   $("pickedOn").textContent = on ? "Hide from world" : "Show in world";
   const t = target(s);
   $("newWhere").textContent = `In ${whereLabel(s, t.place, t.folder)}`;
+  $("createScene").hidden = saveAsAsked;
+  $("createFolder").hidden = saveAsAsked;
   $("createFolder").toggleAttribute("disabled", t.place !== "library");
   $("createFolder").title = t.place === "library" ? "A folder inside this one" : "Folders are made in the Library";
   const rootField = $("libraryRoot");
@@ -1596,14 +1621,24 @@ ${sc.file}`;
 }
 var mainTabs = () => document.getElementById("mainTabs");
 var newName = () => $("newName");
-function toLibrary(name) {
+function toLibrary(name, asCopy = false) {
+  saveAsAsked = asCopy;
   mainTabs().select?.(TabLabels.library);
   const f = newName();
   f.value = name;
   f.focus();
+  if (state) render(state);
+}
+var saveAsAsked = false;
+function leaveSaveAs() {
+  if (!saveAsAsked) return;
+  saveAsAsked = false;
+  newName().value = "";
 }
 $("mainTabs").addEventListener("change", (e) => {
-  if (e.target === $("mainTabs") && e.detail.label === "Library") post({ type: "library.refresh" });
+  if (e.target !== $("mainTabs")) return;
+  if (e.detail.label === "Library") post({ type: "library.refresh" });
+  else leaveSaveAs();
 });
 $("shelves").addEventListener(
   "click",
@@ -1666,6 +1701,7 @@ $("saveAsHere").addEventListener("click", () => {
   if (!name) return status("Type a name for the copy first.");
   post({ type: "scene.saveAs", name, ...target(state) });
   newName().value = "";
+  saveAsAsked = false;
 });
 $("createFolder").addEventListener("click", () => {
   if (!state) return;
@@ -1681,9 +1717,115 @@ $("sceneName").addEventListener("submit", () => {
   document.activeElement?.blur();
 });
 $("saveScene").addEventListener("click", () => post({ type: "scene.save" }));
-$("saveAsScene").addEventListener("click", () => state && toLibrary(`${state.scene.name} copy`));
-$("newScene").addEventListener("click", () => toLibrary(""));
+$("saveAsScene").addEventListener("click", () => state && toLibrary(`${state.scene.name} copy`, true));
+$("newScene").addEventListener("click", () => {
+  leaveSaveAs();
+  toLibrary("");
+});
 $("openScene").addEventListener("click", () => mainTabs().select?.(TabLabels.library));
+var drawerOpen = false;
+var peekAsked = "";
+var confirming;
+var lastDrawerRow = { id: "", at: 0 };
+var pendingGo;
+var drawerHtml = "";
+var TrashIcon = `<svg viewBox="0 0 16 16"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.8 9.5h6.4L12 4M6.7 6.5v4.5M9.3 6.5v4.5"/></svg>`;
+function drawerFile(s) {
+  const sc = picked?.kind === "scene" ? findScene(s, picked.file) : void 0;
+  return sc && !sc.error ? sc.file : s.scene.file ?? "";
+}
+function renderDrawer(s) {
+  if (pendingGo && sameFile(pendingGo.file, s.scene.file ?? "")) {
+    const id = pendingGo.id;
+    pendingGo = void 0;
+    goToObject(s, id);
+  }
+  $("drawer").classList.toggle("open", drawerOpen);
+  if (!drawerOpen) return;
+  const file = drawerFile(s);
+  const isOpen = sameFile(file, s.scene.file ?? "");
+  const peeked = s.library.peek && sameFile(s.library.peek.file, file) ? s.library.peek : void 0;
+  if (isOpen) peekAsked = "";
+  else if (peekAsked !== file) {
+    peekAsked = file;
+    post({ type: "scene.peek", file });
+  }
+  const shown = isOpen ? s.scene : peeked;
+  $("drawerTitle").textContent = shown ? `Objects: ${shown.name}` : "Objects";
+  $("drawerTitle").title = file;
+  if (!shown) {
+    $("drawerInfo").textContent = "Reading the scene...";
+    $("drawerList").innerHTML = drawerHtml = "";
+    return;
+  }
+  const n = shown.objects.length;
+  $("drawerInfo").textContent = `${n} object${n === 1 ? "" : "s"}. ${isOpen ? "Two clicks fly the camera to an object and select it." : "Not the open scene: two clicks open it and fly there. A delete here has no Undo."}`;
+  const groupName = (id) => shown.groups.find((g) => g.id === id)?.name;
+  const html = shown.objects.map((o) => {
+    const end = confirming === o.id ? `<span slot="end" class="confirm">${isOpen ? "Delete?" : "Delete for good?"}<button data-act="yes" data-id="${esc(o.id)}">Yes</button><button data-act="no">No</button></span>` : `<span slot="end">${o.group ? `<span class="grouptag">${esc(groupName(o.group) ?? "")}</span>` : ""}<button class="act" data-act="trash" data-id="${esc(o.id)}" title="Delete">${TrashIcon}</button></span>`;
+    const [x, y, z] = o.transform.position.map((v2) => v2.toFixed(1));
+    return `<rn-item value="${esc(o.id)}" title="${esc(`${o.resource}
+${x}, ${y}, ${z}`)}"${isOpen && s.selected.includes(o.id) ? " selected" : ""}>${esc(o.id)}${end}</rn-item>`;
+  }).join("");
+  if (html !== drawerHtml) $("drawerList").innerHTML = drawerHtml = html;
+}
+function goToObject(s, id) {
+  const o = s.scene.objects.find((x) => x.id === id);
+  if (!o) return;
+  if (s.world === "ready") {
+    const edit = $("edit");
+    if (!edit.checked) {
+      edit.checked = true;
+      viewport.setEdit(true);
+    }
+    if (s.settings.editorCamera !== false) viewport.flyTo(o);
+  }
+  post({ type: "scene.goTo", id });
+}
+$("pickedObjects").addEventListener("click", () => {
+  drawerOpen = !drawerOpen;
+  peekAsked = "";
+  confirming = void 0;
+  if (state) render(state);
+});
+$("drawerClose").addEventListener("click", () => {
+  drawerOpen = false;
+  if (state) render(state);
+});
+$("drawerList").addEventListener(
+  "click",
+  (e) => {
+    if (!state) return;
+    const file = drawerFile(state);
+    const isOpen = sameFile(file, state.scene.file ?? "");
+    const target2 = e.target;
+    const act = target2.closest?.("[data-act]");
+    if (act) {
+      e.stopPropagation();
+      const id2 = act.dataset.id;
+      lastDrawerRow = { id: "", at: 0 };
+      if (act.dataset.act === "trash") confirming = id2;
+      else {
+        confirming = void 0;
+        if (act.dataset.act === "yes" && id2) post(isOpen ? { type: "delete", ids: [id2] } : { type: "scene.removeFrom", file, id: id2 });
+      }
+      render(state);
+      return;
+    }
+    const id = target2.closest?.("rn-item")?.getAttribute("value");
+    if (!id) return;
+    const twice = id === lastDrawerRow.id && performance.now() - lastDrawerRow.at < 500;
+    lastDrawerRow = twice ? { id: "", at: 0 } : { id, at: performance.now() };
+    if (!twice) {
+      if (isOpen) post({ type: "select", ids: [id] });
+    } else if (isOpen) goToObject(state, id);
+    else {
+      pendingGo = { file, id };
+      post({ type: "scene.open", file });
+    }
+  },
+  true
+);
 function status(text) {
   $("message").textContent = text;
   $("message").className = "message warn";
