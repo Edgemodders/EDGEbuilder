@@ -6,7 +6,7 @@ EDGEbuilder is a world builder for Cyberpunk 2077 that runs inside the game on R
 |---|---|
 | [Design](design.md) | The behaviours (Browse, Drop, Position, Arrange, Bake, Return), the runtime and project halves, the pieces, the preview in the game, the editor, files, baking, what it needs from REDnode, REDbridge, REDcode and EDGEdeck, risks, roadmap |
 | [World objects](world-objects.md) | Picking, inspecting, copying and changing what the game already placed: the plan for B3b and B4b, with the probes that come first |
-| [Library and world view](library.md) | Agreed: the Library, where scenes and bakes live and flow into projects, and EDGEbuilder for VS Code with a map of the whole world and a sector view |
+| [Library and world view](library.md) | Agreed: the Library, where scenes and bakes live and flow into projects, the shared rules every EDGE tool's Library follows (assets, the came-from note, Desks), and EDGEbuilder for VS Code with a map of the whole world and a sector view |
 | [World inspector](world-inspector.md) | Agreed: an inspector built into EDGEbuilder, like RED Hot Tools' World Inspector: inspect, scan and look up anything the game placed, hide it for the session; what it needs from REDnode |
 | [Scene format](scene.md) | The scene file, format 1: the contract between the runtime builder, the project builder and REDbridge's bake |
 | [Tests](testing.md) | Every test so far in one place: the automated ones, the page check in REDnode's host, and each in-game test with its result and what it found |
