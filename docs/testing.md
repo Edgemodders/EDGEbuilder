@@ -14,9 +14,9 @@ Last updated 2026-10-30.
 
 | Test | Kind | Phase | Last run | Result |
 |---|---|---|---|---|
-| [Type check and build](#type-check-and-build) | Automated | B1 on | 2026-10-31 (0.5.0) | Pass |
-| [Smoke test](#smoke-test) | Automated, needs REDbridge and the game files | B1 on | 2026-10-31 (0.5.0) | Pass (the arrange part; the bridge part unchanged since 0.4.0) |
-| [Page check in REDnode's host](#page-check-in-rednodes-host) | By hand, no game | B1 on | 2026-10-31 (0.5.0) | Pass |
+| [Type check and build](#type-check-and-build) | Automated | B1 on | 2026-11-03 (0.6.0) | Pass |
+| [Smoke test](#smoke-test) | Automated, needs REDbridge and the game files | B1 on | 2026-11-03 (0.6.0) | Pass (the scenes and Library part; the bridge part unchanged since 0.4.0) |
+| [Page check in REDnode's host](#page-check-in-rednodes-host) | By hand, no game | B1 on | 2026-11-03 (0.6.0) | Pass |
 | [B1 Browse and drop](#b1-browse-and-drop) | In the game | B1 | 2026-10-13 (0.1.1) | Pass |
 | [B2a Position](#b2a-position) | In the game | B2a | 2026-10-14 (0.2.0) | Pass |
 | [B2b Camera](#b2b-camera) | In the game | B2b | 2026-10-14 (0.3.0) | Pass |
