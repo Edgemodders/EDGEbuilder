@@ -402,11 +402,9 @@ async function checkWorld(): Promise<void> {
     say("Builder mode was still on from last time (EDGEbuilder stopped while Edit was on); V's camera and HUD are back.", "info");
     return;
   }
-  if (state.world === "ready" && before !== "ready") void inTurn("Show scenes that are on", () => reloadOn());
-  const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light").length;
-  if (state.world === "ready" && before !== "ready" && away) {
-    say(`${away} object${away === 1 ? " is" : "s are"} in the scene but not in the world. Press Rebuild previews in the Scene tab to place ${away === 1 ? "it" : "them"}, or delete ${away === 1 ? "it" : "them"} there.`, "info");
-    return;
+  if (state.world === "ready" && before !== "ready") {
+    void inTurn("Show scenes that are on", () => reloadOn());
+    previewsBackSoon();
   }
   publish();
 }
@@ -1198,6 +1196,33 @@ async function rebuild(): Promise<void> {
   say(`${n} preview${n === 1 ? "" : "s"} back in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
 }
 
+/**
+ * The open scene's previews come back by themselves once a save is in (0.6.1, the B3-2 test), as the
+ * scenes that are on do. Waits a moment: the game says OnGameAttached more than once as a save comes in
+ * (twice, 14 s apart, at a game start).
+ */
+const PreviewsBackDelay = 2000;
+let previewsTimer: ReturnType<typeof setTimeout> | undefined;
+function previewsBackSoon(): void {
+  clearTimeout(previewsTimer);
+  previewsTimer = setTimeout(() => void inTurn("Put previews back", () => previewsBack()), PreviewsBackDelay);
+}
+
+async function previewsBack(): Promise<void> {
+  if (state.world !== "ready") return;
+  const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light");
+  if (!away.length) return;
+  // Without V's place every object counts as near, and each far one holds the queue for 10 s.
+  if (!(await viewPoints()).length) return say(`${away.length} object${away.length === 1 ? " is" : "s are"} in ${scene.name} but not in the world: Rebuild previews in the Scene tab.`, "info");
+  // Never two of one object: previews from before a repeated OnGameAttached may still stand.
+  const kept = new Set(scene.objects.map((o) => o.entityId));
+  kept.add(editorCam?.id);
+  for (const s of world.spawned?.() ?? []) if (!s.scene && s.attached && !kept.has(s.id.hash)) await world.remove(s.id).catch(() => false);
+  const r = await spawnNear(away, "Back");
+  const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place (the log says why)` : ""].filter(Boolean);
+  say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
+}
+
 async function clear(): Promise<void> {
   if (!scene.objects.length && !scene.groups.length) return say("The scene is already empty.", "info");
   step();
@@ -1385,6 +1410,7 @@ async function sceneOff(file: string): Promise<void> {
   const known = [...onScenes.keys()].find((f) => sameFile(f, file)) ?? file;
   onScenes.delete(known);
   writeSession();
+  console.log(`No longer showing ${path.basename(known)}`);
   if (typeof world.unload === "function") await world.unload(known).catch((err) => console.log(`Unload ${known}: ${(err as Error).message}`));
   publish();
 }
@@ -1694,7 +1720,7 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   void checkWorld().then(() => {
     // The scenes that are on went with the old session's entities: place them again.
     void inTurn("Show scenes that are on", () => reloadOn());
-    if (scene.objects.length) say(`A save loaded. ${scene.objects.length} object${scene.objects.length === 1 ? "" : "s"} in ${scene.name}; press Rebuild previews to see them.`, "info");
+    previewsBackSoon();
   });
 });
 

@@ -1289,11 +1289,9 @@ async function checkWorld() {
     say("Builder mode was still on from last time (EDGEbuilder stopped while Edit was on); V's camera and HUD are back.", "info");
     return;
   }
-  if (state.world === "ready" && before !== "ready") void inTurn("Show scenes that are on", () => reloadOn());
-  const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light").length;
-  if (state.world === "ready" && before !== "ready" && away) {
-    say(`${away} object${away === 1 ? " is" : "s are"} in the scene but not in the world. Press Rebuild previews in the Scene tab to place ${away === 1 ? "it" : "them"}, or delete ${away === 1 ? "it" : "them"} there.`, "info");
-    return;
+  if (state.world === "ready" && before !== "ready") {
+    void inTurn("Show scenes that are on", () => reloadOn());
+    previewsBackSoon();
   }
   publish();
 }
@@ -1914,6 +1912,24 @@ async function rebuild() {
   const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place (the log says why)` : ""].filter(Boolean);
   say(`${n} preview${n === 1 ? "" : "s"} back in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
 }
+var PreviewsBackDelay = 2e3;
+var previewsTimer;
+function previewsBackSoon() {
+  clearTimeout(previewsTimer);
+  previewsTimer = setTimeout(() => void inTurn("Put previews back", () => previewsBack()), PreviewsBackDelay);
+}
+async function previewsBack() {
+  if (state.world !== "ready") return;
+  const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light");
+  if (!away.length) return;
+  if (!(await viewPoints()).length) return say(`${away.length} object${away.length === 1 ? " is" : "s are"} in ${scene.name} but not in the world: Rebuild previews in the Scene tab.`, "info");
+  const kept = new Set(scene.objects.map((o) => o.entityId));
+  kept.add(editorCam?.id);
+  for (const s of world.spawned?.() ?? []) if (!s.scene && s.attached && !kept.has(s.id.hash)) await world.remove(s.id).catch(() => false);
+  const r = await spawnNear(away, "Back");
+  const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place (the log says why)` : ""].filter(Boolean);
+  say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
+}
 async function clear() {
   if (!scene.objects.length && !scene.groups.length) return say("The scene is already empty.", "info");
   step();
@@ -2067,6 +2083,7 @@ async function sceneOff(file) {
   const known = [...onScenes.keys()].find((f) => sameFile(f, file)) ?? file;
   onScenes.delete(known);
   writeSession();
+  console.log(`No longer showing ${path6.basename(known)}`);
   if (typeof world.unload === "function") await world.unload(known).catch((err) => console.log(`Unload ${known}: ${err.message}`));
   publish();
 }
@@ -2327,7 +2344,7 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   state.selected = [];
   void checkWorld().then(() => {
     void inTurn("Show scenes that are on", () => reloadOn());
-    if (scene.objects.length) say(`A save loaded. ${scene.objects.length} object${scene.objects.length === 1 ? "" : "s"} in ${scene.name}; press Rebuild previews to see them.`, "info");
+    previewsBackSoon();
   });
 });
 var gone = /* @__PURE__ */ new Map();
@@ -2357,7 +2374,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.6.0"} starting; data folder ${pkg.dataDir}; scene ${scene.name} (${scene.file}), ${scene.objects.length} objects; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.6.1"} starting; data folder ${pkg.dataDir}; scene ${scene.name} (${scene.file}), ${scene.objects.length} objects; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs6.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

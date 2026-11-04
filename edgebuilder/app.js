@@ -1628,14 +1628,22 @@ $("shelves").addEventListener("select", (e) => {
   }
   if (state) render(state);
 });
-$("shelves").addEventListener("dblclick", (e) => {
-  const item = e.target.closest?.("rn-item");
-  const value = item?.getAttribute("value");
-  if (value?.startsWith("f:") && state && !sameFile(value.slice(2), state.scene.file ?? "")) post({ type: "scene.open", file: value.slice(2) });
-});
+var lastRow = { value: "", at: 0 };
+$("shelves").addEventListener(
+  "click",
+  (e) => {
+    const value = e.target.closest?.("rn-item")?.getAttribute("value") ?? "";
+    const twice = value.startsWith("f:") && value === lastRow.value && performance.now() - lastRow.at < 500;
+    lastRow = twice ? { value: "", at: 0 } : { value, at: performance.now() };
+    if (twice && state && !sameFile(value.slice(2), state.scene.file ?? "")) post({ type: "scene.open", file: value.slice(2) });
+  },
+  true
+);
 $("pickedOpen").addEventListener("click", () => picked?.kind === "scene" && post({ type: "scene.open", file: picked.file }));
+var lastShow = 0;
 $("pickedOn").addEventListener("click", () => {
-  if (picked?.kind !== "scene" || !state) return;
+  if (picked?.kind !== "scene" || !state || performance.now() - lastShow < 600) return;
+  lastShow = performance.now();
   const file = picked.file;
   post({ type: "scene.on", file, on: !state.library.on.some((f) => sameFile(f, file)) });
 });

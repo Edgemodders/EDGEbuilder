@@ -12,6 +12,8 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 **New**
 
+- The open scene's objects near you come back by themselves when a save loads; those over 300 m away still wait for Rebuild previews near them.
+- Two quick clicks on a scene in the Library tab open it.
 - Named scenes. The Scene tab shows the open scene's name (Enter renames it and its file) and where it is, with Save, Save as, New and Open. Every change is still saved at once; Ctrl+S confirms it and Ctrl+Shift+S saves a copy under a new name, which becomes the open scene.
 - The Library: one folder for the EDGE tools' work, kept in `%APPDATA%\EDGE\library.json`, offered at `Documents\EDGE Library` (Make the Library on the Library tab, or any folder in Settings). Make your own folders in it and keep scenes there. The Library is never needed: scenes can stay in the open REDcode project (`source\scenes`) or on This PC.
 - The Library tab: every scene in the Library, the open REDcode project and This PC as one tree of folders, with each scene's object count and when it changed. Pick a scene to open it (or double-click), a folder for New scene here, Save open scene here or New folder.

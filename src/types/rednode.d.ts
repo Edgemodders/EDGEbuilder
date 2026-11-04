@@ -103,6 +103,8 @@ declare module "rednode" {
     load?(scene: unknown, options?: { name?: string; wait?: boolean }): Promise<LoadResult>;
     /** Removes what world.load spawned under that name; resolves with how many. */
     unload?(name: string): Promise<number>;
+    /** This package's spawns still listed; `attached` while in the world, `scene` when world.load made it (REDnode 0.53.0 and later). */
+    spawned?(): { id: EntityId; attached: boolean; scene?: string }[];
   };
 
   /** Solo mode needs the "solo" permission (REDnode 0.18.0 and later). */
