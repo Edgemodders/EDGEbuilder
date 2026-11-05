@@ -61,6 +61,7 @@ const lastGone = session.open && !fs.existsSync(session.open) && path.resolve(se
 // An empty `open`: the player closed the scene, and none is open (a first start opens the working scene).
 const scene = new Scene(session.open === "" ? "" : session.open && !lastGone ? session.open : WorkingScene);
 if (scene.file) scene.load();
+else scene.name = "";
 /** Scenes shown but not edited (B3-2), by file: how many objects REDnode's world.load placed, once the world is ready. */
 const onScenes = new Map<string, number>((session.on ?? []).filter((f) => fs.existsSync(f) && f !== scene.file).map((f) => [f, 0]));
 let libraryRoot = readLibraryRoot();

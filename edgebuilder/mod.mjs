@@ -1006,6 +1006,7 @@ try {
 var lastGone = session.open && !fs6.existsSync(session.open) && path6.resolve(session.open).toLowerCase() !== WorkingScene.toLowerCase() ? session.open : void 0;
 var scene = new Scene(session.open === "" ? "" : session.open && !lastGone ? session.open : WorkingScene);
 if (scene.file) scene.load();
+else scene.name = "";
 var onScenes = new Map((session.on ?? []).filter((f) => fs6.existsSync(f) && f !== scene.file).map((f) => [f, 0]));
 var libraryRoot = readLibraryRoot();
 var suggestedRoot = suggestedLibraryRoot();
