@@ -563,7 +563,7 @@ W11 is in the smoke test (a kind a bake cannot make is left out, and said so). E
 | Finding | What it was | Answer |
 |---|---|---|
 | A bake packed as a REDmod | With `redcode.pack.redmod` on, the `.xl` is in `mods\<project>\archives`, where 0.7.0 did not look, so previews would have stood on the bake. ArchiveXL reads it there, and the game needs `-modded` | 0.7.1 reads both places; this whole test ran as a REDmod. **The plain archive form was tested only by the probes** |
-| The Scene tab's name field and New | The field reads as the name for New, and Enter there renames the open scene with no question. New only opens the Library tab | 0.7.2: labelled Open scene's name, Enter asks first, New's tooltip says what comes next. Not yet tried in game |
+| The Scene tab's name field and New | The field reads as the name for New, and Enter there renames the open scene with no question. New only opens the Library tab | 0.7.2: labelled Open scene's name, Enter asks first, New's tooltip says what comes next. Passed in game on 2026-11-05: the label, the question, Keep the name, Rename and the tooltip. 0.7.3 puts "New Scene Here" in the tooltip in quotes, at the owner's request, so it does not read as pressing New |
 
 #### Questions for Library bakes: the test of B4-3
 
