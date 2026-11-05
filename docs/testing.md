@@ -26,6 +26,7 @@ Last updated 2026-10-30.
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
 | [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 passed on 0.6.5; 32 to 34 passed on 0.6.7; released as 0.6.7 |
+| [B4 Bake](#b4-bake) | In the game | B4 | | The questions are written; round 3, the solid probe, waits for its test |
 
 ## Automated
 
@@ -254,26 +255,7 @@ streaming:
 | Does `sector.build`'s entity node work? | Yes: `crate_red.ent` stands as a `worldEntityNode` |
 | Collision | Through an entity with an `entPhysicalMeshComponent`: solid. A `worldMeshNode`: none. Solid meshes need another node type; see the design's Bake section |
 
-**Round 3** (2026-11-05, for B4: which node type gives a mesh its collision; waiting for its test). What the game does, read with REDbridge's `sector.nodes` in the 40 sectors around the street: its solid static props are drawn by `worldCookedStaticMeshNode` (16,682 items) with the collision cooked apart in `worldCookedCollisionNode` (715), which holds a whole group of shapes per node; WolvenKit reads it. The older `worldCollisionNode`, with box, sphere and capsule shapes, has a writer in WolvenKit, but none of these sectors use it and it is untried on 2.5. Two node types take physics from the mesh itself and can be written: `worldInstancedDestructibleMeshNode` (8,034 items, the delivery crates; its `simulationType` is Dynamic or Kinematic, and its node data has the same flags and priority as a mesh node's) and `worldDynamicMeshNode` (the cooking pots). `scripts/solid-probe.mjs` bakes the same crate six times and rewrites each node through CR2W JSON, with REDbridge's main (0.12.0, unreleased). All six stand at y 1214, z 23, going west from x -1439, with `streaming.primary` 120.
-
-| Crate | x | Node | What we want to learn |
-|---|---|---|---|
-| `a_plain` | -1439 | `worldMeshNode`, the reference | No collision, as in rounds 1 and 2 |
-| `b_kinematic` | -1442 | Instanced destructible, Kinematic | Solid, and stays put? |
-| `c_static` | -1445 | Instanced destructible, Static (the game's own never use this) | Does it show at all? Solid? |
-| `d_impulse` | -1448 | Instanced destructible, Kinematic, turns dynamic on impulse (the game has 454 like this) | Solid until something knocks it? |
-| `e_dynamic` | -1451 | `worldDynamicMeshNode`, asleep at the start | Solid, and can be pushed? |
-| `f_big` | -1455 | As `b_kinematic`, scale 2 | Does the collision grow with the crate? |
-
-| # | Check | Note for each crate |
-|---|---|---|
-| 1 | Game closed; `EDGEbuilder bake probe` on in EDGEdeck, deploy | Two files in `archive\pc\mod` |
-| 2 | Start the game, load a save, go to (-1439, 1214, 23), look west | Six crates in a row, the last one twice the size. Any missing? |
-| 3 | Walk into each, then jump on top | Does V stop? Stand on it? Does it move? |
-| 4 | Shoot each, hit it with a melee weapon | Does it move, break or stay? |
-| 5 | `f_big`: walk around it and jump on top | Does V stop at its real, doubled size, or walk into it? |
-| 6 | Walk 150 m away and come back | Does each come back where it stood, even one you knocked? |
-| 7 | The ArchiveXL log, as in round 1 | Merged, no errors |
+**Round 3** (2026-11-05): moved to [B4 Bake](#b4-bake), where each crate answers a named question.
 
 ### B2c Mod assets
 
@@ -406,3 +388,101 @@ Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck).
 | 32 | 0.6.6. Far from a crate: select it, **Drop to floor**. Fly next to it and press it again | From afar: "Nothing solid below within 1000 m. The ground is solid only near the camera: fly closer and try again." Beside it: it lands |
 | 33 | Fly high above the ground, about 200 m up: **Drop at click** on the ground, then **Drop to floor** on a crate lifted that high | Note how high it still works: how far the solid ground reaches from the camera is unknown. Where it misses, Drop at click places the crate 8 m along the line, and Drop to floor gives the message above |
 | 34 | 0.6.7. Quit the game with a scene open, start it, load a save | The log has one line for the scene, `25 of 25 objects back in the world` or its own numbers, with no `0 of` line and no `Back ...: V is not in the world yet` lines before it. No crate twice |
+
+
+### B4 Bake
+
+Every question B4 has to settle, so nothing critical rests on an assumption. Each says what depends on it and which test proves it. A question moves to **Proven** only on what was seen in game or read in a log. Nothing here is proven yet, but for what rounds 1 and 2 of the [bake probe](#bake-probe) showed.
+
+**What the game does, read with REDbridge's `sector.nodes` in the 40 sectors around the probe's street (2026-11-05).** Its solid static props are drawn by `worldCookedStaticMeshNode` (16,682 items), with collision apart in `worldCookedCollisionNode` (715 nodes), which holds shapes such as boxes at world positions, with presets such as `World Static` and materials such as `metal.physmat`. WolvenKit reads that node. `worldInstancedDestructibleMeshNode` (8,034 items) and `worldDynamicMeshNode` take physics from the mesh itself; their node data has the same flags and priority as a mesh node's. The game's `simulationType` there is Dynamic or Kinematic, never Static in these sectors. The older `worldCollisionNode` holds the same kind of shapes and WolvenKit writes it, but none of these sectors uses it. New shapes with exact mesh form would need cooked PhysX data, and whether anything in reach can make that is unknown.
+
+#### Questions for the Solid switch: round 3, below
+
+| # | Question | What depends on it | Answered by |
+|---|---|---|---|
+| S1 | Which nodes stop V, and can V stand on them? | Which route the Solid switch can use at all | Step 3 |
+| S2 | Which stay put when shot, hit or driven into, and do any break? | A scene must not fall apart when a fight starts | Step 4 |
+| S3 | Does a mesh's collision grow with its scale? | Scaling is in the editor: a scaled mesh must fit | Step 5 |
+| S4 | Does collision follow a turned, leaning object? And does a bake place it turned as the scene says? **No baked object has ever been turned** | Almost every real object is turned | Step 6 |
+| S5 | What does a mesh with no collision data do with mesh physics? Does it show? | Many meshes, some mod meshes among them: the switch must say what it will do | Step 7 |
+| S6 | Does a box stand where the object is, at its size? It assumes the shape's size is a half size, and that the middle of the bounds is right for a mesh whose origin is off-centre (the sofa) | Whether a box from the bounds can be trusted | Steps 3, 7 |
+| S7 | Do the new nodes look as a plain one does: same place and size, the chosen appearance, shadows, how far they are seen? **No baked object has ever had an appearance other than default** | Solid must not change the look | Step 2 |
+| S8 | Do drawing and collision come and go together? Does a knocked object come back where it stood? | Walking through a thing not yet solid, or a scene slowly scattering | Step 8 |
+| S9 | Is a save safe: a knocked object, saving, loading, and then the mod removed? | Players keep their saves. The worst outcome of the whole phase | Step 9 |
+| S10 | Do bullets stop, do cars stop, do people walk around or through? People use a navigation mesh made ahead of time, so they probably walk through: to note, not a fail | What the public preview must say about solid objects | Step 10 |
+| S11 | Does it all load cleanly: no crash, no errors in the logs? | A bad node could take the whole sector with it | Steps 1, 11 |
+
+**What the answers decide:**
+
+| What is seen | The Solid switch |
+|---|---|
+| A mesh-physics crate (`b` or `c`) stays put, and S3 and S4 hold | Uses mesh physics: the mesh's real shape |
+| ...and the sofa (`j`) is not solid, but its box (`k`) is | Mesh physics where the mesh has data, a box where it has none; the panel says which |
+| Boxes (`g`, `i`, `k`) do nothing on 2.5 | Mesh physics only; a mesh with no data is named as not solid, and the way to make it solid is an entity with a collider, as `crate_red.ent` in round 2 |
+| Only `d` or `e` are solid | They move when hit, so Solid has to say so, and boxes become the first choice if they work |
+| None of them is solid | Entities with colliders only, and B4-2 is planned again with the owner |
+
+#### Round 3: the crates
+
+`scripts/solid-probe.mjs` bakes these in one sector with REDbridge's main (0.12.0, unreleased), rewriting each node through CR2W JSON, so no REDbridge change is needed to learn the answer. WolvenKit's reader read everything back as written. They stand in a row on the Watson street of rounds 1 and 2, y 1214, z 23, going west from x -1439, streaming to 120 m. The ground may not be level all the way: a crate slightly sunk or floating is no fault.
+
+| Crate | x | What it is | For |
+|---|---|---|---|
+| `a_plain` | -1439 | Plain `worldMeshNode`, the reference | V walks through it, as before |
+| `b_kinematic` | -1442 | Instanced destructible, Kinematic | S1, S2: the one hoped for |
+| `c_static` | -1444 | Instanced destructible, Static, which the game's own never use | Does it show? S1, S2 |
+| `d_impulse` | -1447 | Instanced destructible, Kinematic, turns dynamic on impulse, as many of the game's are | Solid until knocked? S2, S8 |
+| `e_dynamic` | -1449 | `worldDynamicMeshNode`, asleep at the start | Can be pushed? S2, S8 |
+| `f_big` | -1453 | As `b`, scale 2 | S3 |
+| `g_box` | -1456 | Plain mesh with a `worldCollisionNode` box | S1, S6: do boxes work on 2.5? |
+| `h_turned` | -1459 | As `b`, turned 40 degrees and leaning 20, lifted 0.5 m | S4 |
+| `i_box_turned` | -1462 | As `g`, turned and leaning the same | S4, for a box. It should lean exactly as `h` does |
+| `j_sofa` | -1465 | As `b`, on a sofa with no collision data | S5 |
+| `k_sofa_box` | -1468 | The same sofa, plain, with a box | S5, S6 |
+| `l_red` | -1471 | As `b`, appearance `red` | S7 |
+
+**Should the game crash on loading:** nothing is harmed. Switch the mod off in EDGEdeck and deploy, and it is gone. Tell Claude; `--skip` builds the row again without the likely cause (`c`, then the boxes), and the rest still answers.
+
+| # | Do | Note, for each crate | Answers |
+|---|---|---|---|
+| 1 | Game closed; `EDGEbuilder bake probe` on in EDGEdeck, deploy only it. Start the game, load a save | Does it load? | S11 |
+| 2 | Go to (-1439, 1214, 23), look west. Compare each with `a_plain`, at night or day as it comes | All twelve there? Same look and shadows? Is `l_red` red, `f_big` double? Walk back along the row to about 100 m: does any go sooner than the others? | S7 |
+| 3 | Walk into each, then jump on top | Does V stop? At the object's side, or short of it, or inside it? Stand on it? Does it move? | S1, S6 |
+| 4 | Shoot each, then a melee hit. Then drive a car slowly into `b`, `c`, `g` and `d` | Does it move, break or stay? Does the car stop? | S2 |
+| 5 | `f_big`: walk around it, jump on top | Does V stop at its doubled size, or walk into it? | S3 |
+| 6 | `h_turned`, `i_box_turned`: walk around them, stand on them | Do they lean the same way? Does V follow the leaning shape, or an upright one? | S4 |
+| 7 | `j_sofa`, `k_sofa_box`: look, walk into, sit or stand on them | Does `j` show? Is it solid? Does `k`'s box fit the sofa, on all sides? | S5, S6 |
+| 8 | Knock what can be knocked. Walk 150 m east and come back, then run back fast or in a car | Is each back, and where: where it stood, or where it fell? Is any drawn but not yet solid when you reach it? | S8 |
+| 9 | With something knocked: save. Load that save. Quit, start, load it again. Then quit, switch the mod off, deploy, and load the same save | Anything odd at each load? With the mod off: the crates gone and the save fine? | S9 |
+| 10 | Mod on again. Note what shots do at each solid crate, and watch people walking along the street near the row | Do bullets stop? Do people go around or through? | S10 |
+| 11 | Quit. Claude reads the ArchiveXL, RED4ext and REDnode logs | `All streaming blocks merged`, no errors | S11 |
+
+**Results:** waiting. Claude reads the logs; the rest is what you see, and rough words are enough ("b solid, did not move").
+
+#### Questions for the Bake panel: the test of B4-1
+
+| # | Question | What depends on it |
+|---|---|---|
+| W1 | A baked scene loads with EDGEbuilder uninstalled, not just off | The release gate |
+| W2 | A real scene comes out as placed: 26 objects of Market Corner against their previews, position, turn and scale, seen by showing both at once | The promise of the tool. Rounds 1 and 2 had three objects |
+| W3 | Entities bake with their chosen appearance, and only meshes take a scale | Previews and bakes must agree; the panel warns of what differs |
+| W4 | A mod's mesh bakes, and the panel names the mods the bake needs | Mods as assets, from B2c |
+| W5 | With that mod missing, the game does not crash: the object is just absent | A modder's bake on a player's PC |
+| W6 | Baking again replaces the bake, with no leftovers and no doubles. Does a change need a game restart, or can an archive swap show it? | The everyday loop, and how long it takes |
+| W7 | Removing a bake leaves the world and the save fine | As S9, for a real scene |
+| W8 | Objects far apart in one sector all stream right: one streaming box over a long scene | Scenes across a district, or one sector per area? |
+| W9 | A bake inside a building, and in Dogtown: an `Exterior` sector in an interior, and Phantom Liberty's own streaming block | Half the places a modder wants |
+| W10 | Previews and baked objects together show everything twice: what the panel does about it | The first thing anyone sees after a bake |
+| W11 | What a scene with objects the bake cannot make does: lights, an unknown kind | A clear message, not a broken sector |
+| W12 | No project open, and no Library: Bake says what to do. Project-only works without the Library | Never forced |
+| W13 | The installed REDbridge, as a player gets it from EDGEdeck, does the bake | Tested so far only with a checkout's build; needs REDbridge 0.12.0 released |
+| W14 | A large scene, some hundreds of objects: the game's frame rate near it, and how long the bake takes | Limits the preview must state |
+
+#### Questions for Library bakes: the test of B4-3
+
+| # | Question | What depends on it |
+|---|---|---|
+| L1 | Two scenes in one `.bake`, included in a project, stand in the world | The Library's promise |
+| L2 | Two bakes deployed together both load: ArchiveXL takes several streaming blocks | Several mods from EDGEbuilder in one game, also from different modders |
+| L3 | Two bakes with the same object show the collide flag; a scene changed after its bake shows stale | The flags in [the Library page](library.md) |
+| L4 | Include in project writes the came-from note; a project with no Library still builds | The shared rules |
