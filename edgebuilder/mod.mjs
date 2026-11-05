@@ -740,24 +740,28 @@ function removeBake(project2, slug) {
 function deployedBakes(gameDir2) {
   const found = /* @__PURE__ */ new Map();
   if (!gameDir2) return found;
-  const dir = path5.join(gameDir2, "archive", "pc", "mod");
-  let names;
-  try {
-    names = fs5.readdirSync(dir);
-  } catch {
-    return found;
-  }
-  for (const name of names) {
-    if (!name.toLowerCase().endsWith(".xl")) continue;
-    let text = "";
-    try {
-      text = fs5.readFileSync(path5.join(dir, name), "utf8");
-    } catch {
-      continue;
+  const redmods = path5.join(gameDir2, "mods");
+  const dirs = [path5.join(gameDir2, "archive", "pc", "mod"), ...namesIn(redmods).map((m) => path5.join(redmods, m, "archives"))];
+  for (const dir of dirs) {
+    for (const name of namesIn(dir)) {
+      if (!name.toLowerCase().endsWith(".xl")) continue;
+      let text = "";
+      try {
+        text = fs5.readFileSync(path5.join(dir, name), "utf8");
+      } catch {
+        continue;
+      }
+      for (const m of text.matchAll(/edgebuilder[\\/]([a-z0-9_]+)[\\/]\1\.streamingblock/gi)) found.set(m[1].toLowerCase(), name);
     }
-    for (const m of text.matchAll(/edgebuilder[\\/]([a-z0-9_]+)[\\/]\1\.streamingblock/gi)) found.set(m[1].toLowerCase(), name);
   }
   return found;
+}
+function namesIn(dir) {
+  try {
+    return fs5.readdirSync(dir);
+  } catch {
+    return [];
+  }
 }
 
 // src/scene.ts
@@ -2672,7 +2676,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.7.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.7.1"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs7.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

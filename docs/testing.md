@@ -517,7 +517,7 @@ The logs: all five game starts of the test loaded; ArchiveXL merged the block in
 | W15 | The project's name differs from the scene's: `<scene>.archive.xl` beside `<project>.archive` still loads, and packing carries the `.xl` | Every bake but one made for the purpose |
 | W16 | Two scenes baked into one project both stand | One project, a whole district's scenes |
 
-**The test of B4-1, on 0.7.0.** A project to bake into: `EDGEbuilder_Testing`, open in REDcode. REDbridge 0.12.0, released on 2026-11-05, as EDGEdeck installs it. With 0.11.0, which reads only the game's files and writes a form of `.xl` EDGEbuilder corrects, steps 10 and 11 cannot run.
+**The test of B4-1, on 0.7.1** (0.7.0 did not see a bake packed as a REDmod)**.** A project to bake into: `EDGEbuilder_Testing`, open in REDcode. REDbridge 0.12.0, released on 2026-11-05, as EDGEdeck installs it. With 0.11.0, which reads only the game's files and writes a form of `.xl` EDGEbuilder corrects, steps 10 and 11 cannot run.
 
 | # | Do | Expected | Answers |
 |---|---|---|---|
@@ -526,7 +526,7 @@ The logs: all five game starts of the test loaded; ArchiveXL merged the block in
 | 3 | First add to the scene: a `crate_red.ent` from the Assets tab, a crate with another appearance, and one turned and scaled, near the others | They stand as you placed them | |
 | 4 | Press **Bake** | "Baked Market Corner copy 2: N objects", the three files, and it in the project's list. The busy bar if it takes a while: note how long | W14 |
 | 5 | Move a crate, open Bake, then Ctrl+Z and open Bake again | "The scene changed since", then not | W6 |
-| 6 | Quit. Pack and install the project: in REDcode, Pack; in EDGEdeck, Add from REDcode project, Deploy. Claude can deploy | The project's archive and `market_corner_copy_2.archive.xl` in `archive\pc\mod` | W15 |
+| 6 | Quit. Pack and install the project: in REDcode, Pack; in EDGEdeck, Add from REDcode project, Deploy. Claude can deploy | The project's archive and `market_corner_copy_2.archive.xl` in `archive\pc\mod`, or in `mods\<project>\archives` with REDcode's `redcode.pack.redmod` on, which needs the game started with `-modded` | W15 |
 | 7 | Start the game and load a save near Market Corner | The objects stand. The message says the scene is baked and its previews stay off; Bake says the same. Nothing twice | W10 |
 | 8 | Press **Rebuild previews** | Each preview lands on its baked object, so they flicker in one place, with no offset, for the moved, turned and scaled ones too. `crate_red.ent` keeps its look, and is solid. The meshes are not, yet | W2, W3 |
 | 9 | Walk or drive to the far objects, the `grp_1` ones about 320 m off, and back | They stand there, and come back | W8 |

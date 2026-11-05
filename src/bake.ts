@@ -131,26 +131,34 @@ export function removeBake(project: BakeProject, slug: string): void {
   fs.rmSync(recordFile(project, slug), { force: true });
 }
 
-/** The bakes in the game, by slug: every `.xl` in archive\pc\mod that adds an EDGEbuilder streaming block. */
+/**
+ * The bakes in the game, by slug: every `.xl` that adds an EDGEbuilder streaming block, in archive\pc\mod
+ * and in each REDmod's archives folder, where REDcode's pack puts it with `redcode.pack.redmod` on.
+ */
 export function deployedBakes(gameDir: string | undefined): Map<string, string> {
   const found = new Map<string, string>();
   if (!gameDir) return found;
-  const dir = path.join(gameDir, "archive", "pc", "mod");
-  let names: string[];
-  try {
-    names = fs.readdirSync(dir);
-  } catch {
-    return found;
-  }
-  for (const name of names) {
-    if (!name.toLowerCase().endsWith(".xl")) continue;
-    let text = "";
-    try {
-      text = fs.readFileSync(path.join(dir, name), "utf8");
-    } catch {
-      continue;
+  const redmods = path.join(gameDir, "mods");
+  const dirs = [path.join(gameDir, "archive", "pc", "mod"), ...namesIn(redmods).map((m) => path.join(redmods, m, "archives"))];
+  for (const dir of dirs) {
+    for (const name of namesIn(dir)) {
+      if (!name.toLowerCase().endsWith(".xl")) continue;
+      let text = "";
+      try {
+        text = fs.readFileSync(path.join(dir, name), "utf8");
+      } catch {
+        continue;
+      }
+      for (const m of text.matchAll(/edgebuilder[\\/]([a-z0-9_]+)[\\/]\1\.streamingblock/gi)) found.set(m[1].toLowerCase(), name);
     }
-    for (const m of text.matchAll(/edgebuilder[\\/]([a-z0-9_]+)[\\/]\1\.streamingblock/gi)) found.set(m[1].toLowerCase(), name);
   }
   return found;
+}
+
+function namesIn(dir: string): string[] {
+  try {
+    return fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
 }
