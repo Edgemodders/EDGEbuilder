@@ -462,9 +462,9 @@ async function spawnPreview(o: SceneObject): Promise<void> {
   if (o.kind === "mesh") {
     // REDnode's own mesh prop (0.39.0 and later), which REDnode can spawn again after an archive swap.
     const [sx, sy, sz] = o.transform.scale;
-    ({ id } = await world.spawn({ mesh: o.resource, meshAppearance: o.appearance ?? "default", scale: { x: sx, y: sy, z: sz }, position, orientation, tags: ["edgebuilder"] }));
+    ({ id } = await world.spawn({ mesh: o.resource, meshAppearance: o.appearance ?? "default", scale: { x: sx, y: sy, z: sz }, position, orientation, alwaysSpawned: true, tags: ["edgebuilder"] }));
   } else if (o.kind === "entity") {
-    ({ id } = await world.spawn({ template: o.resource, position, orientation, appearance: o.appearance, tags: ["edgebuilder"] }));
+    ({ id } = await world.spawn({ template: o.resource, position, orientation, appearance: o.appearance, alwaysSpawned: true, tags: ["edgebuilder"] }));
   } else {
     throw new Error(`Previews of ${o.kind} objects come in a later phase`);
   }
@@ -517,40 +517,12 @@ async function respawn(o: SceneObject): Promise<void> {
 }
 
 /**
- * How far from V or the editor camera a preview is put in the world. Farther, the game does not stream
- * the entity in and each spawn waits 10 s for nothing (B3-1 test: 9 objects 4 km away held an Undo and
- * a Rebuild for 90 s each, and every drop behind them). Those wait for a Rebuild near them.
+ * Spawns these objects' previews, wherever they are. `alwaysSpawned` (REDnode 0.58, #41) brings an object
+ * in far from V, where the game would otherwise wait for V to come near.
  */
-const PreviewRange = 300;
-
-/** Where previews can show: V and, in Edit, the editor camera. */
-async function viewPoints(): Promise<V3[]> {
-  const out: V3[] = [];
-  try {
-    const player = await api.GetPlayer(game.instance);
-    const p = player ? ((await player.GetWorldPosition()) as { X: number; Y: number; Z: number }) : undefined;
-    if (p) out.push([p.X, p.Y, p.Z]);
-  } catch {
-    // No player: no limit from V.
-  }
-  if (editorCam) {
-    try {
-      out.push(basisFromMatrix((await editorCam.component.GetLocalToWorld()) as GameMatrix).pos);
-    } catch {
-      // The camera is going: V alone.
-    }
-  }
-  return out;
-}
-
-/** Spawns the previews of the objects near enough to show; says how many showed and how many are far. */
-async function spawnNear(objects: SceneObject[], logWord = "Preview of", also: V3[] = []): Promise<{ shown: number; far: number; failed: number }> {
-  const points = [...(await viewPoints()), ...also];
-  const near = (o: SceneObject) => !points.length || points.some((p) => Math.hypot(...sub(o.transform.position as V3, p)) <= PreviewRange);
-  const out = { shown: 0, far: 0, failed: 0 };
-  const shown = objects.filter((o) => o.kind !== "light");
-  const todo = shown.filter(near);
-  out.far = shown.length - todo.length;
+async function spawnAll(objects: SceneObject[], logWord = "Preview of"): Promise<{ shown: number; failed: number }> {
+  const out = { shown: 0, failed: 0 };
+  const todo = objects.filter((o) => o.kind !== "light");
   for (const [i, o] of todo.entries()) {
     if (stopAsked) {
       out.failed += todo.length - i;
@@ -561,13 +533,7 @@ async function spawnNear(objects: SceneObject[], logWord = "Preview of", also: V
     if (await trySpawn(o, logWord)) out.shown++;
     else out.failed++;
   }
-  if (out.far) console.log(`${out.far} object${out.far === 1 ? " is" : "s are"} more than ${PreviewRange} m from V and the camera: no preview until a Rebuild near ${out.far === 1 ? "it" : "them"}`);
   return out;
-}
-
-/** What `spawnNear` left out, for a message. */
-function farNote(far: number): string {
-  return far ? `${far} far away (over ${PreviewRange} m): Rebuild previews near ${far === 1 ? "it" : "them"}` : "";
 }
 
 /** Spawns a preview; the log says why when the game will not. */
@@ -612,10 +578,10 @@ async function travel(from: SceneState[], to: SceneState[], word: "Undo" | "Redo
   for (const o of ch.gone) await removePreview(o);
   for (const o of ch.respawn) await respawn(o);
   for (const o of ch.move) await world.move(o.entityId!, toPoint(o.transform.position), toQuat(o.transform.rotation)).catch(() => undefined);
-  const spawned = await spawnNear(ch.spawn);
+  const spawned = await spawnAll(ch.spawn);
   scene.save();
   const moved = ch.move.length + ch.respawn.length;
-  const missing = [farNote(spawned.far), spawned.failed ? `${spawned.failed} not in the world: Rebuild previews` : ""].filter(Boolean);
+  const missing = spawned.failed ? [`${spawned.failed} not in the world: Rebuild previews`] : [];
   const what = [
     moved ? `${moved} moved back` : "",
     ch.spawn.length ? `${ch.spawn.length} back${missing.length ? ` (${missing.join("; ")})` : ""}` : "",
@@ -892,7 +858,7 @@ async function playerPose(): Promise<Pose> {
 async function cameraOn(pose: Pose): Promise<void> {
   if (editorCam) return;
   const component = (await api.$new("gameCameraComponent", { name: CameraName })) as GameRef;
-  const { id, entity } = await world.spawn({ template: EmptyEntity, position: toPoint(pose.position), orientation: toQuat(pose.rotation), components: [component], tags: ["edgebuilder", CameraName] });
+  const { id, entity } = await world.spawn({ template: EmptyEntity, position: toPoint(pose.position), orientation: toQuat(pose.rotation), components: [component], alwaysSpawned: true, tags: ["edgebuilder", CameraName] });
   writeBuilderRecord({ ...readBuilderRecord(), entityId: id.hash });
   const attached = entity ? ((await entity.FindComponentByName(CameraName)) as GameRef | null) : null;
   const cam = attached ?? component;
@@ -1157,7 +1123,7 @@ async function paste(at?: { origin: V3; dir: V3 }): Promise<void> {
   const p = pasteOf(clipboard, scene.objects, scene.groups, sub(spot.position, standPoint(clipboard.objects)));
   scene.groups.push(...p.groups);
   scene.objects.push(...p.objects);
-  const r = await spawnNear(p.objects);
+  const r = await spawnAll(p.objects);
   scene.save();
   const n = p.objects.length;
   const missing = n - r.shown;
@@ -1190,14 +1156,13 @@ async function duplicate(ids: string[], offset?: V3): Promise<void> {
 async function rebuild(): Promise<void> {
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
-  const r = await spawnNear(
+  const r = await spawnAll(
     scene.objects.filter((o) => !o.entityId),
     "Rebuild",
   );
   scene.save();
   const n = r.shown;
-  const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place (the log says why)` : ""].filter(Boolean);
-  say(`${n} preview${n === 1 ? "" : "s"} back in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
+  say(`${n} preview${n === 1 ? "" : "s"} back in the world${r.failed ? `; ${r.failed} the game did not place (the log says why)` : ""}.`, r.failed ? "warn" : "ok");
 }
 
 /**
@@ -1216,20 +1181,17 @@ async function previewsBack(): Promise<void> {
   if (state.world !== "ready") return;
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light");
   if (!away.length) return;
-  // Without V's place every object counts as near, and each far one holds the queue for 10 s.
-  if (!(await viewPoints()).length) return say(`${away.length} object${away.length === 1 ? " is" : "s are"} in ${scene.name} but not in the world: Rebuild previews in the Scene tab.`, "info");
   // Never two of one object: previews from before a repeated OnGameAttached may still stand.
   const kept = new Set(scene.objects.map((o) => o.entityId));
   kept.add(editorCam?.id);
   for (const s of world.spawned?.() ?? []) if (!s.scene && s.attached && !kept.has(s.id.hash)) await world.remove(s.id).catch(() => false);
-  const r = await spawnNear(away, "Back");
-  const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place (the log says why)` : ""].filter(Boolean);
-  say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
+  const r = await spawnAll(away, "Back");
+  say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${r.failed ? `; ${r.failed} the game did not place (the log says why)` : ""}.`, r.failed ? "warn" : "ok");
 }
 
 /**
  * The Objects drawer's two clicks: the object selected and in the world. The page moves the camera
- * (it owns the pose). Previews near the object come too, since the camera is on its way there.
+ * (it owns the pose).
  */
 async function goTo(id: string): Promise<void> {
   const o = scene.get(id);
@@ -1242,16 +1204,12 @@ async function goTo(id: string): Promise<void> {
     } catch (err) {
       console.log(`Go to ${id}: ${(err as Error).message}`);
       await select([id]);
-      return say(`${id} is selected, but the game did not place its preview: it brings objects in only near V for now. There is no gizmo without a preview; its numbers in the Selected panel still work.${noCamera}`, "warn");
+      return say(`${id} is selected, but the game did not place its preview (the log says why). There is no gizmo without a preview; its numbers in the Selected panel still work.${noCamera}`, "warn");
     }
   }
   await select([id]);
   await highlight(o, true);
-  await spawnNear(
-    scene.objects.filter((x) => !x.entityId),
-    "Preview of",
-    [o.transform.position as V3],
-  );
+  await spawnAll(scene.objects.filter((x) => !x.entityId));
   say(`${id} is selected.${noCamera}`, "ok");
 }
 
@@ -1379,8 +1337,8 @@ async function openScene(file: string): Promise<void> {
   scene.onSave?.();
   const n = scene.objects.length;
   if (state.world !== "ready") return say(`Opened ${scene.name} (${whereText(file)}), ${n} object${n === 1 ? "" : "s"}. Rebuild previews once a save is loaded.`, "ok");
-  const r = await spawnNear(scene.objects);
-  const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place` : ""].filter(Boolean);
+  const r = await spawnAll(scene.objects);
+  const rest = r.failed ? [`${r.failed} the game did not place`] : [];
   say(`Opened ${scene.name} (${whereText(file)}): ${r.shown} of ${n} object${n === 1 ? "" : "s"} in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
 }
 
@@ -1462,7 +1420,7 @@ function saveNow(): void {
 /** Places a scene that is on, through REDnode. Far objects are created at once and come into the world when V or the camera gets near. */
 async function loadOn(file: string): Promise<number> {
   if (typeof world.load !== "function") throw new Error("Showing other scenes needs REDnode 0.40.1 or later");
-  const r = await world.load(readSceneFile(file), { name: file, wait: false });
+  const r = await world.load(readSceneFile(file), { name: file, wait: false, alwaysSpawned: true });
   for (const s of r.skipped) console.log(`${path.basename(file)}: ${s.object} not shown: ${s.why}`);
   onScenes.set(file, r.spawned.length);
   return r.spawned.length;
@@ -1479,7 +1437,7 @@ async function sceneOn(file: string): Promise<void> {
   writeSession();
   if (state.world !== "ready") return say(`${path.basename(file)} is on; it shows once a save is loaded.`, "info");
   const n = await loadOn(file);
-  say(`Showing ${path.basename(file)}: ${n} object${n === 1 ? "" : "s"}. Those far away come in as V or the camera gets near. They cannot be selected: open the scene to change it.`, "ok");
+  say(`Showing ${path.basename(file)}: ${n} object${n === 1 ? "" : "s"}. They cannot be selected: open the scene to change it.`, "ok");
 }
 
 async function sceneOff(file: string): Promise<void> {

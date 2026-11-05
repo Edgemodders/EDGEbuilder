@@ -75,6 +75,8 @@ declare module "rednode" {
     timeoutMs?: number;
     /** false: resolve once created, without waiting for it to be in the world (REDnode 0.56.1 and later). */
     wait?: boolean;
+    /** In the world wherever V is, until removed (REDnode 0.58.0 and later, #41). */
+    alwaysSpawned?: boolean;
   }
   /** What world.load did (REDnode 0.40.1 and later). */
   export interface LoadResult {
@@ -100,7 +102,7 @@ declare module "rednode" {
     /** After an archive swap, this package's spawns that use a swapped file are spawned again (REDnode 0.40.1 and later). */
     onRespawn(handler: (before: EntityId, after: EntityId) => void): () => void;
     /** Spawns a scene file's objects (a path, or the parsed scene); loading a name again replaces it (REDnode 0.40.1 and later). */
-    load?(scene: unknown, options?: { name?: string; wait?: boolean }): Promise<LoadResult>;
+    load?(scene: unknown, options?: { name?: string; wait?: boolean; alwaysSpawned?: boolean }): Promise<LoadResult>;
     /** Removes what world.load spawned under that name; resolves with how many. */
     unload?(name: string): Promise<number>;
     /** This package's spawns still listed; `attached` while in the world, `scene` when world.load made it (REDnode 0.53.0 and later). */

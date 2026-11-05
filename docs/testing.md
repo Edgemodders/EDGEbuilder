@@ -25,7 +25,7 @@ Last updated 2026-10-30.
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
-| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4 |
+| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 (0.6.5) waiting |
 
 ## Automated
 
@@ -331,6 +331,8 @@ The owner reports the other steps done on 0.6.0. Step 13 passed on 0.6.0: with t
 
 **Retest on 0.6.2 passed (2026-11-04, the owner's report):** steps 9, 11, 17, 18, 20, 21 and 22, every one as written. **B3-2 passed in game on 0.6.2, but for step 19**, which waits for REDnode #41. 0.6.3 only changes the message for a preview the game did not place. The owner then asked for a **Close** button, which returns a scene to the unopened state: built as 0.6.4 (steps 24 to 27). **Steps 24, 25 and 27 passed in game on 2026-11-04** (the log has the Closes, the refusals and a new scene with nothing open). **Step 26 passed** after a full restart: the log says `no scene open` at 19:47:12, and no scene was open.
 
+**REDnode #41 shipped in REDnode 0.58.0** and passed its own test on 2026-11-04: `alwaysSpawned` brought objects in at 300 m, 1 km and 4 km within 0.1 s, and 200 boxes spawned at about 46 ms each with the frame rate steady. **0.6.5** spawns every preview, shown scene and the editor camera with it, and drops the 300 m limit, so an open scene's objects are all in the world wherever V is. It needs REDnode 0.58.0. Retest: 19 and 28 to 31. The steps above that mention "far away" describe the builds before it.
+
 Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck). Needs REDnode 0.56.1 or later (scenes that are shown use `world.load` with `wait: false`). Named scenes saved after every change, in the Library, the open REDcode project or This PC; the Library tab; the last scene reopened at start; other scenes shown beside the open one; EDGEbuilder's service; the page on any screen width ([design](design.md#scenes-and-the-library-b3-2)). Checked before the game in REDnode's host on 2026-11-03: the tab, the folders, New, Save as, Rename, Open, the refusals (a name taken, a folder outside the Library), `scenes()` and `refs()` through the MCP server, and the page at 2580 x 1080. Start somewhere open with Edit on.
 
 | # | Check | Expected |
@@ -353,7 +355,7 @@ Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck).
 | 16 | Your usual screen: Edit on, select a crate | The gizmo sits on the crate as before; the window at the right edge. On a 21:9 or wider screen (or the game windowed at such a size), the same, and the view's tint covers the whole width |
 | 17 | 0.6.2. The Library tab, with one scene open: pick another scene, **Objects** | A drawer slides out to the left of the window: that scene's objects, group names, a small trash icon at the right of each row. Pick another scene: the list follows. **Objects** again, or its X, closes it |
 | 18 | Open Market Corner. Edit off. Two quick clicks on a crate near you in the drawer | Edit goes on, the camera lands in front of the crate, looking slightly down; the crate has the outline and the gizmo, and it moves as usual |
-| 19 | Two quick clicks on a crate over 300 m away (the `grp_1` crates, from where the `grp_4` ones are) | The camera goes there; its preview and those near it appear; it is selected. Very far from V the game may not place the preview: then a message says so, and it is still selected and can be moved |
+| 19 | Two quick clicks on a crate far from V (the `grp_1` crates, from where the `grp_4` ones are; 0.6.5) | The camera goes there, and the crate has its outline and gizmo; it moves as usual. The crates near it are there too, standing on the ground |
 | 20 | Pick a scene that is not open, **Objects**, two quick clicks on an object | That scene opens, then the camera flies to the object |
 | 21 | The open scene: the trash on an object that is not selected and out of view; **No**; the trash again, **Yes**; Ctrl+Z | "Delete?" in the row; No changes nothing; Yes takes it from the list and the world, with the camera staying put; Ctrl+Z brings it back |
 | 22 | A scene that is not open: the trash, **Yes** | "Delete for good?"; "Removed ... Undo cannot bring it back"; the open scene unchanged; the scene's count in the tree one less. If that scene is shown in the world, its object goes too |
@@ -362,3 +364,7 @@ Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck).
 | 25 | With no scene open: **Drop where I look**; Ctrl+V | "No scene is open: open one or make one on the Library tab"; nothing placed |
 | 26 | Quit the game, start it, load a save | The log says `no scene open`; no crates come back, but for scenes still shown |
 | 27 | Pick a scene, **Open** (or two quick clicks); then pick it and press **Close** in the Picked panel; **New scene here** | Opening brings its crates back; Close in the panel works only on the open scene; a new scene opens with no mention of a scene before it |
+| 28 | 0.6.5. Fly far from V, then open a scene with objects near and far from V, and Rebuild previews | Every object comes in, wherever it is, with no message about far objects and no busy bar that hangs. Back near V, they are all still there |
+| 29 | Far from V: select a crate, **Drop to floor**; Ctrl+Z; **Drop at click** on the ground there | The crate lands on the ground if the game has it loaded there; if not, a message says so. Note what happens: the ground's collision far from V is untried |
+| 30 | Show a scene whose objects are far from V; fly there; Hide | Its objects are there from the first press, and Hide takes them out |
+| 31 | Far from V, with Edit on, load a save | The camera ends, V's view comes back, and the open scene's objects all come back, none twice |

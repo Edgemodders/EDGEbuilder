@@ -1333,9 +1333,9 @@ async function spawnPreview(o) {
   let id;
   if (o.kind === "mesh") {
     const [sx, sy, sz] = o.transform.scale;
-    ({ id } = await world.spawn({ mesh: o.resource, meshAppearance: o.appearance ?? "default", scale: { x: sx, y: sy, z: sz }, position, orientation, tags: ["edgebuilder"] }));
+    ({ id } = await world.spawn({ mesh: o.resource, meshAppearance: o.appearance ?? "default", scale: { x: sx, y: sy, z: sz }, position, orientation, alwaysSpawned: true, tags: ["edgebuilder"] }));
   } else if (o.kind === "entity") {
-    ({ id } = await world.spawn({ template: o.resource, position, orientation, appearance: o.appearance, tags: ["edgebuilder"] }));
+    ({ id } = await world.spawn({ template: o.resource, position, orientation, appearance: o.appearance, alwaysSpawned: true, tags: ["edgebuilder"] }));
   } else {
     throw new Error(`Previews of ${o.kind} objects come in a later phase`);
   }
@@ -1376,30 +1376,9 @@ async function respawn(o) {
   await trySpawn(o);
   if (state.selected.includes(o.id)) await highlight(o, true);
 }
-var PreviewRange = 300;
-async function viewPoints() {
-  const out = [];
-  try {
-    const player = await api.GetPlayer(game.instance);
-    const p = player ? await player.GetWorldPosition() : void 0;
-    if (p) out.push([p.X, p.Y, p.Z]);
-  } catch {
-  }
-  if (editorCam) {
-    try {
-      out.push(basisFromMatrix(await editorCam.component.GetLocalToWorld()).pos);
-    } catch {
-    }
-  }
-  return out;
-}
-async function spawnNear(objects, logWord = "Preview of", also = []) {
-  const points = [...await viewPoints(), ...also];
-  const near = (o) => !points.length || points.some((p) => Math.hypot(...sub(o.transform.position, p)) <= PreviewRange);
-  const out = { shown: 0, far: 0, failed: 0 };
-  const shown = objects.filter((o) => o.kind !== "light");
-  const todo = shown.filter(near);
-  out.far = shown.length - todo.length;
+async function spawnAll(objects, logWord = "Preview of") {
+  const out = { shown: 0, failed: 0 };
+  const todo = objects.filter((o) => o.kind !== "light");
   for (const [i, o] of todo.entries()) {
     if (stopAsked) {
       out.failed += todo.length - i;
@@ -1410,11 +1389,7 @@ async function spawnNear(objects, logWord = "Preview of", also = []) {
     if (await trySpawn(o, logWord)) out.shown++;
     else out.failed++;
   }
-  if (out.far) console.log(`${out.far} object${out.far === 1 ? " is" : "s are"} more than ${PreviewRange} m from V and the camera: no preview until a Rebuild near ${out.far === 1 ? "it" : "them"}`);
   return out;
-}
-function farNote(far) {
-  return far ? `${far} far away (over ${PreviewRange} m): Rebuild previews near ${far === 1 ? "it" : "them"}` : "";
 }
 async function trySpawn(o, logWord = "Preview of") {
   if (o.kind === "light" || state.world !== "ready") return false;
@@ -1447,10 +1422,10 @@ async function travel(from, to, word) {
   for (const o of ch.gone) await removePreview(o);
   for (const o of ch.respawn) await respawn(o);
   for (const o of ch.move) await world.move(o.entityId, toPoint(o.transform.position), toQuat(o.transform.rotation)).catch(() => void 0);
-  const spawned = await spawnNear(ch.spawn);
+  const spawned = await spawnAll(ch.spawn);
   scene.save();
   const moved = ch.move.length + ch.respawn.length;
-  const missing = [farNote(spawned.far), spawned.failed ? `${spawned.failed} not in the world: Rebuild previews` : ""].filter(Boolean);
+  const missing = spawned.failed ? [`${spawned.failed} not in the world: Rebuild previews`] : [];
   const what = [
     moved ? `${moved} moved back` : "",
     ch.spawn.length ? `${ch.spawn.length} back${missing.length ? ` (${missing.join("; ")})` : ""}` : "",
@@ -1659,7 +1634,7 @@ async function playerPose() {
 async function cameraOn(pose) {
   if (editorCam) return;
   const component = await api.$new("gameCameraComponent", { name: CameraName });
-  const { id, entity } = await world.spawn({ template: EmptyEntity, position: toPoint(pose.position), orientation: toQuat(pose.rotation), components: [component], tags: ["edgebuilder", CameraName] });
+  const { id, entity } = await world.spawn({ template: EmptyEntity, position: toPoint(pose.position), orientation: toQuat(pose.rotation), components: [component], alwaysSpawned: true, tags: ["edgebuilder", CameraName] });
   writeBuilderRecord({ ...readBuilderRecord(), entityId: id.hash });
   const attached = entity ? await entity.FindComponentByName(CameraName) : null;
   const cam = attached ?? component;
@@ -1877,7 +1852,7 @@ async function paste(at) {
   const p = pasteOf(clipboard, scene.objects, scene.groups, sub(spot.position, standPoint(clipboard.objects)));
   scene.groups.push(...p.groups);
   scene.objects.push(...p.objects);
-  const r = await spawnNear(p.objects);
+  const r = await spawnAll(p.objects);
   scene.save();
   const n = p.objects.length;
   const missing = n - r.shown;
@@ -1908,14 +1883,13 @@ async function duplicate2(ids, offset) {
 async function rebuild() {
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
-  const r = await spawnNear(
+  const r = await spawnAll(
     scene.objects.filter((o) => !o.entityId),
     "Rebuild"
   );
   scene.save();
   const n = r.shown;
-  const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place (the log says why)` : ""].filter(Boolean);
-  say(`${n} preview${n === 1 ? "" : "s"} back in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
+  say(`${n} preview${n === 1 ? "" : "s"} back in the world${r.failed ? `; ${r.failed} the game did not place (the log says why)` : ""}.`, r.failed ? "warn" : "ok");
 }
 var PreviewsBackDelay = 2e3;
 var previewsTimer;
@@ -1927,13 +1901,11 @@ async function previewsBack() {
   if (state.world !== "ready") return;
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light");
   if (!away.length) return;
-  if (!(await viewPoints()).length) return say(`${away.length} object${away.length === 1 ? " is" : "s are"} in ${scene.name} but not in the world: Rebuild previews in the Scene tab.`, "info");
   const kept = new Set(scene.objects.map((o) => o.entityId));
   kept.add(editorCam?.id);
   for (const s of world.spawned?.() ?? []) if (!s.scene && s.attached && !kept.has(s.id.hash)) await world.remove(s.id).catch(() => false);
-  const r = await spawnNear(away, "Back");
-  const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place (the log says why)` : ""].filter(Boolean);
-  say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
+  const r = await spawnAll(away, "Back");
+  say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${r.failed ? `; ${r.failed} the game did not place (the log says why)` : ""}.`, r.failed ? "warn" : "ok");
 }
 async function goTo(id) {
   const o = scene.get(id);
@@ -1946,16 +1918,12 @@ async function goTo(id) {
     } catch (err) {
       console.log(`Go to ${id}: ${err.message}`);
       await select([id]);
-      return say(`${id} is selected, but the game did not place its preview: it brings objects in only near V for now. There is no gizmo without a preview; its numbers in the Selected panel still work.${noCamera}`, "warn");
+      return say(`${id} is selected, but the game did not place its preview (the log says why). There is no gizmo without a preview; its numbers in the Selected panel still work.${noCamera}`, "warn");
     }
   }
   await select([id]);
   await highlight(o, true);
-  await spawnNear(
-    scene.objects.filter((x) => !x.entityId),
-    "Preview of",
-    [o.transform.position]
-  );
+  await spawnAll(scene.objects.filter((x) => !x.entityId));
   say(`${id} is selected.${noCamera}`, "ok");
 }
 function peek(file) {
@@ -2056,8 +2024,8 @@ async function openScene(file) {
   scene.onSave?.();
   const n = scene.objects.length;
   if (state.world !== "ready") return say(`Opened ${scene.name} (${whereText(file)}), ${n} object${n === 1 ? "" : "s"}. Rebuild previews once a save is loaded.`, "ok");
-  const r = await spawnNear(scene.objects);
-  const rest = [farNote(r.far), r.failed ? `${r.failed} the game did not place` : ""].filter(Boolean);
+  const r = await spawnAll(scene.objects);
+  const rest = r.failed ? [`${r.failed} the game did not place`] : [];
   say(`Opened ${scene.name} (${whereText(file)}): ${r.shown} of ${n} object${n === 1 ? "" : "s"} in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
 }
 function newFile(name, place2, folder) {
@@ -2126,7 +2094,7 @@ function saveNow() {
 }
 async function loadOn(file) {
   if (typeof world.load !== "function") throw new Error("Showing other scenes needs REDnode 0.40.1 or later");
-  const r = await world.load(readSceneFile(file), { name: file, wait: false });
+  const r = await world.load(readSceneFile(file), { name: file, wait: false, alwaysSpawned: true });
   for (const s of r.skipped) console.log(`${path6.basename(file)}: ${s.object} not shown: ${s.why}`);
   onScenes.set(file, r.spawned.length);
   return r.spawned.length;
@@ -2142,7 +2110,7 @@ async function sceneOn(file) {
   writeSession();
   if (state.world !== "ready") return say(`${path6.basename(file)} is on; it shows once a save is loaded.`, "info");
   const n = await loadOn(file);
-  say(`Showing ${path6.basename(file)}: ${n} object${n === 1 ? "" : "s"}. Those far away come in as V or the camera gets near. They cannot be selected: open the scene to change it.`, "ok");
+  say(`Showing ${path6.basename(file)}: ${n} object${n === 1 ? "" : "s"}. They cannot be selected: open the scene to change it.`, "ok");
 }
 async function sceneOff(file) {
   const known = [...onScenes.keys()].find((f) => sameFile(f, file)) ?? file;
@@ -2452,7 +2420,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.6.4"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.6.5"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs6.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {
