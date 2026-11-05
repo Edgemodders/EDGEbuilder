@@ -26,7 +26,7 @@ Last updated 2026-10-30.
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
 | [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 passed on 0.6.5; 32 to 34 passed on 0.6.7; released as 0.6.7 |
-| [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. B4-1, the Bake tab, built as 0.7.0: checked in REDnode's host with real clicks, waiting for its test |
+| [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. **B4-1, the Bake tab, passed in game on 2026-11-05 on 0.7.1**, all 16 steps |
 
 ## Automated
 
@@ -539,6 +539,31 @@ The logs: all five game starts of the test loaded; ArchiveXL merged the block in
 | 16 | Turn EDGEbuilder off in EDGEdeck, deploy, start, load near a bake | It stands with EDGEbuilder uninstalled | W1 |
 
 W11 is in the smoke test (a kind a bake cannot make is left out, and said so). Every step answers W13, since the bake runs on the copy EDGEdeck installed.
+
+**Results, 2026-11-05, on 0.7.1 with REDbridge 0.12.0 as EDGEdeck installs it (game 2.5).** The owner ran all 16 steps: everything worked as written. The logs agree where they can speak.
+
+| Question | Answer |
+|---|---|
+| W1 | A bake stands with EDGEbuilder off and deployed out: the 16:45 start merged the blocks, and EDGEbuilder wrote nothing |
+| W2, W3 | Previews land on their baked objects, moved, turned and scaled ones too; `crate_red.ent` keeps its look and is solid; the meshes are not, as expected. Dragging a preview away shows its baked twin behind it |
+| W4, W5 | Bake names EvilClown. With EvilClown off the game does not crash: the chicken is absent and the crate stands |
+| W6 | Baking again replaces the bake, with no copy at the old place. A change came in with a game restart; an archive swap was not tried |
+| W7 | Taking out a bake and packing again removes its objects, and the save is fine. An open scene whose bake is gone stands as previews again, as it should: the crate left when the scene was closed |
+| W8 | The far objects, about 320 m off, stand and come back |
+| W9 | A bake inside a building (VoodDoo Inside, one object) stands, and so does one in Dogtown (Market Corner copy 2, already there), from one project |
+| W10 | The scene's previews stay off, the message and the tab say so, nothing stands twice until Rebuild previews |
+| W12 | No project open says so, with Bake greyed out; with the project open, Bake is lit |
+| W13 | The bake runs on the installed copy: the log says `REDbridge 0.12.0 ready (EDGEdeck (Code))` |
+| W14 | 200 objects bake into a 12,634-byte sector, and the owner saw no real frame rate drop near them. No measured figures |
+| W15 | Three bakes beside `EDGEbuilder_Testing.archive` load, each through its own `.xl`: `<scene>.archive.xl` needs no archive of its name |
+| W16 | ArchiveXL merged four blocks from one project in one start |
+
+**Found on the way.**
+
+| Finding | What it was | Answer |
+|---|---|---|
+| A bake packed as a REDmod | With `redcode.pack.redmod` on, the `.xl` is in `mods\<project>\archives`, where 0.7.0 did not look, so previews would have stood on the bake. ArchiveXL reads it there, and the game needs `-modded` | 0.7.1 reads both places; this whole test ran as a REDmod. **The plain archive form was tested only by the probes** |
+| The Scene tab's name field and New | The field reads as the name for New, and Enter there renames the open scene with no question. New only opens the Library tab | 0.7.2: labelled Open scene's name, Enter asks first, New's tooltip says what comes next. Not yet tried in game |
 
 #### Questions for Library bakes: the test of B4-3
 

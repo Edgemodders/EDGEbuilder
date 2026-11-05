@@ -18,6 +18,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 **Changed**
 
 - The window is a little wider, for the sixth tab.
+- The Scene tab's name field is labelled Open scene's name, and pressing Enter after changing it asks before renaming the scene and its file. The New button's tooltip says what comes next.
 
 ## 0.6.7 (2026-11-05)
 

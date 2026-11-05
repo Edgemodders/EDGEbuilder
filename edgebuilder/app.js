@@ -1628,9 +1628,16 @@ $("bakeList").addEventListener(
   },
   true
 );
+var renameTo;
 function renderLibrary(s) {
   const name = $("sceneName");
-  if (document.activeElement?.id !== "sceneName") name.value = s.scene.name;
+  if (renameTo && renameTo.file !== s.scene.file) renameTo = void 0;
+  if (document.activeElement?.id !== "sceneName" && !renameTo) name.value = s.scene.name;
+  $("renameAsk").hidden = !renameTo;
+  if (renameTo) {
+    const baked = s.bake.current || s.bake.inGame ? " Its bake keeps the old name: bake again and take the old bake out, or both stand in the world." : "";
+    $("renameText").textContent = `Rename ${s.scene.name} to ${renameTo.name}? Its file is renamed too.${baked}`;
+  }
   const where = whereLabel(s, s.scene.place, s.scene.folder);
   const noScene = !s.scene.file;
   $("sceneWhere").textContent = noScene ? "No scene is open. Open one or make one on the Library tab." : where ? `In ${where}. Saved after every change.` : `In ${s.scene.file}. Saved after every change.`;
@@ -1764,8 +1771,26 @@ $("createFolder").addEventListener("click", () => {
   newName().value = "";
 });
 $("sceneName").addEventListener("submit", () => {
-  post({ type: "scene.rename", name: $("sceneName").value ?? "" });
+  if (!state?.scene.file) return;
+  const name = ($("sceneName").value ?? "").trim();
+  renameTo = name && name !== state.scene.name ? { file: state.scene.file, name } : void 0;
   document.activeElement?.blur();
+  render(state);
+});
+$("sceneName").addEventListener("input", () => {
+  if (!renameTo) return;
+  renameTo = void 0;
+  if (state) render(state);
+});
+$("renameYes").addEventListener("click", () => {
+  if (!renameTo) return;
+  post({ type: "scene.rename", name: renameTo.name });
+  renameTo = void 0;
+  if (state) render(state);
+});
+$("renameNo").addEventListener("click", () => {
+  renameTo = void 0;
+  if (state) render(state);
 });
 $("saveScene").addEventListener("click", () => post({ type: "scene.save" }));
 $("saveAsScene").addEventListener("click", () => state && toLibrary(`${state.scene.name} copy`, true));

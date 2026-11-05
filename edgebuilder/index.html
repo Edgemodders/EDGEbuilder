@@ -86,12 +86,16 @@
         </rn-panel>
       </rn-tab>
       <rn-tab label="Scene">
-        <rn-input id="sceneName" label="Scene" title="Enter renames the scene and its file"></rn-input>
+        <rn-input id="sceneName" label="Open scene's name" title="Change it and press Enter to rename the open scene and its file. It asks first. A new scene is made with New"></rn-input>
+        <div id="renameAsk" hidden>
+          <div id="renameText" class="detail"></div>
+          <div class="row"><rn-button id="renameYes" variant="ghost">Rename</rn-button><rn-button id="renameNo" variant="ghost">Keep the name</rn-button></div>
+        </div>
         <div id="sceneWhere" class="count"></div>
         <div class="row">
           <rn-button id="saveScene" variant="ghost" title="Ctrl+S. EDGEbuilder saves after every change; this confirms it">Save</rn-button>
           <rn-button id="saveAsScene" variant="ghost" title="Ctrl+Shift+S: a copy under a new name, in a folder you pick">Save as</rn-button>
-          <rn-button id="newScene" variant="ghost" title="An empty scene, in a folder you pick">New</rn-button>
+          <rn-button id="newScene" variant="ghost" title="An empty scene. This opens the Library tab: type a name, pick a folder, then press New scene here">New</rn-button>
           <rn-button id="openScene" variant="ghost" title="The Library tab">Open</rn-button>
           <rn-button id="closeScene" variant="ghost" title="Its objects leave the world and no scene is open. It stays saved">Close</rn-button>
         </div>

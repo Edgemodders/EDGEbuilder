@@ -564,10 +564,20 @@ $("bakeList").addEventListener(
   true,
 );
 
+/** A new name typed for the open scene, waiting for Rename or Keep the name. */
+let renameTo: { file: string; name: string } | undefined;
+
 function renderLibrary(s: Snapshot): void {
   // The scene at the top of the Scene tab.
   const name = $<Field>("sceneName");
-  if (document.activeElement?.id !== "sceneName") name.value = s.scene.name;
+  if (renameTo && renameTo.file !== s.scene.file) renameTo = undefined;
+  if (document.activeElement?.id !== "sceneName" && !renameTo) name.value = s.scene.name;
+  $("renameAsk").hidden = !renameTo;
+  if (renameTo) {
+    // Bakes go by the scene's name, so the old bake is not this scene's any more.
+    const baked = s.bake.current || s.bake.inGame ? " Its bake keeps the old name: bake again and take the old bake out, or both stand in the world." : "";
+    $("renameText").textContent = `Rename ${s.scene.name} to ${renameTo.name}? Its file is renamed too.${baked}`;
+  }
   const where = whereLabel(s, s.scene.place, s.scene.folder);
   const noScene = !s.scene.file;
   $("sceneWhere").textContent = noScene ? "No scene is open. Open one or make one on the Library tab." : where ? `In ${where}. Saved after every change.` : `In ${s.scene.file}. Saved after every change.`;
@@ -714,8 +724,27 @@ $("createFolder").addEventListener("click", () => {
   newName().value = "";
 });
 $("sceneName").addEventListener("submit", () => {
-  post({ type: "scene.rename", name: $<Field>("sceneName").value ?? "" });
+  if (!state?.scene.file) return;
+  const name = ($<Field>("sceneName").value ?? "").trim();
+  renameTo = name && name !== state.scene.name ? { file: state.scene.file, name } : undefined;
   (document.activeElement as HTMLElement | null)?.blur();
+  render(state);
+});
+// Typing again takes back the name that was asked about, until Enter asks about the new one.
+$("sceneName").addEventListener("input", () => {
+  if (!renameTo) return;
+  renameTo = undefined;
+  if (state) render(state);
+});
+$("renameYes").addEventListener("click", () => {
+  if (!renameTo) return;
+  post({ type: "scene.rename", name: renameTo.name });
+  renameTo = undefined;
+  if (state) render(state);
+});
+$("renameNo").addEventListener("click", () => {
+  renameTo = undefined;
+  if (state) render(state);
 });
 $("saveScene").addEventListener("click", () => post({ type: "scene.save" }));
 $("saveAsScene").addEventListener("click", () => state && toLibrary(`${state.scene.name} copy`, true));
