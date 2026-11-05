@@ -25,7 +25,7 @@ Last updated 2026-10-30.
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
-| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.0), 0.6.2 built for the retest | Waiting: step 10 not met on 0.6.0; steps 13, 14 and 15 passed |
+| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.0), 0.6.2 built for the retest | Waiting: steps 10, 13, 14, 15 and 23 passed; step 19 waits for REDnode #41 |
 
 ## Automated
 
@@ -327,7 +327,9 @@ streaming:
 
 The owner reports the other steps done on 0.6.0. Step 13 passed on 0.6.0: with the camera far off, Show in world on Market Corner answered at once (a brief busy bar; the log's `Showing market_corner.scene.json: 25 objects` at 18:54:19), and the crates appeared as the camera got near. That press stayed shown (`session.json` still lists the scene), so one press does hold in game, which points to a second press in step 10's two quick hides. Asked for at the same test: an **Objects** drawer, built as 0.6.2 (steps 17 to 22). Checked in REDnode's host with real mouse events on 2026-11-04: the drawer, the confirm row, a delete from the open scene and from one not open, two clicks opening a scene, Save as. Not checkable there, since no world is loaded: the flight, the outline, previews.
 
-**Retest on 0.6.2:** steps 9, 10 and 11, then 17 to 23.
+**On 0.6.2 (2026-11-04).** **Step 10, the gate, passed:** the restart logged `scene Yard (...)`, `1 other scene on`; with a save loaded near both, Yard's crate and Market Corner's near crates were in the world with no press. **Step 23 passed** the same way (`Yard: 1 of 1 object back in the world`, no crate twice, though the game sent OnGameAttached three times). **Step 19 found a limit:** the camera flew to a crate about 320 m from V as asked, but its preview and those near it did not appear, and there was no gizmo. The log: `the entity was created but not in the world after 10000 ms`. The game's dynamic entity system brings an entity in only near V, wherever the camera is. Codeware's `DynamicEntitySpec` has `alwaysSpawned`, which REDnode's `world.spawn` does not set: [REDnode #41](https://github.com/Edgemodders/REDnode/issues/41) asks for it (untried). The gizmo needs a preview, so the message in 0.6.2, "You can still move it", was wrong: 0.6.3 says the Selected panel's numbers still work.
+
+**Retest on 0.6.2:** steps 9, 11, 17, 18, 20, 21, 22. Step 19 waits for REDnode #41.
 
 Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck). Needs REDnode 0.56.1 or later (scenes that are shown use `world.load` with `wait: false`). Named scenes saved after every change, in the Library, the open REDcode project or This PC; the Library tab; the last scene reopened at start; other scenes shown beside the open one; EDGEbuilder's service; the page on any screen width ([design](design.md#scenes-and-the-library-b3-2)). Checked before the game in REDnode's host on 2026-11-03: the tab, the folders, New, Save as, Rename, Open, the refusals (a name taken, a folder outside the Library), `scenes()` and `refs()` through the MCP server, and the page at 2580 x 1080. Start somewhere open with Edit on.
 

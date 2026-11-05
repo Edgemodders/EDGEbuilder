@@ -1941,7 +1941,7 @@ async function goTo(id) {
     } catch (err) {
       console.log(`Go to ${id}: ${err.message}`);
       await select([id]);
-      return say(`${id} is selected, but the game did not place its preview: the world loads around V, and it may be too far from V. You can still move it.${noCamera}`, "warn");
+      return say(`${id} is selected, but the game did not place its preview: it brings objects in only near V for now. There is no gizmo without a preview; its numbers in the Selected panel still work.${noCamera}`, "warn");
     }
   }
   await select([id]);
@@ -2431,7 +2431,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.6.2"} starting; data folder ${pkg.dataDir}; scene ${scene.name} (${scene.file}), ${scene.objects.length} objects; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.6.3"} starting; data folder ${pkg.dataDir}; scene ${scene.name} (${scene.file}), ${scene.objects.length} objects; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs6.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

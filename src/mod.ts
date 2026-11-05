@@ -1238,7 +1238,7 @@ async function goTo(id: string): Promise<void> {
     } catch (err) {
       console.log(`Go to ${id}: ${(err as Error).message}`);
       await select([id]);
-      return say(`${id} is selected, but the game did not place its preview: the world loads around V, and it may be too far from V. You can still move it.${noCamera}`, "warn");
+      return say(`${id} is selected, but the game did not place its preview: it brings objects in only near V for now. There is no gizmo without a preview; its numbers in the Selected panel still work.${noCamera}`, "warn");
     }
   }
   await select([id]);
