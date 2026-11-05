@@ -517,7 +517,7 @@ The logs: all five game starts of the test loaded; ArchiveXL merged the block in
 | W15 | The project's name differs from the scene's: `<scene>.archive.xl` beside `<project>.archive` still loads, and packing carries the `.xl` | Every bake but one made for the purpose |
 | W16 | Two scenes baked into one project both stand | One project, a whole district's scenes |
 
-**The test of B4-1, on 0.7.0.** A project to bake into: `EDGEbuilder_Testing`, open in REDcode. EDGEbuilder as you have it, and the REDbridge you have (0.11.0) for steps up to 9: it reads only the game's files, and writes a form of `.xl` EDGEbuilder corrects. Steps 10 and 11 need REDbridge 0.12.0, or its build named in Settings.
+**The test of B4-1, on 0.7.0.** A project to bake into: `EDGEbuilder_Testing`, open in REDcode. REDbridge 0.12.0, released on 2026-11-05, as EDGEdeck installs it. With 0.11.0, which reads only the game's files and writes a form of `.xl` EDGEbuilder corrects, steps 10 and 11 cannot run.
 
 | # | Do | Expected | Answers |
 |---|---|---|---|
@@ -538,7 +538,7 @@ The logs: all five game starts of the test loaded; ArchiveXL merged the block in
 | 15 | Bake tab's trash on a bake: **No**, then **Yes**; pack and install; start with the same save | The bake is out of the project, the scene stays, the objects leave the world, and the save is fine | W7 |
 | 16 | Turn EDGEbuilder off in EDGEdeck, deploy, start, load near a bake | It stands with EDGEbuilder uninstalled | W1 |
 
-W11 is in the smoke test (a kind a bake cannot make is left out, and said so). W13 waits for REDbridge 0.12.0's release.
+W11 is in the smoke test (a kind a bake cannot make is left out, and said so). Every step answers W13, since the bake runs on the copy EDGEdeck installed.
 
 #### Questions for Library bakes: the test of B4-3
 
