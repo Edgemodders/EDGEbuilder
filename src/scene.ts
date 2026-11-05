@@ -94,7 +94,9 @@ export class Scene {
   /** Called after each save, for the service's scene-changed event. */
   onSave: (() => void) | undefined;
 
+  /** No file: the scene was closed, and nothing is open. */
   save(): void {
+    if (!this.file) return;
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     fs.writeFileSync(this.file, JSON.stringify(this.data(), null, 2));
     this.onSave?.();

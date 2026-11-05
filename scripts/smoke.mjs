@@ -102,6 +102,10 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.equal(copy.game, "2.5");
   assert.equal(copy.objects[0].entityId, undefined);
   assert.throws(() => readSceneFile(path.join(lib, "broken.scene.json")));
+  // Closed: no file, and a save writes nothing.
+  const closed = new Scene("");
+  closed.save();
+  assert.equal(closed.file, "");
   console.log("scenes and the Library: ok");
 }
 

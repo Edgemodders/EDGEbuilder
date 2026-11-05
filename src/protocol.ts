@@ -197,6 +197,7 @@ export type PageMessage =
   | { type: "scene.save" }
   /** Show a scene that is not open in the world (`on`), or take it away. */
   | { type: "scene.on"; file: string; on: boolean }
+  | { type: "scene.close" }
   | { type: "scene.peek"; file: string }
   | { type: "scene.goTo"; id: string }
   | { type: "scene.removeFrom"; file: string; id: string }

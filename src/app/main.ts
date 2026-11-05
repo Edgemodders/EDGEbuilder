@@ -517,7 +517,9 @@ function renderLibrary(s: Snapshot): void {
   const name = $<Field>("sceneName");
   if (document.activeElement?.id !== "sceneName") name.value = s.scene.name;
   const where = whereLabel(s, s.scene.place, s.scene.folder);
-  $("sceneWhere").textContent = where ? `In ${where}. Saved after every change.` : s.scene.file ? `In ${s.scene.file}. Saved after every change.` : "";
+  const noScene = !s.scene.file;
+  $("sceneWhere").textContent = noScene ? "No scene is open. Open one or make one on the Library tab." : where ? `In ${where}. Saved after every change.` : `In ${s.scene.file}. Saved after every change.`;
+  for (const id of ["sceneName", "saveScene", "saveAsScene", "closeScene", "saveAsHere"]) $(id).toggleAttribute("disabled", noScene);
   $("sceneWhere").title = s.scene.file ?? "";
 
   // The Library tab.
@@ -535,6 +537,7 @@ function renderLibrary(s: Snapshot): void {
   else if (picked?.kind === "folder") $("pickedText").textContent = `Folder: ${whereLabel(s, picked.place, picked.folder)}`;
   else $("pickedText").textContent = "Pick a scene to open or show it, or a folder for a new scene. A double-click opens a scene.";
   $("pickedOpen").toggleAttribute("disabled", !sc || open || !!sc.error);
+  $("pickedClose").toggleAttribute("disabled", !open);
   $("pickedOn").toggleAttribute("disabled", !sc || open || !!sc.error);
   $("pickedOn").textContent = on ? "Hide from world" : "Show in world";
   const t = target(s);
@@ -615,6 +618,8 @@ $("shelves").addEventListener(
   },
   true,
 );
+$("pickedClose").addEventListener("click", () => post({ type: "scene.close" }));
+$("closeScene").addEventListener("click", () => post({ type: "scene.close" }));
 $("pickedOpen").addEventListener("click", () => picked?.kind === "scene" && post({ type: "scene.open", file: picked.file }));
 // The label flips under the cursor, so a double-click would show and hide at once: one press.
 let lastShow = 0;

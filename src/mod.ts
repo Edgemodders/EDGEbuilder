@@ -58,8 +58,9 @@ try {
 }
 // A Library or project scene moved or deleted since; a working scene not written yet is no news.
 const lastGone = session.open && !fs.existsSync(session.open) && path.resolve(session.open).toLowerCase() !== WorkingScene.toLowerCase() ? session.open : undefined;
-const scene = new Scene(session.open && !lastGone ? session.open : WorkingScene);
-scene.load();
+// An empty `open`: the player closed the scene, and none is open (a first start opens the working scene).
+const scene = new Scene(session.open === "" ? "" : session.open && !lastGone ? session.open : WorkingScene);
+if (scene.file) scene.load();
 /** Scenes shown but not edited (B3-2), by file: how many objects REDnode's world.load placed, once the world is ready. */
 const onScenes = new Map<string, number>((session.on ?? []).filter((f) => fs.existsSync(f) && f !== scene.file).map((f) => [f, 0]));
 let libraryRoot = readLibraryRoot();
@@ -1022,6 +1023,7 @@ function runSearch(): void {
 }
 
 async function drop(assetPath: string, appearance?: string, at?: { origin: V3; dir: V3 }): Promise<void> {
+  if (!scene.file) return say(NoScene, "warn");
   const kind = kindOf(assetPath);
   if (!kind) return say(`${assetPath} is not a mesh or an entity template.`, "warn");
   if (state.world !== "ready") await checkWorld();
@@ -1145,6 +1147,7 @@ async function cut(ids: string[]): Promise<void> {
 
 /** Ctrl+V: the copies, their box's bottom middle where the line through the cursor meets a surface. */
 async function paste(at?: { origin: V3; dir: V3 }): Promise<void> {
+  if (!scene.file) return say(NoScene, "warn");
   if (!clipboard) return say("Nothing copied yet: select something and press Ctrl+C.", "warn");
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
@@ -1346,6 +1349,19 @@ async function switchTo(data: SceneFile, file: string): Promise<void> {
   writeSession();
 }
 
+const NoScene = "No scene is open: open one or make one on the Library tab.";
+
+/** Its objects leave the world and nothing is open; the file is already saved. Undo starts again with the next scene. */
+async function closeScene(): Promise<void> {
+  if (!scene.file) return say("No scene is open.", "info");
+  const was = scene.name;
+  const where = whereText(scene.file);
+  await switchTo({ format: 1, name: "", groups: [], objects: [] }, "");
+  scanLibrary();
+  scene.onSave?.();
+  say(`Closed ${was}. It is saved in ${where}; the Library tab opens it again.`, "ok");
+}
+
 async function openScene(file: string): Promise<void> {
   if (sameFile(file, scene.file)) return say(`${scene.name} is already open.`, "info");
   let data: SceneFile;
@@ -1394,11 +1410,12 @@ async function newScene(name: string, place: Place, folder?: string): Promise<vo
   await switchTo({ format: 1, name: t.name, groups: [], objects: [] }, t.file);
   scene.save();
   scanLibrary();
-  say(`New scene ${t.name} in ${whereText(t.file)}. ${was} is saved where it was; the Library tab opens it again.`, "ok");
+  say(`New scene ${t.name} in ${whereText(t.file)}.${was ? ` ${was} is saved where it was; the Library tab opens it again.` : ""}`, "ok");
 }
 
 /** A copy of the open scene, which becomes the open scene; its previews and history stay. */
 function saveAs(name: string, place: Place, folder?: string): void {
+  if (!scene.file) return say(NoScene, "warn");
   const t = attempt(() => newFile(name, place, folder));
   if (!t) return;
   const was = scene.file;
@@ -1412,6 +1429,7 @@ function saveAs(name: string, place: Place, folder?: string): void {
 
 /** A new name, and the file renamed to match (in the same folder). */
 function renameScene(name: string): void {
+  if (!scene.file) return publish();
   name = name.trim();
   if (!name || name === scene.name) return publish();
   const was = scene.file;
@@ -1571,6 +1589,7 @@ export interface ServiceRef {
 export function sceneRefs(which?: string): { scene: string; file: string; refs: ServiceRef[] } {
   let data: SceneFile;
   let file = scene.file;
+  if (!which && !scene.file) throw new Error("No scene is open: name one, as scenes() gives them");
   if (!which || sameFile(which, scene.file) || which.toLowerCase() === scene.name.toLowerCase()) data = scene.data();
   else {
     const all = listScenes();
@@ -1675,6 +1694,9 @@ channel.on<PageMessage>((m) => {
         break;
       case "scene.new":
         await inTurn("New scene", () => newScene(m.name, m.place, m.folder));
+        break;
+      case "scene.close":
+        await inTurn("Close scene", () => closeScene());
         break;
       case "scene.saveAs":
         await inTurn("Save as", () => saveAs(m.name, m.place, m.folder));
@@ -1829,7 +1851,7 @@ if (typeof ui?.onSolo === "function") {
   });
 }
 
-console.log(`EDGEbuilder ${__VERSION__} starting; data folder ${pkg.dataDir}; scene ${scene.name} (${scene.file}), ${scene.objects.length} objects; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${__VERSION__} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 // The open scene is always a file, so the Library tab lists it from the start.
 if (!fs.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();

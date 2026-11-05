@@ -794,7 +794,9 @@ var Scene = class {
   }
   /** Called after each save, for the service's scene-changed event. */
   onSave;
+  /** No file: the scene was closed, and nothing is open. */
   save() {
+    if (!this.file) return;
     fs4.mkdirSync(path4.dirname(this.file), { recursive: true });
     fs4.writeFileSync(this.file, JSON.stringify(this.data(), null, 2));
     this.onSave?.();
@@ -1002,8 +1004,8 @@ try {
 } catch {
 }
 var lastGone = session.open && !fs6.existsSync(session.open) && path6.resolve(session.open).toLowerCase() !== WorkingScene.toLowerCase() ? session.open : void 0;
-var scene = new Scene(session.open && !lastGone ? session.open : WorkingScene);
-scene.load();
+var scene = new Scene(session.open === "" ? "" : session.open && !lastGone ? session.open : WorkingScene);
+if (scene.file) scene.load();
 var onScenes = new Map((session.on ?? []).filter((f) => fs6.existsSync(f) && f !== scene.file).map((f) => [f, 0]));
 var libraryRoot = readLibraryRoot();
 var suggestedRoot = suggestedLibraryRoot();
@@ -1767,6 +1769,7 @@ function runSearch() {
   publish();
 }
 async function drop(assetPath, appearance, at) {
+  if (!scene.file) return say(NoScene, "warn");
   const kind = kindOf(assetPath);
   if (!kind) return say(`${assetPath} is not a mesh or an entity template.`, "warn");
   if (state.world !== "ready") await checkWorld();
@@ -1864,6 +1867,7 @@ async function cut(ids) {
   say(`Cut ${n} object${n === 1 ? "" : "s"}. Ctrl+V pastes ${n === 1 ? "it" : "them"} where the cursor points; Ctrl+Z puts ${n === 1 ? "it" : "them"} back.`, "ok");
 }
 async function paste(at) {
+  if (!scene.file) return say(NoScene, "warn");
   if (!clipboard) return say("Nothing copied yet: select something and press Ctrl+C.", "warn");
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
@@ -2026,6 +2030,16 @@ async function switchTo(data, file) {
   scene.take(data, file);
   writeSession();
 }
+var NoScene = "No scene is open: open one or make one on the Library tab.";
+async function closeScene() {
+  if (!scene.file) return say("No scene is open.", "info");
+  const was = scene.name;
+  const where = whereText(scene.file);
+  await switchTo({ format: 1, name: "", groups: [], objects: [] }, "");
+  scanLibrary();
+  scene.onSave?.();
+  say(`Closed ${was}. It is saved in ${where}; the Library tab opens it again.`, "ok");
+}
 async function openScene(file) {
   if (sameFile(file, scene.file)) return say(`${scene.name} is already open.`, "info");
   let data;
@@ -2068,9 +2082,10 @@ async function newScene(name, place2, folder) {
   await switchTo({ format: 1, name: t.name, groups: [], objects: [] }, t.file);
   scene.save();
   scanLibrary();
-  say(`New scene ${t.name} in ${whereText(t.file)}. ${was} is saved where it was; the Library tab opens it again.`, "ok");
+  say(`New scene ${t.name} in ${whereText(t.file)}.${was ? ` ${was} is saved where it was; the Library tab opens it again.` : ""}`, "ok");
 }
 function saveAs(name, place2, folder) {
+  if (!scene.file) return say(NoScene, "warn");
   const t = attempt(() => newFile(name, place2, folder));
   if (!t) return;
   const was = scene.file;
@@ -2082,6 +2097,7 @@ function saveAs(name, place2, folder) {
   say(`Saved as ${t.name} in ${whereText(t.file)}; that is the open scene now. The one before is still in ${whereText(was)}.`, "ok");
 }
 function renameScene(name) {
+  if (!scene.file) return publish();
   name = name.trim();
   if (!name || name === scene.name) return publish();
   const was = scene.file;
@@ -2199,6 +2215,7 @@ function listScenes() {
 function sceneRefs(which) {
   let data;
   let file = scene.file;
+  if (!which && !scene.file) throw new Error("No scene is open: name one, as scenes() gives them");
   if (!which || sameFile(which, scene.file) || which.toLowerCase() === scene.name.toLowerCase()) data = scene.data();
   else {
     const all = listScenes();
@@ -2298,6 +2315,9 @@ channel.on((m) => {
         break;
       case "scene.new":
         await inTurn("New scene", () => newScene(m.name, m.place, m.folder));
+        break;
+      case "scene.close":
+        await inTurn("Close scene", () => closeScene());
         break;
       case "scene.saveAs":
         await inTurn("Save as", () => saveAs(m.name, m.place, m.folder));
@@ -2431,7 +2451,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.6.3"} starting; data folder ${pkg.dataDir}; scene ${scene.name} (${scene.file}), ${scene.objects.length} objects; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.6.4"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs6.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

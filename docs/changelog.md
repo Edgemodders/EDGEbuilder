@@ -12,6 +12,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 **New**
 
+- Close on the Scene tab and the Library tab's Picked panel: the scene's objects leave the world and no scene is open, also at the next start. The scene stays saved.
 - An Objects drawer beside the window, from the Library tab: every object of the picked scene or the open one. Two quick clicks fly the camera to an object and select it, opening its scene first if needed; a trash icon on each row deletes it after asking, wherever it and the camera are.
 - After Save as (Ctrl+Shift+S), only Save open scene here is offered, so a copy cannot come out empty by mistake.
 - The open scene's objects near you come back by themselves when a save loads; those over 300 m away still wait for Rebuild previews near them.
