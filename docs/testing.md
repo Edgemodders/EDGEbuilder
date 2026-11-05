@@ -25,7 +25,7 @@ Last updated 2026-10-30.
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
-| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 (0.6.5) waiting |
+| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 passed on 0.6.5, step 29 with a question left |
 
 ## Automated
 
@@ -333,6 +333,8 @@ The owner reports the other steps done on 0.6.0. Step 13 passed on 0.6.0: with t
 
 **REDnode #41 shipped in REDnode 0.58.0** and passed its own test on 2026-11-04: `alwaysSpawned` brought objects in at 300 m, 1 km and 4 km within 0.1 s, and 200 boxes spawned at about 46 ms each with the frame rate steady. **0.6.5** spawns every preview, shown scene and the editor camera with it, and drops the 300 m limit, so an open scene's objects are all in the world wherever V is. It needs REDnode 0.58.0. Retest: 19 and 28 to 31. The steps above that mention "far away" describe the builds before it.
 
+**Retest on 0.6.5 (2026-11-04), the owner's report: passed.** The log agrees: `Opened Market Corner copy 2: 25 of 25 objects in the world`, no preview refused, Show and Hide far off, and after a save `25 of 25 objects back`. **Step 29 left one question:** Drop at click and Drop to floor found nothing, but the crates were at z 356 to 358, about 240 m above Market Corner's crates, past Drop to floor's 100 m reach. So whether the ground has collision far from V is still unknown.
+
 Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck). Needs REDnode 0.56.1 or later (scenes that are shown use `world.load` with `wait: false`). Named scenes saved after every change, in the Library, the open REDcode project or This PC; the Library tab; the last scene reopened at start; other scenes shown beside the open one; EDGEbuilder's service; the page on any screen width ([design](design.md#scenes-and-the-library-b3-2)). Checked before the game in REDnode's host on 2026-11-03: the tab, the folders, New, Save as, Rename, Open, the refusals (a name taken, a folder outside the Library), `scenes()` and `refs()` through the MCP server, and the page at 2580 x 1080. Start somewhere open with Edit on.
 
 | # | Check | Expected |
@@ -367,4 +369,4 @@ Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck).
 | 28 | 0.6.5. Fly far from V, then open a scene with objects near and far from V, and Rebuild previews | Every object comes in, wherever it is, with no message about far objects and no busy bar that hangs. Back near V, they are all still there |
 | 29 | Far from V: select a crate, **Drop to floor**; Ctrl+Z; **Drop at click** on the ground there | The crate lands on the ground if the game has it loaded there; if not, a message says so. Note what happens: the ground's collision far from V is untried |
 | 30 | Show a scene whose objects are far from V; fly there; Hide | Its objects are there from the first press, and Hide takes them out |
-| 31 | Far from V, with Edit on, load a save | The camera ends, V's view comes back, and the open scene's objects all come back, none twice |
+| 31 | Far from V, with Edit on, load a save | Edit stays on and the editor camera starts again at V's view; the open scene's objects all come back, none twice |
