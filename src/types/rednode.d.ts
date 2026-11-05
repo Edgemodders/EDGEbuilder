@@ -25,6 +25,8 @@ declare module "rednode" {
     photoMode: boolean;
     scene: boolean;
     mainMenu: boolean;
+    /** V is in the world: a save has loaded and no other load has started (REDnode 0.47.0 and later). */
+    world: boolean;
     overlay: "passive" | "interactive" | "hidden";
   }
 

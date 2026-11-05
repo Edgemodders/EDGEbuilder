@@ -1177,6 +1177,8 @@ async function rebuild(): Promise<void> {
  */
 const PreviewsBackDelay = 2000;
 let previewsTimer: ReturnType<typeof setTimeout> | undefined;
+/** Previews are waiting for V to be in the world: `game.onState` starts them. */
+let backWhenIn = false;
 function previewsBackSoon(): void {
   clearTimeout(previewsTimer);
   previewsTimer = setTimeout(() => void inTurn("Put previews back", () => previewsBack()), PreviewsBackDelay);
@@ -1186,6 +1188,12 @@ async function previewsBack(): Promise<void> {
   if (state.world !== "ready") return;
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light");
   if (!away.length) return;
+  // The first OnGameAttached of a game start comes during the load: REDnode can spawn by then, but what
+  // it spawns goes again as the load goes on, and it cannot find the entity (0.6.6, game start).
+  if (!(await game.state()).world) {
+    backWhenIn = true;
+    return;
+  }
   // Never two of one object: previews from before a repeated OnGameAttached may still stand.
   const kept = new Set(scene.objects.map((o) => o.entityId));
   kept.add(editorCam?.id);
@@ -1743,6 +1751,10 @@ channel.on<PageMessage>((m) => {
 // The host links to the game, or loses it: the world may have become usable, or not.
 let linked: boolean | undefined;
 game.onState((s) => {
+  if (s.world && backWhenIn) {
+    backWhenIn = false;
+    previewsBackSoon();
+  }
   if (s.connected === linked) return;
   linked = s.connected;
   if (!s.connected) {

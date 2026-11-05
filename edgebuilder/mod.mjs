@@ -1895,6 +1895,7 @@ async function rebuild() {
 }
 var PreviewsBackDelay = 2e3;
 var previewsTimer;
+var backWhenIn = false;
 function previewsBackSoon() {
   clearTimeout(previewsTimer);
   previewsTimer = setTimeout(() => void inTurn("Put previews back", () => previewsBack()), PreviewsBackDelay);
@@ -1903,6 +1904,10 @@ async function previewsBack() {
   if (state.world !== "ready") return;
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light");
   if (!away.length) return;
+  if (!(await game.state()).world) {
+    backWhenIn = true;
+    return;
+  }
   const kept = new Set(scene.objects.map((o) => o.entityId));
   kept.add(editorCam?.id);
   for (const s of world.spawned?.() ?? []) if (!s.scene && s.attached && !kept.has(s.id.hash)) await world.remove(s.id).catch(() => false);
@@ -2367,6 +2372,10 @@ channel.on((m) => {
 });
 var linked;
 game.onState((s) => {
+  if (s.world && backWhenIn) {
+    backWhenIn = false;
+    previewsBackSoon();
+  }
   if (s.connected === linked) return;
   linked = s.connected;
   if (!s.connected) {
@@ -2422,7 +2431,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.6.6"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.6.7"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs6.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {
