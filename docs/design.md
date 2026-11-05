@@ -233,7 +233,7 @@ For EDGEdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` dep
 | Driving the player as the camera has side effects | Restore everything on exit; block damage while editing; test with saves, menus and fast travel |
 | REDbridge beside the game is heavy | WolvenKit in process is a few hundred MB; the game wants 12 to 16 GB. Start the bridge on demand, stop it after the bake |
 | The baked sector does not load, or streams wrongly | Answered by the bake probe on 2026-10-30: a baked sector loads on 2.5 through ArchiveXL's `streaming: blocks:` ([REDbridge #13](https://github.com/Edgemodders/REDbridge/issues/13)), streams at the scene's distances, and the default (`max(40, 11 x size)`) matches the game's own crates |
-| A baked mesh has no collision | Found by the bake probe: a `worldMeshNode` only draws. Entities with an `entPhysicalMeshComponent` are solid. Solid meshes need another node type (the game's props use instanced destructible meshes or cooked collision nodes); B4 probes which before it bakes a Solid switch |
+| A baked mesh has no collision | Found by the bake probe: a `worldMeshNode` only draws. Entities with an `entPhysicalMeshComponent` are solid. Answered by round 3 (2026-11-05): a `worldInstancedDestructibleMeshNode`, Kinematic, not destructible, no impulse, is solid, grows with scale, stays put and looks the same. A mesh with no collision data stays not solid, and `worldCollisionNode` boxes as written did nothing, so such a mesh needs an entity with a collider |
 | Drifting into World Builder's shapes | Design from behaviours and the game API, as this page does; review for it at each phase |
 
 ## Roadmap

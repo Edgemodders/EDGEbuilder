@@ -26,7 +26,7 @@ Last updated 2026-10-30.
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
 | [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 passed on 0.6.5; 32 to 34 passed on 0.6.7; released as 0.6.7 |
-| [B4 Bake](#b4-bake) | In the game | B4 | | The questions are written; round 3, the solid probe, waits for its test |
+| [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. The panel's questions wait for B4-1 |
 
 ## Automated
 
@@ -392,7 +392,7 @@ Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck).
 
 ### B4 Bake
 
-Every question B4 has to settle, so nothing critical rests on an assumption. Each says what depends on it and which test proves it. A question moves to **Proven** only on what was seen in game or read in a log. Nothing here is proven yet, but for what rounds 1 and 2 of the [bake probe](#bake-probe) showed.
+Every question B4 has to settle, so nothing critical rests on an assumption. Each says what depends on it and which test proves it. A question moves to **Proven** only on what was seen in game or read in a log. Round 3's answers are under its results; the rest wait for their tests.
 
 **What the game does, read with REDbridge's `sector.nodes` in the 40 sectors around the probe's street (2026-11-05).** Its solid static props are drawn by `worldCookedStaticMeshNode` (16,682 items), with collision apart in `worldCookedCollisionNode` (715 nodes), which holds shapes such as boxes at world positions, with presets such as `World Static` and materials such as `metal.physmat`. WolvenKit reads that node. `worldInstancedDestructibleMeshNode` (8,034 items) and `worldDynamicMeshNode` take physics from the mesh itself; their node data has the same flags and priority as a mesh node's. The game's `simulationType` there is Dynamic or Kinematic, never Static in these sectors. The older `worldCollisionNode` holds the same kind of shapes and WolvenKit writes it, but none of these sectors uses it. New shapes with exact mesh form would need cooked PhysX data, and whether anything in reach can make that is unknown.
 
@@ -457,7 +457,44 @@ Every question B4 has to settle, so nothing critical rests on an assumption. Eac
 | 10 | Mod on again. Note what shots do at each solid crate, if any people or cars pass | Do bullets stop? People, if any: around or through? | S10 |
 | 11 | Quit. Claude reads the ArchiveXL, RED4ext and REDnode logs | `All streaming blocks merged`, no errors | S11 |
 
-**Results:** waiting. Claude reads the logs; the rest is what you see, and rough words are enough ("b solid, did not move").
+**Results (2026-11-05, game 2.5, REDnode 0.58.0, ArchiveXL 1.28.6, the owner's report and the logs): mesh physics works; these boxes do not.**
+
+| Crate | Shows | V | Bullets | Melee | Car |
+|---|---|---|---|---|---|
+| `a_plain` | Yes | Walks through | Pass | Pass | |
+| `b_kinematic` | Yes | Stops, stands on it | Hit | Hit | Stops |
+| `c_static` | Yes | Stops; harder to get on top of, but stood on it | Hit | Hit | Stops |
+| `d_impulse` | Yes | Walks through | Pass | Hit | Goes through |
+| `e_dynamic` | Yes | Walks through | Pass * | Pass * | |
+| `f_big` | Double | Stops at its doubled size, stands on it and can drop inside | Hit | Hit | |
+| `g_box` | Yes | Walks through | Pass | Pass | Goes through |
+| `h_turned` | Yes | Stops, stood on it | Hit | Hit | |
+| `i_box_turned` | Yes | Walks through | Pass | Pass | |
+| `j_sofa` | Yes | Walks through | Pass | Pass | |
+| `k_sofa_box` | Yes | Walks through | Pass | Pass | |
+| `l_red` | Red | Stops, stands on it | Hit | Hit | |
+
+\* The note for step 4 says "Crate A" twice; the second, between D and F, is read as E.
+
+The logs: all five game starts of the test loaded; ArchiveXL merged the block in the four with the mod on, with no warnings or errors in any of the five, and none in the latest RED4ext log; no crash report. The start with the mod off (08:22) loaded the save, and EDGEbuilder's scene came back.
+
+| # | Answer | State |
+|---|---|---|
+| S1 | **Solid: instanced destructible, Kinematic or Static, no impulse.** Not solid: Kinematic with impulse, `worldDynamicMeshNode`, the plain mesh | Proven |
+| S2 | `b` and `c` stay put and stop a car; nothing moved or broke under shots and melee | Proven for these; `f`, `h` and `l` not driven into |
+| S3 | Collision grows with scale | Proven |
+| S4 | A turned crate stands turned, and `h` and `i` lean alike, so a bake's rotation is right. `h` is solid, but V stays upright on anything, so whether the collision leans with the crate is **still open** | Half proven |
+| S5 | A mesh with no collision data shows, and is not solid. Neither route makes it solid | Proven. Of 73 crate-sized meshes sampled among containers and furniture, 32 have no data, so this is common |
+| S6 | Moot, as boxes did nothing | Open with them |
+| S7 | Same look and shadows; `l_red` is red | Proven, but for how far each is seen, which the notes do not say |
+| S8 | All stood where they were after 150 m away and back. Nothing could be knocked, so a knocked object's return does not arise for `b` or `c`. Drawn before solid: not noted | Mostly proven |
+| S9 | Crates gone with the mod off, and the save loads | Proven for removal; nothing was knocked |
+| S10 | Bullets and melee stop at solid crates, and cars too. People: for the city test, B4-1 | Part proven |
+| S11 | No crash, no errors | Proven |
+
+**What it decides.** The second row of "what the answers decide" did not quite come: boxes did nothing, so it is the third. **Solid means an instanced destructible mesh node, Kinematic, `isDestructible` 0, no impulse**: the mesh's real shape, as `f_big` shows with its open top; Kinematic rather than Static because the game's own nodes use it and V got onto it more easily. A mesh with no collision data cannot be made solid this way, so the panel must know which those are and say so. The way to make one solid is an entity with a collider, as `crate_red.ent` in round 2.
+
+**Boxes are not ruled out for good:** only this form of them. `worldCollisionNode`'s `sectorHash`, `resourceVersion` and proxy type were best guesses from the cooked form, and no sector sampled uses the plain node.
 
 #### Questions for the Bake panel: the test of B4-1
 
