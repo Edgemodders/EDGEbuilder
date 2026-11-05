@@ -426,6 +426,11 @@ async function inFrontOfPlayer(): Promise<Placement> {
   return { position: [p.X + f.X * SpawnDistance, p.Y + f.Y * SpawnDistance, p.Z], yaw };
 }
 
+/** How far Drop at click and Drop to floor look for a surface. */
+const SurfaceReach = 1000;
+/** The game's ground is solid only near the camera (B3-2 test, step 29), so a miss may not mean there is no ground. */
+const NoSurface = `within ${SurfaceReach} m. The ground is solid only near the camera: fly closer and try again.`;
+
 /**
  * Where a drop lands. Drop at click: on the first surface along the line through the clicked spot
  * (or 8 m along it when there is none). Else, with the editor camera, on the first surface the camera
@@ -433,8 +438,8 @@ async function inFrontOfPlayer(): Promise<Placement> {
  */
 async function dropPlace(at?: { origin: V3; dir: V3 }): Promise<Placement> {
   if (at) {
-    const { hit } = await raycast(at.origin, add(at.origin, mul(at.dir, 200)));
-    if (!hit) console.log("Drop at click: nothing there within 200 m; dropping 8 m along the line");
+    const { hit } = await raycast(at.origin, add(at.origin, mul(at.dir, SurfaceReach)));
+    if (!hit) console.log(`Drop at click: nothing there within ${SurfaceReach} m; dropping 8 m along the line`);
     return { position: hit ?? add(at.origin, mul(at.dir, 8)), yaw: (Math.atan2(at.dir[0], -at.dir[1]) * 180) / Math.PI };
   }
   if (editorCam) {
@@ -640,20 +645,20 @@ async function dropToFloor(ids: string[]): Promise<void> {
     fell = o.transform.position[2] - t.position[2];
     items.push({ id: o.id, transform: t });
   }
-  if (!items.length) return say(objects.length === 1 ? "Nothing below to drop onto within 100 m." : "Nothing below any of them to drop onto within 100 m.", "warn");
+  if (!items.length) return say(objects.length === 1 ? `Nothing solid below ${NoSurface}` : `Nothing solid below any of them ${NoSurface}`, "warn");
   await setTransforms(items);
   const missed = objects.length - items.length;
   if (objects.length === 1) say(`Dropped ${objects[0].id} to the floor, ${fell.toFixed(2)} m down.`, "ok");
-  else say(`Dropped ${items.length} objects to the floor${missed ? `; ${missed} had nothing below within 100 m` : ""}.`, missed ? "warn" : "ok");
+  else say(`Dropped ${items.length} objects to the floor${missed ? `; ${missed} had nothing solid below ${NoSurface}` : ""}.`, missed ? "warn" : "ok");
 }
 
-/** Where an object would stand on whatever is below it, or nothing within 100 m. */
+/** Where an object would stand on whatever is below it, or nothing within reach. */
 async function floorUnder(o: SceneObject): Promise<SceneTransform | undefined> {
   const [x, y, z] = o.transform.position;
   const lowest = (o.bounds?.min[2] ?? 0) * o.transform.scale[2];
   // Start just above the object's base, so an entity's own colliders above it are not hit.
   const startZ = z + lowest + 0.05;
-  const { hit, tried } = await raycast([x, y, startZ], [x, y, startZ - 100]);
+  const { hit, tried } = await raycast([x, y, startZ], [x, y, startZ - SurfaceReach]);
   const floor = hit?.[2];
   console.log(`Drop to floor ${o.id} from z ${startZ.toFixed(2)}: ${tried.join("; ")}`);
   return floor === undefined ? undefined : { ...o.transform, position: [x, y, floor - lowest] };

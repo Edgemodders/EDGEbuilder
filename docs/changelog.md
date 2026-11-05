@@ -12,6 +12,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 **New**
 
+- Drop at click and Drop to floor look up to 1000 m for a surface. The game's ground is solid only near the camera, and Drop to floor's message now says to fly closer when it finds nothing.
 - A scene's objects are all in the world wherever V is, so you can fly to any of them and work there; the old 300 m limit is gone. Needs REDnode 0.58.0.
 - Close on the Scene tab and the Library tab's Picked panel: the scene's objects leave the world and no scene is open, also at the next start. The scene stays saved.
 - An Objects drawer beside the window, from the Library tab: every object of the picked scene or the open one. Two quick clicks fly the camera to an object and select it, opening its scene first if needed; a trash icon on each row deletes it after asking, wherever it and the camera are.

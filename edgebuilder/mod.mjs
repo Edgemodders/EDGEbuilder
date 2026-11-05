@@ -1306,10 +1306,12 @@ async function inFrontOfPlayer() {
   const yaw = Math.atan2(f.X, -f.Y) * 180 / Math.PI;
   return { position: [p.X + f.X * SpawnDistance, p.Y + f.Y * SpawnDistance, p.Z], yaw };
 }
+var SurfaceReach = 1e3;
+var NoSurface = `within ${SurfaceReach} m. The ground is solid only near the camera: fly closer and try again.`;
 async function dropPlace(at) {
   if (at) {
-    const { hit } = await raycast(at.origin, add(at.origin, mul(at.dir, 200)));
-    if (!hit) console.log("Drop at click: nothing there within 200 m; dropping 8 m along the line");
+    const { hit } = await raycast(at.origin, add(at.origin, mul(at.dir, SurfaceReach)));
+    if (!hit) console.log(`Drop at click: nothing there within ${SurfaceReach} m; dropping 8 m along the line`);
     return { position: hit ?? add(at.origin, mul(at.dir, 8)), yaw: Math.atan2(at.dir[0], -at.dir[1]) * 180 / Math.PI };
   }
   if (editorCam) {
@@ -1474,17 +1476,17 @@ async function dropToFloor(ids) {
     fell = o.transform.position[2] - t.position[2];
     items.push({ id: o.id, transform: t });
   }
-  if (!items.length) return say(objects.length === 1 ? "Nothing below to drop onto within 100 m." : "Nothing below any of them to drop onto within 100 m.", "warn");
+  if (!items.length) return say(objects.length === 1 ? `Nothing solid below ${NoSurface}` : `Nothing solid below any of them ${NoSurface}`, "warn");
   await setTransforms(items);
   const missed = objects.length - items.length;
   if (objects.length === 1) say(`Dropped ${objects[0].id} to the floor, ${fell.toFixed(2)} m down.`, "ok");
-  else say(`Dropped ${items.length} objects to the floor${missed ? `; ${missed} had nothing below within 100 m` : ""}.`, missed ? "warn" : "ok");
+  else say(`Dropped ${items.length} objects to the floor${missed ? `; ${missed} had nothing solid below ${NoSurface}` : ""}.`, missed ? "warn" : "ok");
 }
 async function floorUnder(o) {
   const [x, y, z] = o.transform.position;
   const lowest = (o.bounds?.min[2] ?? 0) * o.transform.scale[2];
   const startZ = z + lowest + 0.05;
-  const { hit, tried } = await raycast([x, y, startZ], [x, y, startZ - 100]);
+  const { hit, tried } = await raycast([x, y, startZ], [x, y, startZ - SurfaceReach]);
   const floor = hit?.[2];
   console.log(`Drop to floor ${o.id} from z ${startZ.toFixed(2)}: ${tried.join("; ")}`);
   return floor === void 0 ? void 0 : { ...o.transform, position: [x, y, floor - lowest] };
@@ -2420,7 +2422,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.6.5"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.6.6"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs6.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {
