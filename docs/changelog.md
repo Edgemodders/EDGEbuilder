@@ -10,6 +10,8 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.7.3 (2026-11-05)
+
 **New**
 
 - The Bake tab: bake the open scene into the REDcode project open in VS Code, as a streaming sector of its own. It checks the scene first, names the mods it needs, says when the scene changed since the last bake, and lists the project's bakes, which you can take out again. Pack and install the project, and the objects stand in the world from the next game start, with EDGEbuilder off.
