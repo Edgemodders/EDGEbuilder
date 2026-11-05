@@ -424,37 +424,37 @@ Every question B4 has to settle, so nothing critical rests on an assumption. Eac
 
 #### Round 3: the crates
 
-`scripts/solid-probe.mjs` bakes these in one sector with REDbridge's main (0.12.0, unreleased), rewriting each node through CR2W JSON, so no REDbridge change is needed to learn the answer. WolvenKit's reader read everything back as written. They stand in a row on the Watson street of rounds 1 and 2, y 1214, z 23, going west from x -1439, streaming to 120 m. The ground may not be level all the way: a crate slightly sunk or floating is no fault.
+`scripts/solid-probe.mjs` bakes these in one sector with REDbridge's main (0.12.0, unreleased), rewriting each node through CR2W JSON, so no REDbridge change is needed to learn the answer. WolvenKit's reader read everything back as written. The first build stood on the Watson street of rounds 1 and 2, where the row ran into a building, so the owner asked for it in the open: it now runs through the Badlands from (1840.9, -753.3, 51.8), 6 m ahead of where V stood, to (1871.3, -763.3, 53.0), east-south-east, streaming to 120 m. Each object stands at the height of the ground under it, asked of the game with a raycast. There are no people here, so S10's people wait for B4-1's test in the city.
 
-| Crate | x | What it is | For |
+| Crate | Metres along | What it is | For |
 |---|---|---|---|
-| `a_plain` | -1439 | Plain `worldMeshNode`, the reference | V walks through it, as before |
-| `b_kinematic` | -1442 | Instanced destructible, Kinematic | S1, S2: the one hoped for |
-| `c_static` | -1444 | Instanced destructible, Static, which the game's own never use | Does it show? S1, S2 |
-| `d_impulse` | -1447 | Instanced destructible, Kinematic, turns dynamic on impulse, as many of the game's are | Solid until knocked? S2, S8 |
-| `e_dynamic` | -1449 | `worldDynamicMeshNode`, asleep at the start | Can be pushed? S2, S8 |
-| `f_big` | -1453 | As `b`, scale 2 | S3 |
-| `g_box` | -1456 | Plain mesh with a `worldCollisionNode` box | S1, S6: do boxes work on 2.5? |
-| `h_turned` | -1459 | As `b`, turned 40 degrees and leaning 20, lifted 0.5 m | S4 |
-| `i_box_turned` | -1462 | As `g`, turned and leaning the same | S4, for a box. It should lean exactly as `h` does |
-| `j_sofa` | -1465 | As `b`, on a sofa with no collision data | S5 |
-| `k_sofa_box` | -1468 | The same sofa, plain, with a box | S5, S6 |
-| `l_red` | -1471 | As `b`, appearance `red` | S7 |
+| `a_plain` | 0 | Plain `worldMeshNode`, the reference | V walks through it, as before |
+| `b_kinematic` | 2.5 | Instanced destructible, Kinematic | S1, S2: the one hoped for |
+| `c_static` | 5 | Instanced destructible, Static, which the game's own never use | Does it show? S1, S2 |
+| `d_impulse` | 7.5 | Instanced destructible, Kinematic, turns dynamic on impulse, as many of the game's are | Solid until knocked? S2, S8 |
+| `e_dynamic` | 10 | `worldDynamicMeshNode`, asleep at the start | Can be pushed? S2, S8 |
+| `f_big` | 13.5 | As `b`, scale 2 | S3 |
+| `g_box` | 17 | Plain mesh with a `worldCollisionNode` box | S1, S6: do boxes work on 2.5? |
+| `h_turned` | 20 | As `b`, turned 40 degrees and leaning 20, lifted 0.5 m | S4 |
+| `i_box_turned` | 23 | As `g`, turned and leaning the same | S4, for a box. It should lean exactly as `h` does |
+| `j_sofa` | 26 | As `b`, on a sofa with no collision data | S5 |
+| `k_sofa_box` | 29 | The same sofa, plain, with a box | S5, S6 |
+| `l_red` | 32 | As `b`, appearance `red` | S7 |
 
 **Should the game crash on loading:** nothing is harmed. Switch the mod off in EDGEdeck and deploy, and it is gone. Tell Claude; `--skip` builds the row again without the likely cause (`c`, then the boxes), and the rest still answers.
 
 | # | Do | Note, for each crate | Answers |
 |---|---|---|---|
 | 1 | Game closed; `EDGEbuilder bake probe` on in EDGEdeck, deploy only it. Start the game, load a save | Does it load? | S11 |
-| 2 | Go to (-1439, 1214, 23), look west. Compare each with `a_plain`, at night or day as it comes | All twelve there? Same look and shadows? Is `l_red` red, `f_big` double? Walk back along the row to about 100 m: does any go sooner than the others? | S7 |
+| 2 | Go to the row's start and look along it. Compare each with `a_plain`, at night or day as it comes | All twelve there? Same look and shadows? Is `l_red` red, `f_big` double? Walk back along the row to about 100 m: does any go sooner than the others? | S7 |
 | 3 | Walk into each, then jump on top | Does V stop? At the object's side, or short of it, or inside it? Stand on it? Does it move? | S1, S6 |
 | 4 | Shoot each, then a melee hit. Then drive a car slowly into `b`, `c`, `g` and `d` | Does it move, break or stay? Does the car stop? | S2 |
 | 5 | `f_big`: walk around it, jump on top | Does V stop at its doubled size, or walk into it? | S3 |
 | 6 | `h_turned`, `i_box_turned`: walk around them, stand on them | Do they lean the same way? Does V follow the leaning shape, or an upright one? | S4 |
 | 7 | `j_sofa`, `k_sofa_box`: look, walk into, sit or stand on them | Does `j` show? Is it solid? Does `k`'s box fit the sofa, on all sides? | S5, S6 |
-| 8 | Knock what can be knocked. Walk 150 m east and come back, then run back fast or in a car | Is each back, and where: where it stood, or where it fell? Is any drawn but not yet solid when you reach it? | S8 |
+| 8 | Knock what can be knocked. Walk 150 m away and come back, then run back fast or in a car | Is each back, and where: where it stood, or where it fell? Is any drawn but not yet solid when you reach it? | S8 |
 | 9 | With something knocked: save. Load that save. Quit, start, load it again. Then quit, switch the mod off, deploy, and load the same save | Anything odd at each load? With the mod off: the crates gone and the save fine? | S9 |
-| 10 | Mod on again. Note what shots do at each solid crate, and watch people walking along the street near the row | Do bullets stop? Do people go around or through? | S10 |
+| 10 | Mod on again. Note what shots do at each solid crate, if any people or cars pass | Do bullets stop? People, if any: around or through? | S10 |
 | 11 | Quit. Claude reads the ArchiveXL, RED4ext and REDnode logs | `All streaming blocks merged`, no errors | S11 |
 
 **Results:** waiting. Claude reads the logs; the rest is what you see, and rough words are enough ("b solid, did not move").

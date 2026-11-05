@@ -4,7 +4,9 @@
 // The node-data entries stay as sector.build wrote them, but for the collision boxes: the game's own
 // instanced destructible and dynamic mesh nodes have the same flags and priority as a mesh node.
 //   npm run build
-//   node scripts/solid-probe.mjs <out folder> [--x X --y Y --z Z] [--skip id,id]
+//   node scripts/solid-probe.mjs <out folder> [--x X --y Y --z Z] [--yaw DEGREES] [--ground z,z,...] [--skip id,id]
+// --yaw is the way the row runs (the game's yaw: 0 north, 90 west). --ground is the ground's height under each
+// object, in row order, where it is not level; asked of the game with a raycast.
 // --skip leaves crates out, should one of them stop the game from loading.
 // EDGEBUILDER_BRIDGE (REDbridge with sector.nodes, 0.12.0 or later) and EDGEBUILDER_GAME as for the smoke test.
 // Writes <out>/project and <out>/mod (archive\pc\mod\...), for EDGEdeck.
@@ -18,7 +20,7 @@ const skip = args.includes("--skip") ? args[args.indexOf("--skip") + 1].split(",
 const exe = process.env.EDGEBUILDER_BRIDGE;
 const game = [process.env.EDGEBUILDER_GAME, "E:\\SteamLibrary\\steamapps\\common\\Cyberpunk 2077", "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Cyberpunk 2077"].find((p) => p && isGameFolder(p));
 if (!out || !exe || !game) {
-  console.error("usage: EDGEBUILDER_BRIDGE=<REDbridge.exe> node scripts/solid-probe.mjs <out folder> [--x X --y Y --z Z] [--skip id,id]");
+  console.error("usage: EDGEBUILDER_BRIDGE=<REDbridge.exe> node scripts/solid-probe.mjs <out folder> [--x X --y Y --z Z] [--yaw DEGREES] [--ground z,z,...] [--skip id,id]");
   process.exit(2);
 }
 const num = (name, fallback) => {
@@ -27,6 +29,9 @@ const num = (name, fallback) => {
 };
 // Default: the Watson street of rounds 1 and 2, going west.
 const start = [num("x", -1439.15), num("y", 1214.04), num("z", 23.07)];
+const yaw = (num("yaw", 90) * Math.PI) / 180;
+const along = [-Math.sin(yaw), Math.cos(yaw)];
+const ground = args.includes("--ground") ? args[args.indexOf("--ground") + 1].split(",").map(Number) : [];
 
 const name = "edgebuilder_bake_probe";
 const crate = "base\\environment\\decoration\\containers\\cargo\\cargo_crate\\cargo_crate_a.mesh";
@@ -125,7 +130,11 @@ const row = [
   { id: "j_sofa", west: 26, resource: sofa, note: "as b_kinematic, a mesh with no collision data", make: kinematic },
   { id: "k_sofa_box", west: 29, resource: sofa, note: "the same mesh, plain, with a collision box", make: (n) => n, box: true },
   { id: "l_red", west: 32, appearance: "red", note: "as b_kinematic, appearance red", make: kinematic },
-].filter((r) => !skip.includes(r.id));
+];
+row.forEach((r, i) => {
+  r.ground = ground[i] ?? start[2];
+});
+const kept = row.filter((r) => !skip.includes(r.id));
 
 // A name as the game hashes it (CName: FNV-1a, 64 bits).
 function hashName(text) {
@@ -206,7 +215,7 @@ const mod = path.resolve(out, "mod");
 fs.rmSync(path.resolve(out), { recursive: true, force: true });
 fs.mkdirSync(project, { recursive: true });
 
-for (const r of row) r.position = [start[0] - r.west, start[1], start[2] + (r.lift ?? 0)];
+for (const r of kept) r.position = [start[0] + along[0] * r.west, start[1] + along[1] * r.west, r.ground + (r.lift ?? 0)];
 const object = (r, id) => {
   const s = r.scale ?? 1;
   return {
@@ -223,7 +232,7 @@ const scene = {
   name,
   game: "2.5",
   groups: [],
-  objects: row.flatMap((r) => [object(r, r.id), ...(r.box ? [object(r, `${r.id}_collider`)] : [])]),
+  objects: kept.flatMap((r) => [object(r, r.id), ...(r.box ? [object(r, `${r.id}_collider`)] : [])]),
 };
 
 const bridge = new BridgeClient(exe, game);
@@ -248,7 +257,7 @@ try {
   if (nodes.length !== scene.objects.length) throw new Error(`expected ${scene.objects.length} nodes, found ${nodes.length}`);
   const expected = [];
   let n = 0;
-  for (const r of row) {
+  for (const r of kept) {
     nodes[n].Data = r.make(nodes[n].Data, 9000 + n);
     expected.push({ id: r.id, node: nodes[n].Data.$type, note: r.note });
     n++;
