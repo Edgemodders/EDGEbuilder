@@ -50,6 +50,25 @@ export interface InfoFrom {
   root?: string;
 }
 
+/** What sector.build wrote: the bake's files, in full and as game paths. */
+export interface SectorBuilt {
+  name: string;
+  sector: string;
+  block: string;
+  xl: string;
+  sectorPath: string;
+  blockPath: string;
+  nodes: number;
+  streamingBox: { min: number[]; max: number[] };
+  warnings: string[];
+}
+
+/** What sector.build takes: a project folder, a scene, and where to look for a project's or a mod's files (0.12.0 and later). */
+export interface SectorBuild extends InfoFrom {
+  project: string;
+  scene: unknown;
+}
+
 export class BridgeError extends Error {}
 
 /** What the mod needs from REDbridge, whether it is REDnode's shared one or a process of its own. */
@@ -59,6 +78,7 @@ export interface Bridge {
   list(prefix: string, offset: number, limit?: number): Promise<FileList>;
   meshInfoMany(paths: string[], from?: InfoFrom): Promise<MeshInfoResult[]>;
   openMod(archivePath: string): Promise<ModArchive>;
+  sectorBuild(params: SectorBuild): Promise<SectorBuilt>;
   stop(): void;
 }
 
@@ -77,6 +97,9 @@ export class KernelBridge implements Bridge {
   }
   openMod(archivePath: string): Promise<ModArchive> {
     return this.handle.call<ModArchive>("archive.openMod", { path: archivePath });
+  }
+  sectorBuild(params: SectorBuild): Promise<SectorBuilt> {
+    return this.handle.call<SectorBuilt>("sector.build", { ...params });
   }
   stop(): void {
     // REDnode owns the process and stops it when no package has used it for a while.
@@ -194,6 +217,10 @@ export class BridgeClient implements Bridge {
 
   openMod(archivePath: string): Promise<ModArchive> {
     return this.call<ModArchive>("archive.openMod", { path: archivePath });
+  }
+
+  sectorBuild(params: SectorBuild): Promise<SectorBuilt> {
+    return this.call<SectorBuilt>("sector.build", { ...params });
   }
 }
 

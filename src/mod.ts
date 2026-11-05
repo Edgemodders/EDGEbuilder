@@ -8,11 +8,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { api, channel, game, kernel, pkg, service, ui, world, type GameRef } from "rednode";
-import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge } from "./bridge";
+import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge, type SectorBuilt } from "./bridge";
 import { AssetIndex, kindOf } from "./index";
 import { ModSources, modArchives, modFolders, sceneNeeds } from "./sources";
+import { bakeHash, bakeInput, bakesIn, checkBake, deployedBakes, removeBake as removeBakeFiles, settleXl, writeRecord, type BakeProject } from "./bake";
 import { Scene, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
-import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
+import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
 import type { AssetEntry, AssetFrom, AssetInfo, AssetKind, PageMessage, Place, PlaceRoot, SceneObject, SceneTransform, Snapshot } from "./protocol";
@@ -92,6 +93,7 @@ const state: Snapshot = {
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
   scene: { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: [] },
   library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [] },
+  bake: { project: null, checks: [], stale: false, list: [] },
   selected: [],
   history: { undo: 0, redo: 0 },
   settings: { ...settings, settingsFile },
@@ -204,6 +206,7 @@ async function startKernelBridge(get: () => Promise<{ version: string | null; so
 
 async function bridgeReady(info: { version: string; archives: number; files: number }, source: string): Promise<void> {
   state.bridge = { status: "ready", path: source, version: info.version };
+  bakeSoon();
   gameKey = `${info.archives}-${info.files}`;
   console.log(`REDbridge ${info.version} ready (${source}), ${info.files} files in ${info.archives} archives`);
   publish();
@@ -301,6 +304,8 @@ interface RedcodeProject {
   modName: string;
   dir: string;
   archive: string;
+  raw: string;
+  resources: string;
 }
 
 let project: RedcodeProject | null = null;
@@ -328,6 +333,7 @@ function setProject(next: RedcodeProject | null): void {
       console.log("REDcode project closed");
     }
   }
+  bakeSoon();
   project = next;
   scanLibrary();
   scanProject();
@@ -405,6 +411,7 @@ async function checkWorld(): Promise<void> {
     return;
   }
   if (state.world === "ready" && before !== "ready") {
+    lookAtBakes();
     void inTurn("Show scenes that are on", () => reloadOn());
     previewsBackSoon();
   }
@@ -1194,6 +1201,8 @@ async function previewsBack(): Promise<void> {
     backWhenIn = true;
     return;
   }
+  lookAtBakes();
+  if (state.bake.inGame) return say(BakedOff(scene.name, state.bake.inGame), "info");
   // Never two of one object: previews from before a repeated OnGameAttached may still stand.
   const kept = new Set(scene.objects.map((o) => o.entityId));
   kept.add(editorCam?.id);
@@ -1350,6 +1359,8 @@ async function openScene(file: string): Promise<void> {
   scene.onSave?.();
   const n = scene.objects.length;
   if (state.world !== "ready") return say(`Opened ${scene.name} (${whereText(file)}), ${n} object${n === 1 ? "" : "s"}. Rebuild previews once a save is loaded.`, "ok");
+  lookAtBakes();
+  if (state.bake.inGame) return say(BakedOff(scene.name, state.bake.inGame), "info");
   const r = await spawnAll(scene.objects);
   const rest = r.failed ? [`${r.failed} the game did not place`] : [];
   say(`Opened ${scene.name} (${whereText(file)}): ${r.shown} of ${n} object${n === 1 ? "" : "s"} in the world${rest.length ? `; ${rest.join("; ")}` : ""}.`, r.failed ? "warn" : "ok");
@@ -1472,6 +1483,8 @@ async function reloadOn(): Promise<void> {
       continue;
     }
     try {
+      // Its bake is in the game: shown again it would stand twice. Show in world still asks for it.
+      if (inGameNow.has(slugOf(readSceneFile(file).name))) continue;
       n += await loadOn(file);
     } catch (err) {
       console.log(`${path.basename(file)} not shown: ${(err as Error).message}`);
@@ -1589,6 +1602,7 @@ export function sceneRefs(which?: string): { scene: string; file: string; refs: 
 /** scene-changed for connected packages, half a second after the last save. */
 let changedTimer: ReturnType<typeof setTimeout> | undefined;
 scene.onSave = () => {
+  bakeSoon();
   if (typeof service?.emit !== "function") return;
   clearTimeout(changedTimer);
   changedTimer = setTimeout(() => service.emit("scene-changed", { name: scene.name, file: scene.file, objects: scene.objects.length }), 500);
@@ -1701,6 +1715,16 @@ channel.on<PageMessage>((m) => {
         scanLibrary();
         publish();
         break;
+      case "bake":
+        await inTurn("Bake", () => bakeOpenScene());
+        break;
+      case "bake.refresh":
+        lookAtBakes();
+        publish();
+        break;
+      case "bake.remove":
+        await inTurn("Remove bake", () => removeBake(m.slug));
+        break;
       case "redo":
         await inTurn("Redo", () => travel(future, past, "Redo"));
         break;
@@ -1745,6 +1769,121 @@ channel.on<PageMessage>((m) => {
     }
   })().catch((err) => say(`${m.type}: ${(err as Error).message}`, "error"));
 });
+
+// ---- the bake (B4) --------------------------------------------------------------------------------
+//
+// One scene into the open REDcode project, through REDbridge's sector.build. bake.ts has what needs no
+// REDnode. A bake stands in the world from the next game start, as a sector of our own.
+
+/** The bakes in the game, by slug, as last looked at. */
+let inGameNow = new Map<string, string>();
+
+const BakedOff = (name: string, xl: string) => `${name} is baked and in the game (${xl}), so its previews stay off and nothing stands twice. Rebuild previews on the Scene tab brings them back to edit it.`;
+
+function bakeProject(): BakeProject | null {
+  return project ? { name: project.name, dir: project.dir, archive: project.archive, raw: project.raw, resources: project.resources } : null;
+}
+
+const needsOf = () => sceneNeeds(scene.objects.map((o) => o.resource), index.extra);
+
+/** What the Bake tab shows, from the project's files and the game's. */
+function lookAtBakes(): void {
+  const target = bakeProject();
+  const slug = slugOf(scene.name);
+  const list = bakesIn(target);
+  const current = scene.file ? list.find((b) => b.slug === slug) : undefined;
+  inGameNow = deployedBakes(gameDir());
+  const fromElsewhere = current?.file && !sameFile(current.file, scene.file) ? current : undefined;
+  state.bake = {
+    ...state.bake,
+    project: target ? { name: target.name, dir: target.dir } : null,
+    checks: checkBake({
+      file: scene.file,
+      name: scene.name,
+      objects: scene.objects,
+      project: target,
+      bridgeReady: !!bridge?.running && state.bridge.status === "ready",
+      needs: needsOf(),
+      sameNameFrom: fromElsewhere ? whereText(fromElsewhere.file!) : undefined,
+    }),
+    current,
+    stale: !!current?.hash && !fromElsewhere && current.hash !== bakeHash(scene.objects),
+    inGame: scene.file ? inGameNow.get(slug) : undefined,
+    list,
+  };
+}
+
+const bakeSoon = debounced(() => {
+  lookAtBakes();
+  publish();
+});
+
+async function bakeOpenScene(): Promise<void> {
+  lookAtBakes();
+  const stop = state.bake.checks.find((c) => c.tone === "error");
+  if (stop) {
+    publish();
+    return say(stop.text, "warn");
+  }
+  const target = bakeProject()!;
+  const { scene: input } = bakeInput(scene.name, scene.game, scene.groups, scene.objects);
+  // A file that is not the game's needs its size from where it is; sector.build reads the game's itself.
+  const b = bridge!;
+  const byPath = new Map(index.extra.map((e) => [e.path.toLowerCase(), e]));
+  for (const o of input.objects) {
+    if (o.bounds || !o.resource) continue;
+    const entry = byPath.get(o.resource.replace(/\//g, "\\").toLowerCase());
+    if (!entry?.source) continue;
+    const info = await sources.lookAt(b, entry);
+    if (info.bounds) o.bounds = info.bounds;
+  }
+  let built: SectorBuilt;
+  try {
+    try {
+      built = await b.sectorBuild({ project: target.dir, scene: input, root: target.archive });
+    } catch (err) {
+      // REDbridge before 0.12.0 takes no `root`, and reads only the game's files.
+      if (!/param|argument|signature|method/i.test((err as Error).message)) throw err;
+      built = await b.sectorBuild({ project: target.dir, scene: input });
+    }
+  } catch (err) {
+    console.log(`Bake ${scene.name}: ${(err as Error).message}`);
+    state.bake.last = undefined;
+    lookAtBakes();
+    return say(`The bake did not go through: ${(err as Error).message}`, "error");
+  }
+  const xl = settleXl(built.xl, built.name, built.blockPath);
+  const needs = needsOf();
+  writeRecord(target, {
+    slug: built.name,
+    name: scene.name,
+    file: scene.file,
+    hash: bakeHash(scene.objects),
+    objects: built.nodes,
+    date: new Date().toISOString(),
+    bridge: state.bridge.version,
+    box: built.streamingBox,
+    needs,
+  });
+  state.bake.last = { slug: built.name, files: [built.sector, built.block, xl].map((f) => path.relative(target.dir, f)), warnings: built.warnings };
+  lookAtBakes();
+  console.log(`Baked ${scene.name}: ${built.nodes} objects into ${target.name} (${built.sector})${built.warnings.length ? `; ${built.warnings.length} warnings: ${built.warnings.join(" | ")}` : ""}`);
+  say(`Baked ${scene.name}: ${built.nodes} object${built.nodes === 1 ? "" : "s"} into ${target.name}. Pack and install the project, and start the game again.`, "ok");
+}
+
+async function removeBake(slug: string): Promise<void> {
+  const target = bakeProject();
+  if (!target) return say("No REDcode project is open.", "warn");
+  try {
+    removeBakeFiles(target, slug);
+  } catch (err) {
+    return say(`${slug} could not be removed: ${(err as Error).message}`, "error");
+  }
+  if (state.bake.last?.slug === slug) state.bake.last = undefined;
+  lookAtBakes();
+  const stillIn = inGameNow.get(slug);
+  say(`Took the bake ${slug} out of ${target.name}. Its scene is untouched.${stillIn ? ` It stays in the game (${stillIn}) until you pack and install the project again.` : ""}`, "ok");
+}
 
 // ---- lifecycle --------------------------------------------------------------------------------
 

@@ -546,7 +546,7 @@ export class Viewport {
     const ctx = this.ctx;
     ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
     const centre = this.canvas.width / 2;
-    const windowLeft = this.canvas.width - 24 - 448;
+    const windowLeft = this.canvas.width - 24 - 544;
     const max = 2 * (windowLeft - 24 - centre) - 24;
     const lines: string[] = [];
     for (const part of parts.filter(Boolean)) {

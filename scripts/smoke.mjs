@@ -9,10 +9,69 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as core from "../dist/core.mjs";
 import { cleanFolderName, fileNameOf, folderIn, freeFileName, readLibraryRoot, readSceneFile, refOf, scanShelf, slugOf, whereIs, writeLibraryRoot } from "../dist/core.mjs";
+import { bakeHash, bakeInput, bakesIn, checkBake, deployedBakes, removeBake, settleXl, writeRecord } from "../dist/core.mjs";
 import { AssetIndex, BridgeClient, applyChange, centreOf, copyOf, duplicate, makeGroup, pasteOf, standPoint, pickMany, pickSelection, pruneGroups, selectionUnits, ungroup, ModSources, NeedsNewerBridge, Scene, findBridge, isGameFolder, kindOf, modArchives, quaternionToYaw, sceneNeeds, yawToQuaternion } from "../dist/core.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
+
+// The bake's checks and its files in a project, without REDbridge.
+{
+  const crate = { id: "c", kind: "mesh", resource: "base\\c.mesh", transform: { position: [1, 2, 3], rotation: [0, 0, 0, 1], scale: [1, 1, 1] }, entityId: "77" };
+  const person = { id: "p", kind: "npc", transform: crate.transform };
+  const { scene: input, skipped } = bakeInput("Yard", "2.5", [], [crate, person]);
+  assert.deepEqual(input.objects.map((o) => o.id), ["c"]);
+  assert.equal(input.objects[0].entityId, undefined, "previews stay out of a bake");
+  assert.deepEqual(skipped, [{ id: "p", kind: "npc" }]);
+  assert.equal(bakeHash([crate]), bakeHash([{ ...crate, entityId: "other" }]), "a preview does not make a scene stale");
+  assert.notEqual(bakeHash([crate]), bakeHash([{ ...crate, transform: { ...crate.transform, position: [9, 2, 3] } }]), "a move does");
+
+  const dir = path.join(tmp, "bake-project");
+  const target = { name: "P", dir, archive: path.join(dir, "source", "archive"), raw: path.join(dir, "source", "raw"), resources: path.join(dir, "source", "resources") };
+  const tones = (over) => checkBake({ file: "f", name: "Yard", objects: [crate], project: target, bridgeReady: true, needs: [], ...over }).filter((c) => c.tone === "error");
+  assert.deepEqual(tones({}), [], "nothing stops a good scene");
+  assert.equal(tones({ file: "" }).length, 1, "no scene open");
+  assert.equal(tones({ objects: [] }).length, 1, "nothing to bake");
+  assert.equal(tones({ project: null }).length, 1, "no project");
+  assert.equal(tones({ bridgeReady: false }).length, 1, "no REDbridge");
+  assert.equal(tones({ objects: [{ ...crate, resource: undefined }] }).length, 1, "no resource");
+  assert.equal(tones({ objects: [{ ...crate, transform: { ...crate.transform, position: [NaN, 0, 0] } }] }).length, 1, "a bad number");
+  assert.equal(tones({ objects: [crate, { ...crate }] }).length, 1, "the same id twice");
+  const all = checkBake({ file: "f", name: "Yard", objects: [crate, person], project: target, bridgeReady: true, needs: ["Mod"], sameNameFrom: "elsewhere" });
+  assert.ok(all.some((c) => /Left out.*\bp\b/.test(c.text)) && all.some((c) => /needs: Mod/.test(c.text)) && all.some((c) => /from elsewhere/.test(c.text)));
+
+  // An old REDbridge's resource patch becomes streaming: blocks; a new one's stays.
+  const xlDir = path.join(target.resources, "archive", "pc", "mod");
+  fs.mkdirSync(xlDir, { recursive: true });
+  const old = path.join(xlDir, "yard.xl");
+  fs.writeFileSync(old, "resource:\n  patch:\n");
+  const settled = settleXl(old, "yard", "edgebuilder\\yard\\yard.streamingblock");
+  assert.equal(path.basename(settled), "yard.archive.xl");
+  assert.ok(!fs.existsSync(old));
+  assert.match(fs.readFileSync(settled, "utf8"), /^streaming:\n {2}blocks:\n {4}- edgebuilder\\yard\\yard\.streamingblock/m);
+  assert.equal(settleXl(settled, "yard", "x"), settled);
+
+  // The project's bakes, and the game's.
+  assert.deepEqual(bakesIn(null), []);
+  assert.deepEqual(bakesIn(target), []);
+  fs.mkdirSync(path.join(target.archive, "edgebuilder", "yard"), { recursive: true });
+  fs.writeFileSync(path.join(target.archive, "edgebuilder", "yard", "yard.streamingsector"), "x");
+  assert.deepEqual(bakesIn(target), [{ slug: "yard", name: "yard" }], "a bake without a record still shows");
+  writeRecord(target, { slug: "yard", name: "Yard", objects: 1, hash: "h" });
+  assert.equal(bakesIn(target)[0].name, "Yard");
+  const game = path.join(tmp, "bake-game");
+  assert.equal(deployedBakes(game).size, 0);
+  const mods = path.join(game, "archive", "pc", "mod");
+  fs.mkdirSync(mods, { recursive: true });
+  fs.copyFileSync(settled, path.join(mods, "anymod.archive.xl"));
+  fs.writeFileSync(path.join(mods, "other.xl"), "streaming:\n  blocks:\n    - elsewhere\\x.streamingblock\n");
+  assert.deepEqual([...deployedBakes(game)], [["yard", "anymod.archive.xl"]]);
+  assert.throws(() => removeBake(target, "..\\..\\evil"));
+  removeBake(target, "yard");
+  assert.deepEqual(bakesIn(target), []);
+  assert.ok(!fs.existsSync(settled), "its .xl goes too");
+  console.log("bake: ok");
+}
 
 // Scene store: add, select ids, remove, save and load round trip, previews forgotten.
 {
@@ -424,6 +483,22 @@ if (!exe || !game) {
       else assert.ok(looked.bounds && looked.appearances.length, JSON.stringify(looked));
     }
     console.log(`mod archive: ok (${real.mod}: ${mods.modAssets} meshes and entities${first ? `; ${first.path.split("\\").pop()} looked at` : ""})`);
+  }
+  // A real bake: the files sector.build writes, for a project the Bake tab would use.
+  {
+    const dir = path.join(tmp, "real-bake");
+    const target = { name: "P", dir, archive: path.join(dir, "source", "archive"), raw: path.join(dir, "source", "raw"), resources: path.join(dir, "source", "resources") };
+    fs.mkdirSync(dir, { recursive: true });
+    const object = { id: "crate", kind: "mesh", resource: crates[0].path, transform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } };
+    const built = await bridge.sectorBuild({ project: dir, scene: bakeInput("Smoke Bake", undefined, [], [object]).scene });
+    assert.equal(built.nodes, 1);
+    assert.equal(built.name, "smoke_bake");
+    const xl = settleXl(built.xl, built.name, built.blockPath);
+    assert.match(fs.readFileSync(xl, "utf8"), /^streaming:/m);
+    assert.deepEqual(bakesIn(target).map((b) => b.slug), ["smoke_bake"]);
+    removeBake(target, "smoke_bake");
+    assert.deepEqual(bakesIn(target), []);
+    console.log(`bake through REDbridge: ok (${built.nodes} node)`);
   }
   const bad = await index.lookAt(bridge, "base\\nope.mesh");
   assert.ok(bad.error);

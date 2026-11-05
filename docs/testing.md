@@ -26,7 +26,7 @@ Last updated 2026-10-30.
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
 | [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 passed on 0.6.5; 32 to 34 passed on 0.6.7; released as 0.6.7 |
-| [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. The panel's questions wait for B4-1 |
+| [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. B4-1, the Bake tab, built as 0.7.0: checked in REDnode's host with real clicks, waiting for its test |
 
 ## Automated
 
@@ -474,7 +474,7 @@ Every question B4 has to settle, so nothing critical rests on an assumption. Eac
 | `k_sofa_box` | Yes | Walks through | Pass | Pass | |
 | `l_red` | Red | Stops, stands on it | Hit | Hit | |
 
-\* The note for step 4 says "Crate A" twice; the second, between D and F, is read as E.
+\* The note for step 4 says "Crate A" twice; the owner confirms the second, between D and F, is E.
 
 The logs: all five game starts of the test loaded; ArchiveXL merged the block in the four with the mod on, with no warnings or errors in any of the five, and none in the latest RED4ext log; no crash report. The start with the mod off (08:22) loaded the save, and EDGEbuilder's scene came back.
 
@@ -514,6 +514,31 @@ The logs: all five game starts of the test loaded; ArchiveXL merged the block in
 | W12 | No project open, and no Library: Bake says what to do. Project-only works without the Library | Never forced |
 | W13 | The installed REDbridge, as a player gets it from EDGEdeck, does the bake | Tested so far only with a checkout's build; needs REDbridge 0.12.0 released |
 | W14 | A large scene, some hundreds of objects: the game's frame rate near it, and how long the bake takes | Limits the preview must state |
+| W15 | The project's name differs from the scene's: `<scene>.archive.xl` beside `<project>.archive` still loads, and packing carries the `.xl` | Every bake but one made for the purpose |
+| W16 | Two scenes baked into one project both stand | One project, a whole district's scenes |
+
+**The test of B4-1, on 0.7.0.** A project to bake into: `EDGEbuilder_Testing`, open in REDcode. EDGEbuilder as you have it, and the REDbridge you have (0.11.0) for steps up to 9: it reads only the game's files, and writes a form of `.xl` EDGEbuilder corrects. Steps 10 and 11 need REDbridge 0.12.0, or its build named in Settings.
+
+| # | Do | Expected | Answers |
+|---|---|---|---|
+| 1 | Close the project in REDcode. Open **Bake** | "No REDcode project is open", and Bake greyed out | W12 |
+| 2 | Open `EDGEbuilder_Testing` in REDcode, and open Market Corner copy 2. Press **Refresh** | The scene and its object count, "Into the REDcode project EDGEbuilder_Testing", the note about collision; Bake lit | W12 |
+| 3 | First add to the scene: a `crate_red.ent` from the Assets tab, a crate with another appearance, and one turned and scaled, near the others | They stand as you placed them | |
+| 4 | Press **Bake** | "Baked Market Corner copy 2: N objects", the three files, and it in the project's list. The busy bar if it takes a while: note how long | W14 |
+| 5 | Move a crate, open Bake, then Ctrl+Z and open Bake again | "The scene changed since", then not | W6 |
+| 6 | Quit. Pack and install the project: in REDcode, Pack; in EDGEdeck, Add from REDcode project, Deploy. Claude can deploy | The project's archive and `market_corner_copy_2.archive.xl` in `archive\pc\mod` | W15 |
+| 7 | Start the game and load a save near Market Corner | The objects stand. The message says the scene is baked and its previews stay off; Bake says the same. Nothing twice | W10 |
+| 8 | Press **Rebuild previews** | Each preview lands on its baked object, so they flicker in one place, with no offset, for the moved, turned and scaled ones too. `crate_red.ent` keeps its look, and is solid. The meshes are not, yet | W2, W3 |
+| 9 | Walk or drive to the far objects, the `grp_1` ones about 320 m off, and back | They stand there, and come back | W8 |
+| 10 | A new scene, with EvilClown's chicken and one crate: Bake | Bake names EvilClown as needed | W4 |
+| 11 | Pack and install; then turn EvilClown off, deploy, and load | **No crash**: the chicken is absent, the crate stands | W5 |
+| 12 | Move a crate in Market Corner, bake again, pack and install; start | It stands in its new place, with no copy at the old | W6 |
+| 13 | Bake a scene inside a building, and one in Dogtown, into the same project; pack and install; start | Both stand, and neither stops the other | W9, W16 |
+| 14 | Duplicate a scene to some 200 objects: Bake; pack and install; start | The time it takes, and the frame rate near them | W14 |
+| 15 | Bake tab's trash on a bake: **No**, then **Yes**; pack and install; start with the same save | The bake is out of the project, the scene stays, the objects leave the world, and the save is fine | W7 |
+| 16 | Turn EDGEbuilder off in EDGEdeck, deploy, start, load near a bake | It stands with EDGEbuilder uninstalled | W1 |
+
+W11 is in the smoke test (a kind a bake cannot make is left out, and said so). W13 waits for REDbridge 0.12.0's release.
 
 #### Questions for Library bakes: the test of B4-3
 

@@ -659,7 +659,7 @@ var Viewport = class {
     const ctx = this.ctx;
     ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
     const centre = this.canvas.width / 2;
-    const windowLeft = this.canvas.width - 24 - 448;
+    const windowLeft = this.canvas.width - 24 - 544;
     const max = 2 * (windowLeft - 24 - centre) - 24;
     const lines = [];
     for (const part of parts.filter(Boolean)) {
@@ -1286,6 +1286,7 @@ function render(s) {
   $("bridgeDetail").textContent = [b.path, b.detail].filter(Boolean).join("\n");
   $("indexDetail").textContent = ix.file ?? "";
   renderLibrary(s);
+  renderBake(s);
   renderBusy(s.busy);
   if (s.message && s.message.text !== lastMessage) {
     lastMessage = s.message.text;
@@ -1584,6 +1585,49 @@ ${sc.error}` : sc.file)}"${isPicked({ kind: "scene", file: sc.file }) ? " select
   }
   return rows.join("");
 }
+var bakeHtml = "";
+var bakeConfirm;
+function renderBake(s) {
+  const b = s.bake;
+  const n = s.scene.objects.length;
+  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${n} object${n === 1 ? "" : "s"}` : "No scene open";
+  $("bakeInto").textContent = b.project ? `Into the REDcode project ${b.project.name}` : "";
+  $("bakeInto").title = b.project?.dir ?? "";
+  const checks = b.checks.map((c) => `<div class="check ${c.tone}">${esc(c.text)}</div>`).join("");
+  if ($("bakeChecks").innerHTML !== checks) $("bakeChecks").innerHTML = checks;
+  const when2 = (iso) => iso ? new Date(iso).toLocaleString() : "";
+  const lines = [];
+  if (b.current) lines.push(`Baked ${when2(b.current.date)}${b.current.objects === void 0 ? "" : `, ${b.current.objects} object${b.current.objects === 1 ? "" : "s"}`}.${b.stale ? " The scene changed since: bake again to bring it in." : ""}`);
+  if (b.inGame) lines.push(`Its bake is in the game (${b.inGame}), so its previews stay off and nothing stands twice. Rebuild previews on the Scene tab brings them back to edit it.`);
+  $("bakeState").textContent = lines.join("\n");
+  $("bakeGo").toggleAttribute("disabled", b.checks.some((c) => c.tone === "error"));
+  const last = b.last;
+  $("bakeDone").toggleAttribute("hidden", !last);
+  if (last) $("bakeFiles").textContent = [...last.files, ...last.warnings].join("\n");
+  const html = b.list.map((r) => {
+    const end = bakeConfirm === r.slug ? `<span slot="end" class="confirm">Take it out?<button data-act="yes" data-id="${esc(r.slug)}">Yes</button><button data-act="no">No</button></span>` : `<span slot="end"><span class="grouptag">${r.objects === void 0 ? "" : `${r.objects} object${r.objects === 1 ? "" : "s"}`}</span><button class="act" data-act="trash" data-id="${esc(r.slug)}" title="Take this bake out of the project. Its scene stays">${TrashIcon}</button></span>`;
+    return `<rn-item value="${esc(r.slug)}" title="${esc([r.file, when2(r.date)].filter(Boolean).join("\n"))}">${esc(r.name)}${end}</rn-item>`;
+  }).join("");
+  if (html !== bakeHtml) $("bakeList").innerHTML = bakeHtml = html;
+}
+$("bakeGo").addEventListener("click", () => post({ type: "bake" }));
+$("bakeLook").addEventListener("click", () => post({ type: "bake.refresh" }));
+$("bakeList").addEventListener(
+  "click",
+  (e) => {
+    const act = e.target.closest?.("[data-act]");
+    if (!act) return;
+    e.stopPropagation();
+    const id = act.dataset.id;
+    if (act.dataset.act === "trash") bakeConfirm = id;
+    else {
+      bakeConfirm = void 0;
+      if (act.dataset.act === "yes" && id) post({ type: "bake.remove", slug: id });
+    }
+    if (state) render(state);
+  },
+  true
+);
 function renderLibrary(s) {
   const name = $("sceneName");
   if (document.activeElement?.id !== "sceneName") name.value = s.scene.name;
@@ -1640,8 +1684,10 @@ function leaveSaveAs() {
 }
 $("mainTabs").addEventListener("change", (e) => {
   if (e.target !== $("mainTabs")) return;
-  if (e.detail.label === "Library") post({ type: "library.refresh" });
+  const label = e.detail.label;
+  if (label === "Library") post({ type: "library.refresh" });
   else leaveSaveAs();
+  if (label === "Bake") post({ type: "bake.refresh" });
 });
 $("shelves").addEventListener(
   "click",

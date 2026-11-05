@@ -104,6 +104,31 @@ export interface ScenePeek {
   groups: SceneGroup[];
 }
 
+/** One thing the Bake tab says before a bake; "error" stops it. */
+export interface BakeCheck {
+  tone: "error" | "warn" | "info";
+  text: string;
+}
+
+/** A bake in a project: what it came from, as far as its record says. */
+export interface BakeRecord {
+  /** The scene's name as the bake's files have it. */
+  slug: string;
+  name: string;
+  /** The scene file it came from. */
+  file?: string;
+  /** What was in the scene then (`bakeHash`): another hash now means the scene changed since. */
+  hash?: string;
+  objects?: number;
+  /** When, ISO 8601. */
+  date?: string;
+  bridge?: string;
+  /** The sector's streaming box. */
+  box?: { min: number[]; max: number[] };
+  /** The mods and the project its objects need. */
+  needs?: string[];
+}
+
 export interface Snapshot {
   /** The mod has started. */
   ready: boolean;
@@ -130,6 +155,20 @@ export interface Snapshot {
    * three places with their folders and scenes; the scenes switched on (shown, not edited), by file.
    */
   library: { root?: string; suggested: string; shelves: Shelf[]; on: string[]; peek?: ScenePeek };
+  /**
+   * B4: the Bake tab. The project a bake goes into, what the checks say, the open scene's bake in that
+   * project and whether the scene changed since, the `.xl` that has its bake in the game, every bake in
+   * the project, and what the last bake wrote.
+   */
+  bake: {
+    project: { name: string; dir: string } | null;
+    checks: BakeCheck[];
+    current?: BakeRecord;
+    stale: boolean;
+    inGame?: string;
+    list: BakeRecord[];
+    last?: { slug: string; files: string[]; warnings: string[] };
+  };
   /** The selected objects (B3: several at once; a group selects all its objects). */
   selected: string[];
   /** How many steps Undo and Redo can take. */
@@ -201,6 +240,12 @@ export type PageMessage =
   | { type: "scene.peek"; file: string }
   | { type: "scene.goTo"; id: string }
   | { type: "scene.removeFrom"; file: string; id: string }
+  /** B4: bake the open scene into the open REDcode project. */
+  | { type: "bake" }
+  /** Look at the project's bakes and the game's again. */
+  | { type: "bake.refresh" }
+  /** Take a bake out of the project, by its slug. */
+  | { type: "bake.remove"; slug: string }
   /** Set the Library root (made when missing), for every EDGE tool. */
   | { type: "library.root"; root: string }
   /** A new folder `name` inside `folder` of the Library. */

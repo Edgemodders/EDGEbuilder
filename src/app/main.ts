@@ -167,6 +167,7 @@ function render(s: Snapshot): void {
 
   // Scenes and the Library (B3-2).
   renderLibrary(s);
+  renderBake(s);
 
   // Busy: a change that takes a while, and the ones waiting behind it.
   renderBusy(s.busy);
@@ -512,6 +513,57 @@ function libraryRows(s: Snapshot): string {
   return rows.join("");
 }
 
+let bakeHtml = "";
+let bakeConfirm: string | undefined;
+
+function renderBake(s: Snapshot): void {
+  const b = s.bake;
+  const n = s.scene.objects.length;
+  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${n} object${n === 1 ? "" : "s"}` : "No scene open";
+  $("bakeInto").textContent = b.project ? `Into the REDcode project ${b.project.name}` : "";
+  $("bakeInto").title = b.project?.dir ?? "";
+  const checks = b.checks.map((c) => `<div class="check ${c.tone}">${esc(c.text)}</div>`).join("");
+  if ($("bakeChecks").innerHTML !== checks) $("bakeChecks").innerHTML = checks;
+  const when = (iso?: string) => (iso ? new Date(iso).toLocaleString() : "");
+  const lines: string[] = [];
+  if (b.current) lines.push(`Baked ${when(b.current.date)}${b.current.objects === undefined ? "" : `, ${b.current.objects} object${b.current.objects === 1 ? "" : "s"}`}.${b.stale ? " The scene changed since: bake again to bring it in." : ""}`);
+  if (b.inGame) lines.push(`Its bake is in the game (${b.inGame}), so its previews stay off and nothing stands twice. Rebuild previews on the Scene tab brings them back to edit it.`);
+  $("bakeState").textContent = lines.join("\n");
+  $("bakeGo").toggleAttribute("disabled", b.checks.some((c) => c.tone === "error"));
+  const last = b.last;
+  $("bakeDone").toggleAttribute("hidden", !last);
+  if (last) $("bakeFiles").textContent = [...last.files, ...last.warnings].join("\n");
+  const html = b.list
+    .map((r) => {
+      const end =
+        bakeConfirm === r.slug
+          ? `<span slot="end" class="confirm">Take it out?<button data-act="yes" data-id="${esc(r.slug)}">Yes</button><button data-act="no">No</button></span>`
+          : `<span slot="end"><span class="grouptag">${r.objects === undefined ? "" : `${r.objects} object${r.objects === 1 ? "" : "s"}`}</span><button class="act" data-act="trash" data-id="${esc(r.slug)}" title="Take this bake out of the project. Its scene stays">${TrashIcon}</button></span>`;
+      return `<rn-item value="${esc(r.slug)}" title="${esc([r.file, when(r.date)].filter(Boolean).join("\n"))}">${esc(r.name)}${end}</rn-item>`;
+    })
+    .join("");
+  if (html !== bakeHtml) $("bakeList").innerHTML = bakeHtml = html;
+}
+
+$("bakeGo").addEventListener("click", () => post({ type: "bake" }));
+$("bakeLook").addEventListener("click", () => post({ type: "bake.refresh" }));
+$("bakeList").addEventListener(
+  "click",
+  (e) => {
+    const act = (e.target as HTMLElement).closest?.("[data-act]") as HTMLElement | null;
+    if (!act) return;
+    e.stopPropagation();
+    const id = act.dataset.id;
+    if (act.dataset.act === "trash") bakeConfirm = id;
+    else {
+      bakeConfirm = undefined;
+      if (act.dataset.act === "yes" && id) post({ type: "bake.remove", slug: id });
+    }
+    if (state) render(state);
+  },
+  true,
+);
+
 function renderLibrary(s: Snapshot): void {
   // The scene at the top of the Scene tab.
   const name = $<Field>("sceneName");
@@ -579,8 +631,10 @@ function leaveSaveAs(): void {
 
 $("mainTabs").addEventListener("change", (e) => {
   if (e.target !== $("mainTabs")) return;
-  if ((e as CustomEvent<{ label: string }>).detail.label === "Library") post({ type: "library.refresh" });
+  const label = (e as CustomEvent<{ label: string }>).detail.label;
+  if (label === "Library") post({ type: "library.refresh" });
   else leaveSaveAs();
+  if (label === "Bake") post({ type: "bake.refresh" });
 });
 $("shelves").addEventListener(
   "click",

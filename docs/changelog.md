@@ -10,6 +10,15 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**New**
+
+- The Bake tab: bake the open scene into the REDcode project open in VS Code, as a streaming sector of its own. It checks the scene first, names the mods it needs, says when the scene changed since the last bake, and lists the project's bakes, which you can take out again. Pack and install the project, and the objects stand in the world from the next game start, with EDGEbuilder off.
+- A scene whose bake is in the game places no previews by itself, so nothing stands twice. Rebuild previews brings them back to edit it.
+
+**Changed**
+
+- The window is a little wider, for the sixth tab.
+
 ## 0.6.7 (2026-11-05)
 
 B3-2 Save. Tested on game 2.5 with REDnode 0.58.0. 0.6.0 to 0.6.6 were test builds only. Needs REDnode 0.58.0 or later.
