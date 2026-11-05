@@ -554,7 +554,7 @@ W11 is in the smoke test (a kind a bake cannot make is left out, and said so). E
 | W10 | The scene's previews stay off, the message and the tab say so, nothing stands twice until Rebuild previews |
 | W12 | No project open says so, with Bake greyed out; with the project open, Bake is lit |
 | W13 | The bake runs on the installed copy: the log says `REDbridge 0.12.0 ready (EDGEdeck (Code))` |
-| W14 | 200 objects bake into a 12,634-byte sector, and the owner saw no real frame rate drop near them. No measured figures |
+| W14 | 200 objects bake into a 12,634-byte sector, and the owner saw no real frame rate drop near them. REDnode's `perf`, at 3840 x 2160, V among them at (-2013.3, -2877.6, 98.0), yaw -132.3, Edit off: about 67 fps with crates in view (67.8, 67.5, 67.4, 67.1), about 93 looking at the sky (93.4, 93.1, 93.5). The sky removes the street as well as the crates, so this does not say what the crates alone cost |
 | W15 | Three bakes beside `EDGEbuilder_Testing.archive` load, each through its own `.xl`: `<scene>.archive.xl` needs no archive of its name |
 | W16 | ArchiveXL merged four blocks from one project in one start |
 
