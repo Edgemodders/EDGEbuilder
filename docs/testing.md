@@ -254,6 +254,27 @@ streaming:
 | Does `sector.build`'s entity node work? | Yes: `crate_red.ent` stands as a `worldEntityNode` |
 | Collision | Through an entity with an `entPhysicalMeshComponent`: solid. A `worldMeshNode`: none. Solid meshes need another node type; see the design's Bake section |
 
+**Round 3** (2026-11-05, for B4: which node type gives a mesh its collision; waiting for its test). What the game does, read with REDbridge's `sector.nodes` in the 40 sectors around the street: its solid static props are drawn by `worldCookedStaticMeshNode` (16,682 items) with the collision cooked apart in `worldCookedCollisionNode` (715), which is opaque to us. Two node types take physics from the mesh itself and can be written: `worldInstancedDestructibleMeshNode` (8,034 items, the delivery crates; its `simulationType` is Dynamic or Kinematic, and its node data has the same flags and priority as a mesh node's) and `worldDynamicMeshNode` (the cooking pots). `scripts/solid-probe.mjs` bakes the same crate six times and rewrites each node through CR2W JSON, with REDbridge's main (0.12.0, unreleased). All six stand at y 1214, z 23, going west from x -1439, with `streaming.primary` 120.
+
+| Crate | x | Node | What we want to learn |
+|---|---|---|---|
+| `a_plain` | -1439 | `worldMeshNode`, the reference | No collision, as in rounds 1 and 2 |
+| `b_kinematic` | -1442 | Instanced destructible, Kinematic | Solid, and stays put? |
+| `c_static` | -1445 | Instanced destructible, Static (the game's own never use this) | Does it show at all? Solid? |
+| `d_impulse` | -1448 | Instanced destructible, Kinematic, turns dynamic on impulse (the game has 454 like this) | Solid until something knocks it? |
+| `e_dynamic` | -1451 | `worldDynamicMeshNode`, asleep at the start | Solid, and can be pushed? |
+| `f_big` | -1455 | As `b_kinematic`, scale 2 | Does the collision grow with the crate? |
+
+| # | Check | Note for each crate |
+|---|---|---|
+| 1 | Game closed; `EDGEbuilder bake probe` on in EDGEdeck, deploy | Two files in `archive\pc\mod` |
+| 2 | Start the game, load a save, go to (-1439, 1214, 23), look west | Six crates in a row, the last one twice the size. Any missing? |
+| 3 | Walk into each, then jump on top | Does V stop? Stand on it? Does it move? |
+| 4 | Shoot each, hit it with a melee weapon | Does it move, break or stay? |
+| 5 | `f_big`: walk around it and jump on top | Does V stop at its real, doubled size, or walk into it? |
+| 6 | Walk 150 m away and come back | Does each come back where it stood, even one you knocked? |
+| 7 | The ArchiveXL log, as in round 1 | Merged, no errors |
+
 ### B2c Mod assets
 
 **Passed on 2026-10-30**: 0.4.0 passed steps 1 to 8, step 9 found a fix, and 0.4.1 passed the retest (results below the steps). EDGEbuilder 0.4.0, from `npm run package`, added in EDGEdeck (it goes into the old row). REDnode 0.41.0 or later; **REDbridge with #12** (0.12.0, or the build from REDbridge's main the REDnode session deployed on 2026-10-30) for sizes and appearances; REDcode 0.10.5 or later for the Project steps. The smoke test passed with both REDbridge 0.11.0 (sizes skipped, the "needs 0.12.0" answer) and the main build (EvilClown's meshes read from its archive). Browse lists installed mods' and the open REDcode project's meshes and entities; mesh previews are now REDnode's mesh props, so steps 1 and 2 repeat the basics.
