@@ -25,7 +25,7 @@ Last updated 2026-10-30.
 | [Bake probe](#bake-probe) | In the game, no EDGEbuilder | Bake probe | 2026-10-30 (REDbridge 0.11.0) | Pass (both rounds) |
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
-| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 passed on 0.6.5; 32 to 34 (0.6.7) waiting |
+| [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 passed on 0.6.5; 32 to 34 passed on 0.6.7; released as 0.6.7 |
 
 ## Automated
 
@@ -336,6 +336,16 @@ The owner reports the other steps done on 0.6.0. Step 13 passed on 0.6.0: with t
 **Retest on 0.6.5 (2026-11-04), the owner's report: passed.** The log agrees: `Opened Market Corner copy 2: 25 of 25 objects in the world`, no preview refused, Show and Hide far off, and after a save `25 of 25 objects back`. **Step 29 left one question:** Drop at click and Drop to floor found nothing, but the crates were at z 356 to 358, about 240 m above Market Corner's crates, past Drop to floor's 100 m reach. A check at ground level answered it: **the ground is solid near the camera, not only near V.** The same crate, about 320 m from where V stood, from the same height z 116.30: with the camera far off, all three surfaces missed (20:41:51); with the camera beside it, Static hit 115.81 and it dropped 0.45 m (20:42:12). V was not moved between them, as far as the test went. **0.6.6** says so in Drop to floor's message and looks 1000 m for a surface, where Drop to floor looked 100 m and Drop at click 200 m. Retest: 32 and 33.
 
 **0.6.6 at a game start (2026-11-05, read from the log; the game was started twice with a scene open).** Both times the log says `0 of 25 objects back in the world; 25 the game did not place`, 25 lines of `V is not in the world yet`, and about 20 s later `25 of 25 objects back`. The first OnGameAttached of a game start comes during the load: REDnode's `world.available()` is already true, so the spawn works, but `FindEntityByID` afterwards refuses, and the game takes those entities away 7 s later. No crate was doubled: 50 attaches and 25 detaches. A false warning, from 0.6.5, which removed the check that stopped this; those builds' restarts had no scene open, so the test did not see it. **0.6.7** waits for `game.state().world`. Retest on 0.6.7: 32, 33, 34.
+
+**Retest on 0.6.7 (2026-11-05, game 2.5, REDnode 0.58.0), the owner's report: passed, and B3-2 Save with it.** The log agrees.
+
+| Step | Result | The log |
+|---|---|---|
+| 32 | Pass for what it tried. Flown far off, but with the floating crates still in sight, Drop to floor put all three on the ground, seen from close by. It found the ground, so the "fly closer" message did not show, and that message has not been seen in game | `Static: 79.12` at 02:47:17 and 02:48:24; `Dropped 3 objects to the floor` |
+| 33 | Drop at click from high in the sky placed the crate on the ground, so Drop to floor had nothing left to do | `Dropped cargo_crate_a.mesh in 172 ms` at 02:49:55, with no `nothing there` line |
+| 34 | Pass. After a full restart the open scene came back intact | `26 of 26 objects back in the world` at 02:52:43, after two OnGameAttached, with no `0 of` and no `Back ...` lines |
+
+The same drop from the sky missed on 0.6.5 with a reach of 200 m, so that miss was the reach, and 1000 m cures it. The miss beside the crate at 20:41:51 on 0.6.5 was another matter: the ground 0.5 m below was not solid from where the camera was. How far from the camera the ground is solid is still not measured (the log does not say where the camera was).
 
 Built on 2026-11-03 as EDGEbuilder 0.6.0 (`npm run package`, added in EDGEdeck). Needs REDnode 0.56.1 or later (scenes that are shown use `world.load` with `wait: false`). Named scenes saved after every change, in the Library, the open REDcode project or This PC; the Library tab; the last scene reopened at start; other scenes shown beside the open one; EDGEbuilder's service; the page on any screen width ([design](design.md#scenes-and-the-library-b3-2)). Checked before the game in REDnode's host on 2026-11-03: the tab, the folders, New, Save as, Rename, Open, the refusals (a name taken, a folder outside the Library), `scenes()` and `refs()` through the MCP server, and the page at 2580 x 1080. Start somewhere open with Edit on.
 

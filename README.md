@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://edgemodders.github.io/EDGEbuilder/"><img src="docs/assets/brand/badges/docs.svg" alt="docs: read the docs"></a>
-  <img src="docs/assets/brand/badges/status.svg" alt="status: 0.5.8 released">
+  <img src="docs/assets/brand/badges/status.svg" alt="status: 0.6.7 released">
   <img src="docs/assets/brand/badges/game.svg" alt="game: Cyberpunk 2077">
   <img src="docs/assets/brand/badges/runtime.svg" alt="runs on: REDnode">
   <a href="LICENSE"><img src="docs/assets/brand/badges/license.svg" alt="license: MIT"></a>
@@ -17,7 +17,7 @@ EDGEbuilder is the first mod built on the EDGE platform end to end: the editor i
 **[Read the design](https://edgemodders.github.io/EDGEbuilder/design.html)** &middot; [REDnode](https://github.com/Edgemodders/REDnode) &middot; [REDbridge](https://github.com/Edgemodders/REDbridge) &middot; [REDcode](https://github.com/Edgemodders/REDcode) &middot; [EDGEdeck](https://github.com/Edgemodders/EDGEdeck)
 
 > [!NOTE]
-> **Status: 0.5.8 released on 2026-11-02, for game 2.5; test builds only.** B1 Browse and drop, B2a Position, B2b Camera, B2c Mod assets and B3-1 Arrange passed in game. EDGEbuilder reads an index of the meshes and entities in your game, your installed mods and the project open in REDcode through REDbridge, searches it, and drops a picked asset into the world through REDnode's world API. With **Edit** on it flies a camera of its own, hides the game's HUD (and other packages' windows, with Solo allowed), and moves, turns and scales objects with a gizmo or the keys G, R and S. It handles several objects at once, groups, duplicates, copies, cuts and pastes, and undoes and redoes the last 100 changes; in the game its Ctrl keys and Esc need REDnode 0.52.0 or later. Nothing it places outlasts the session yet: saving scenes (B3-2) and baking them into the world (B4) come next, and the first public release follows B4. A bake probe already loaded a baked sector in game 2.5. Results: [Tests](https://edgemodders.github.io/EDGEbuilder/testing.html). Test builds are on the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases) once their in-game test passed; install them with EDGEdeck. The [design](https://edgemodders.github.io/EDGEbuilder/design.html) says where it goes.
+> **Status: 0.6.7 released on 2026-11-05, for game 2.5; test builds only.** B1 Browse and drop, B2a Position, B2b Camera, B2c Mod assets, B3-1 Arrange and B3-2 Save passed in game. EDGEbuilder reads an index of the meshes and entities in your game, your installed mods and the project open in REDcode through REDbridge, searches it, and drops a picked asset into the world through REDnode's world API. With **Edit** on it flies a camera of its own, hides the game's HUD (and other packages' windows, with Solo allowed), and moves, turns and scales objects with a gizmo or the keys G, R and S. It handles several objects at once, groups, duplicates, copies, cuts and pastes, and undoes and redoes the last 100 changes; It keeps named scenes in the EDGE Library, the open REDcode project or on this PC, saved after every change, and brings the last one back at the next start; another scene can show beside the one you edit. It needs REDnode 0.58.0 or later. What it places is still gone from the world without EDGEbuilder: baking scenes into the world (B4) comes next, and the first public release follows B4. A bake probe already loaded a baked sector in game 2.5. Results: [Tests](https://edgemodders.github.io/EDGEbuilder/testing.html). Test builds are on the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases) once their in-game test passed; install them with EDGEdeck. The [design](https://edgemodders.github.io/EDGEbuilder/design.html) says where it goes.
 
 ## How it works
 
@@ -57,7 +57,7 @@ Two halves share the scene file: the **runtime builder** in the game, where what
 - **B2b Camera.** EDGEbuilder's own camera while Edit is on, builder mode without the game's HUD, drops where the camera looks. Passed in game 2026-10-14.
 - **Bake probe.** One crate baked, packed, deployed and loaded on game 2.5, before anything is built on the bake. Passed on 2026-10-30.
 - **B2c Mod assets.** Browse also lists mod archives and the open REDcode project. Passed in game on 2026-10-30 (0.4.1).
-- **B3 Arrange and save.** Groups, multi-select, duplicate, undo and redo, scene files, a service other packages can ask for scenes. B3-1 Arrange (several objects at once, groups, duplicate, copy, cut and paste, undo and redo) passed in game on 2026-11-02 (0.5.8).
+- **B3 Arrange and save.** Groups, multi-select, duplicate, undo and redo, scene files, a service other packages can ask for scenes. B3-1 Arrange (several objects at once, groups, duplicate, copy, cut and paste, undo and redo) passed in game on 2026-11-02 (0.5.8); B3-2 Save (named scenes, the Library, the service) on 2026-11-05 (0.6.7).
 - **B4 Bake.** `sector.build` in REDbridge, the bake panel, the scene in the REDcode project, install through EDGEdeck. The first public release (a preview) follows.
 - **B3c NPCs and scenes through REDnode.** NPCs as a scene kind, and scenes REDnode loads for any package (REDnode's side passed in game).
 - **B3b World objects.** Pick, inspect and copy what the game already placed. Agreed.

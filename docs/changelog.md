@@ -10,6 +10,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.6.7 (2026-11-05)
+
+B3-2 Save. Tested on game 2.5 with REDnode 0.58.0. 0.6.0 to 0.6.6 were test builds only. Needs REDnode 0.58.0 or later.
+
 **New**
 
 - Drop at click and Drop to floor look up to 1000 m for a surface. The game's ground is solid only near the camera, and Drop to floor's message now says to fly closer when it finds nothing.
