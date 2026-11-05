@@ -193,7 +193,7 @@ export class ModSources {
       if (!archive) return { appearances: [], error: `${from.name} is no longer installed` };
       cache = archive.info ??= {};
       const known = cache[key];
-      if (known && !known.error) return known;
+      if (known && !known.error && known.hasCollision !== undefined) return known;
     } else {
       let mtime = 0;
       try {
@@ -204,14 +204,14 @@ export class ModSources {
       key = `${from.file}|${mtime}`;
       cache = this.projectInfo;
       const known = cache.get(key);
-      if (known && !known.error) return known;
+      if (known && !known.error && known.hasCollision !== undefined) return known;
     }
     let info: AssetInfo;
     try {
       const [r] = await bridge.meshInfoMany([entry.path], from.kind === "mod" ? { archive: from.file } : { root: this.projectRoot });
       // REDbridge before 0.12.0 ignores archive and root, and looks in the game's archives only.
       if (r?.error && /not in the loaded archives/i.test(r.error)) info = { appearances: [], error: NeedsNewerBridge };
-      else info = r?.error ? { appearances: [], error: r.error } : { bounds: r?.bounds ?? undefined, appearances: r?.appearances ?? [] };
+      else info = r?.error ? { appearances: [], error: r.error } : { bounds: r?.bounds ?? undefined, appearances: r?.appearances ?? [], hasCollision: r?.hasCollision ?? null };
     } catch (err) {
       const why = (err as Error).message;
       info = { appearances: [], error: /param|argument|signature|method/i.test(why) ? NeedsNewerBridge : why };

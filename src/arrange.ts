@@ -281,3 +281,8 @@ export function boxOf(objects: SceneObject[]): { min: V3; max: V3 } | undefined 
   }
   return min && max ? { min, max } : undefined;
 }
+
+/** How `noCollision` names a mesh, whatever slashes and capitals the scene wrote it with. */
+export function collisionKey(resource: string | undefined): string {
+  return (resource ?? "").replace(/\//g, "\\").toLowerCase();
+}

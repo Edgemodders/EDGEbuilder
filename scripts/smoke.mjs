@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as core from "../dist/core.mjs";
 import { cleanFolderName, fileNameOf, folderIn, freeFileName, readLibraryRoot, readSceneFile, refOf, scanShelf, slugOf, whereIs, writeLibraryRoot } from "../dist/core.mjs";
-import { bakeHash, bakeInput, bakesIn, checkBake, deployedBakes, removeBake, settleXl, writeRecord } from "../dist/core.mjs";
+import { bakeHash, bakeInput, bakesIn, checkBake, collisionKey, deployedBakes, removeBake, settleXl, solidForBake, writeRecord } from "../dist/core.mjs";
 import { AssetIndex, BridgeClient, applyChange, centreOf, copyOf, duplicate, makeGroup, pasteOf, standPoint, pickMany, pickSelection, pruneGroups, selectionUnits, ungroup, ModSources, NeedsNewerBridge, Scene, findBridge, isGameFolder, kindOf, modArchives, quaternionToYaw, sceneNeeds, yawToQuaternion } from "../dist/core.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -75,6 +75,30 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   removeBake(target, "yard");
   assert.deepEqual(bakesIn(target), []);
   assert.ok(!fs.existsSync(settled), "its .xl goes too");
+  // The Solid switch (B4-2).
+  const plainCrate = { id: "c", kind: "mesh", resource: "base\\a\\Crate.mesh", transform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } };
+  const solidCrate = { ...plainCrate, solid: true };
+  const beforeSwitch = bakeHash([plainCrate]);
+  assert.notEqual(bakeHash([solidCrate]), beforeSwitch, "the switch counts as a change");
+  assert.equal(bakeHash([{ ...plainCrate, solid: false }]), beforeSwitch, "off is as absent");
+  const entity = { ...plainCrate, kind: "entity", resource: "base\\a\\b.ent" };
+  assert.equal(bakeHash([{ ...entity, solid: true }]), bakeHash([entity]), "solid means nothing on an entity");
+  assert.equal(collisionKey("base/A/Crate.mesh"), "base\\a\\crate.mesh");
+  const none = new Set([collisionKey(plainCrate.resource)]);
+  const [stripped] = solidForBake([solidCrate], none);
+  assert.ok(!("solid" in stripped), "no data: bakes as a plain mesh");
+  assert.ok(solidCrate.solid, "and the scene keeps its setting");
+  assert.equal(solidForBake([solidCrate], new Set())[0].solid, true);
+  assert.equal(bakeInput("n", undefined, [], [solidCrate]).scene.objects[0].solid, true, "solid reaches sector.build");
+  const says = (objects, over = {}) => checkBake({ file: "f", name: "Yard", objects, project: target, bridgeReady: true, needs: [], ...over }).map((c) => `${c.tone}: ${c.text}`).join("\n");
+  assert.match(says([solidCrate]), /info: 1 mesh will stop V/);
+  assert.match(says([plainCrate]), /info: 1 mesh is set not solid/);
+  assert.match(says([solidCrate], { noCollision: none }), /warn: A mesh has no collision data.*Crate\.mesh/);
+  assert.doesNotMatch(says([solidCrate], { noCollision: none }), /will stop V/);
+  assert.match(says([solidCrate], { bridgeVersion: "0.11.0" }), /warn: REDbridge 0\.11\.0 writes no solid meshes/);
+  assert.doesNotMatch(says([solidCrate], { bridgeVersion: "0.12.0" }), /writes no solid/);
+  assert.doesNotMatch(says([plainCrate], { bridgeVersion: "0.11.0" }), /writes no solid/);
+  assert.doesNotMatch(says([entity]), /solid/i, "an entity is no mesh to speak of");
   console.log("bake: ok");
 }
 
@@ -110,6 +134,19 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.ok(!fs.existsSync(scene.file));
   damaged.add("mesh", "base/a.mesh", { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
   assert.ok(fs.readFileSync(damaged.setAside, "utf8").includes("broken"), "the next save did not touch it");
+  {
+    const undoScene = new Scene(path.join(tmp, "undo.scene.json"));
+    const o = undoScene.add("mesh", "a.mesh", { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
+    const before = undoScene.state();
+    o.solid = true;
+    undoScene.save();
+    const on = undoScene.state();
+    assert.equal(undoScene.restore(before).move.length, 0, "the switch moves nothing");
+    assert.ok(!undoScene.get(o.id).solid, "Undo takes it back");
+    undoScene.restore(on);
+    assert.equal(undoScene.get(o.id).solid, true, "Redo too");
+    assert.equal(JSON.parse(fs.readFileSync(undoScene.file, "utf8")).objects[0].solid, true, "and the file keeps it");
+  }
   console.log("scene: ok");
 }
 
@@ -274,6 +311,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.equal(scene.get(y.id).entityId, "2", "a moved preview keeps its entity");
   assert.equal(scene.get(x.id).entityId, undefined);
   assert.equal(scene.objects.length, 3);
+  const solidOne = { id: "s", kind: "mesh", resource: "a.mesh", solid: true, transform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } };
+  assert.equal(duplicate(["s"], [solidOne], []).objects[0].solid, true, "a copy of a solid mesh is solid");
   console.log("arrange: ok");
 }
 
@@ -451,6 +490,7 @@ if (!exe || !game) {
   const info = await bridge.info();
   assert.ok(info.gameLoaded && info.files > 100000, JSON.stringify(info));
   console.log(`bridge: ok (REDbridge ${info.version}, ${info.files} files)`);
+  const bridgeAtLeast012 = info.version.split(".").map(Number).reduce((a, n, i) => a + n * [10000, 100, 1][i], 0) >= 1200;
   const index = new AssetIndex(path.join(tmp, "index"));
   const key = `${info.archives}-${info.files}`;
   assert.equal(index.load(key), false);
@@ -501,6 +541,15 @@ if (!exe || !game) {
     const xl = settleXl(built.xl, built.name, built.blockPath);
     assert.match(fs.readFileSync(xl, "utf8"), /^streaming:/m);
     assert.deepEqual(bakesIn(target).map((b) => b.slug), ["smoke_bake"]);
+    // The Solid switch through a real bake: the node type is in the file's names, plain or solid.
+    if (bridgeAtLeast012) {
+      assert.ok(!fs.readFileSync(built.sector).includes("worldInstancedDestructibleMeshNode"), "a plain mesh stays a plain node");
+      const solid = await bridge.sectorBuild({ project: dir, scene: bakeInput("Smoke Bake", undefined, [], [{ ...object, solid: true }]).scene });
+      assert.ok(fs.readFileSync(solid.sector).includes("worldInstancedDestructibleMeshNode"), "a solid mesh writes the node round 3 proved");
+      const [looked] = await bridge.meshInfoMany([crates[0].path]);
+      assert.equal(typeof looked.hasCollision, "boolean", "mesh.info says whether a mesh has collision data");
+      console.log(`solid through REDbridge: ok (hasCollision ${looked.hasCollision})`);
+    }
     removeBake(target, "smoke_bake");
     assert.deepEqual(bakesIn(target), []);
     console.log(`bake through REDbridge: ok (${built.nodes} node)`);

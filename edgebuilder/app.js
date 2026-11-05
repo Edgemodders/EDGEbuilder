@@ -218,6 +218,9 @@ function boxOf(objects) {
   }
   return min && max ? { min, max } : void 0;
 }
+function collisionKey(resource) {
+  return (resource ?? "").replace(/\//g, "\\").toLowerCase();
+}
 
 // src/app/held.ts
 import { game } from "rednode";
@@ -1331,7 +1334,24 @@ function sceneRows(s) {
 }
 var fields = ["px", "py", "pz", "yaw", "scale"];
 var field = (id) => $(id);
+function renderSolid(sel, s) {
+  const meshes = sel.filter((o) => o.kind === "mesh");
+  $("solidRow").hidden = !meshes.length;
+  if (!meshes.length) return;
+  const none = new Set(s.noCollision);
+  const able = meshes.filter((o) => !none.has(collisionKey(o.resource)));
+  const solid = able.filter((o) => o.solid).length;
+  const toggle = $("solid");
+  toggle.checked = able.length > 0 && solid === able.length;
+  toggle.toggleAttribute("disabled", !able.length);
+  const cannot = meshes.length - able.length;
+  const lines = [];
+  if (meshes.length > 1 && solid && solid < able.length) lines.push(`${solid} of ${able.length} solid.`);
+  if (cannot) lines.push(meshes.length === 1 ? "No collision data, so this mesh can't be solid." : cannot === 1 ? "1 of these has no collision data, so it can't be solid." : `${cannot} of these have no collision data, so they can't be solid.`);
+  $("solidNote").textContent = lines.join(" ");
+}
 function renderSelected(sel, s) {
+  renderSolid(sel, s);
   const focused = document.activeElement?.id;
   const units = selectionUnits(s.selected, s.scene.objects, s.scene.groups);
   const oneGroup = units.groups.length === 1 && !units.objects.length ? s.scene.groups.find((g) => g.id === units.groups[0]) : void 0;
@@ -1940,6 +1960,7 @@ window.addEventListener("keydown", (e) => {
   const ids = selection();
   if (key === "z" && !e.shiftKey) post({ type: "undo" });
   else if (key === "y" || key === "z" && e.shiftKey) post({ type: "redo" });
+  else if (key === "a" && !e.shiftKey && state) post({ type: "select", ids: state.scene.objects.map((o) => o.id) });
   else if (key === "d") duplicate();
   else if (key === "c" && ids.length) post({ type: "copy", ids });
   else if (key === "x" && ids.length) post({ type: "cut", ids });
@@ -1957,6 +1978,11 @@ for (const id of ["editorCamera", "hideHud"]) {
   $(id).addEventListener("change", (e) => post({ type: "settings", [id]: !!e.detail.checked }));
 }
 $("edit").addEventListener("change", (e) => viewport.setEdit(!!e.detail.checked));
+$("solid").addEventListener("change", (e) => {
+  if (!state) return;
+  const ids = state.scene.objects.filter((o) => o.kind === "mesh" && state.selected.includes(o.id)).map((o) => o.id);
+  post({ type: "solid", ids, on: !!e.detail.checked });
+});
 $("rebuild").addEventListener("click", () => post({ type: "rebuild" }));
 $("clear").addEventListener("click", () => post({ type: "clear" }));
 $("buildIndex").addEventListener("click", () => post({ type: "index.build" }));

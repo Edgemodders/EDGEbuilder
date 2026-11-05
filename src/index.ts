@@ -142,9 +142,10 @@ export class AssetIndex {
   /** What the bridge knows about an asset, asked once and remembered. */
   async lookAt(bridge: Bridge, assetPath: string): Promise<AssetInfo> {
     const known = this.info[assetPath];
-    if (known && !known.error) return known;
+    // An answer from before `hasCollision` (B4-2) is asked again.
+    if (known && !known.error && known.hasCollision !== undefined) return known;
     const [r] = await bridge.meshInfoMany([assetPath]);
-    const info: AssetInfo = r?.error ? { appearances: [], error: r.error } : { bounds: r?.bounds ?? undefined, appearances: r?.appearances ?? [] };
+    const info: AssetInfo = r?.error ? { appearances: [], error: r.error } : { bounds: r?.bounds ?? undefined, appearances: r?.appearances ?? [], hasCollision: r?.hasCollision ?? null };
     this.info[assetPath] = info;
     try {
       this.save();

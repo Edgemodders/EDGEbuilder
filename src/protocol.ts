@@ -31,6 +31,8 @@ export interface AssetEntry {
 export interface AssetInfo {
   bounds?: { min: number[]; max: number[] };
   appearances: string[];
+  /** Whether a mesh has collision data, which it needs to be solid. Null: not a mesh, or a REDbridge before 0.12.0. Absent: not asked yet. */
+  hasCollision?: boolean | null;
   error?: string;
 }
 
@@ -54,6 +56,8 @@ export interface SceneObject {
   kind: "mesh" | "entity" | "light";
   resource?: string;
   appearance?: string;
+  /** A mesh that stops V, bullets and cars once baked (B4-2). A new mesh starts solid; absent means not solid, as in older scenes. */
+  solid?: boolean;
   transform: SceneTransform;
   streaming?: { primary?: number; secondary?: number };
   ref?: string;
@@ -169,6 +173,8 @@ export interface Snapshot {
     list: BakeRecord[];
     last?: { slug: string; files: string[]; warnings: string[] };
   };
+  /** The scene's meshes known to have no collision data, which cannot be solid: `collisionKey` of each. */
+  noCollision: string[];
   /** The selected objects (B3: several at once; a group selects all its objects). */
   selected: string[];
   /** How many steps Undo and Redo can take. */
@@ -211,6 +217,8 @@ export type PageMessage =
    * step; `merge` folds it into the step before (the move that places a duplicate).
    */
   | { type: "transform"; items: { id: string; transform: SceneTransform }[]; merge?: boolean }
+  /** Solid or not once baked, for the meshes among `ids`. One undo step. */
+  | { type: "solid"; ids: string[]; on: boolean }
   /** Drop the objects onto whatever is below each. */
   | { type: "floor"; ids: string[] }
   /** Group the selected objects; ungroup them; rename a group. */

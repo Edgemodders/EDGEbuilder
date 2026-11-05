@@ -293,9 +293,9 @@ var AssetIndex = class {
   /** What the bridge knows about an asset, asked once and remembered. */
   async lookAt(bridge2, assetPath) {
     const known = this.info[assetPath];
-    if (known && !known.error) return known;
+    if (known && !known.error && known.hasCollision !== void 0) return known;
     const [r] = await bridge2.meshInfoMany([assetPath]);
-    const info = r?.error ? { appearances: [], error: r.error } : { bounds: r?.bounds ?? void 0, appearances: r?.appearances ?? [] };
+    const info = r?.error ? { appearances: [], error: r.error } : { bounds: r?.bounds ?? void 0, appearances: r?.appearances ?? [], hasCollision: r?.hasCollision ?? null };
     this.info[assetPath] = info;
     try {
       this.save();
@@ -472,7 +472,7 @@ var ModSources = class {
       if (!archive) return { appearances: [], error: `${from.name} is no longer installed` };
       cache = archive.info ??= {};
       const known = cache[key];
-      if (known && !known.error) return known;
+      if (known && !known.error && known.hasCollision !== void 0) return known;
     } else {
       let mtime = 0;
       try {
@@ -483,13 +483,13 @@ var ModSources = class {
       key = `${from.file}|${mtime}`;
       cache = this.projectInfo;
       const known = cache.get(key);
-      if (known && !known.error) return known;
+      if (known && !known.error && known.hasCollision !== void 0) return known;
     }
     let info;
     try {
       const [r] = await bridge2.meshInfoMany([entry.path], from.kind === "mod" ? { archive: from.file } : { root: this.projectRoot });
       if (r?.error && /not in the loaded archives/i.test(r.error)) info = { appearances: [], error: NeedsNewerBridge };
-      else info = r?.error ? { appearances: [], error: r.error } : { bounds: r?.bounds ?? void 0, appearances: r?.appearances ?? [] };
+      else info = r?.error ? { appearances: [], error: r.error } : { bounds: r?.bounds ?? void 0, appearances: r?.appearances ?? [], hasCollision: r?.hasCollision ?? null };
     } catch (err) {
       const why = err.message;
       info = { appearances: [], error: /param|argument|signature|method/i.test(why) ? NeedsNewerBridge : why };
@@ -521,252 +521,6 @@ function sceneNeeds(resources, sources2) {
   }
   return [...needs].sort((a, b) => a.localeCompare(b));
 }
-
-// src/bake.ts
-import { createHash } from "node:crypto";
-import * as fs5 from "node:fs";
-import * as path5 from "node:path";
-
-// src/scenes.ts
-import { execFileSync } from "node:child_process";
-import * as fs4 from "node:fs";
-import * as os from "node:os";
-import * as path4 from "node:path";
-var SceneEnding = ".scene.json";
-function libraryConfigFile() {
-  return path4.join(process.env.APPDATA ?? path4.join(os.homedir(), "AppData", "Roaming"), "EDGE", "library.json");
-}
-function readLibraryRoot(file = libraryConfigFile()) {
-  try {
-    const root = JSON.parse(fs4.readFileSync(file, "utf8")).root;
-    return typeof root === "string" && root.trim() ? root.trim() : void 0;
-  } catch {
-    return void 0;
-  }
-}
-function writeLibraryRoot(root, file = libraryConfigFile()) {
-  root = path4.resolve(root);
-  fs4.mkdirSync(root, { recursive: true });
-  let data = {};
-  try {
-    data = JSON.parse(fs4.readFileSync(file, "utf8"));
-  } catch {
-  }
-  fs4.mkdirSync(path4.dirname(file), { recursive: true });
-  fs4.writeFileSync(file, JSON.stringify({ ...data, root }, null, 2));
-}
-function documentsFolder() {
-  const fallback = path4.join(os.homedir(), "Documents");
-  if (process.platform !== "win32") return fallback;
-  try {
-    const out = execFileSync("reg", ["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders", "/v", "Personal"], { encoding: "utf8", windowsHide: true, timeout: 5e3 });
-    const m = /Personal\s+REG_(?:EXPAND_)?SZ\s+(.+)/.exec(out);
-    if (!m) return fallback;
-    return m[1].trim().replace(/%([^%]+)%/g, (all, name) => process.env[name] ?? all);
-  } catch {
-    return fallback;
-  }
-}
-function suggestedLibraryRoot() {
-  return path4.join(documentsFolder(), "EDGE Library");
-}
-function slugOf(name) {
-  return name.trim().toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/^_+|_+$/g, "") || "scene";
-}
-function refOf(sceneName, o) {
-  return o.ref ?? `edgebuilder/${slugOf(sceneName)}/${o.id}`;
-}
-function fileNameOf(name) {
-  return slugOf(name) + SceneEnding;
-}
-function folderIn(root, folder) {
-  const full = path4.resolve(root, folder ?? "");
-  const rel = path4.relative(path4.resolve(root), full);
-  if (rel.startsWith("..") || path4.isAbsolute(rel)) throw new Error(`${folder} is outside ${root}`);
-  return full;
-}
-function cleanFolderName(name) {
-  const clean = name.replace(/[<>:"/\\|?*\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/, "");
-  if (!clean || clean === "." || clean === "..") throw new Error("Give the folder a name");
-  return clean;
-}
-function whereIs(file, roots) {
-  for (const r of roots) {
-    const rel = path4.relative(path4.resolve(r.dir), path4.resolve(file));
-    if (!rel.startsWith("..") && !path4.isAbsolute(rel)) return { place: r.place, folder: path4.dirname(rel).replace(/\\/g, "/").replace(/^\.$/, "") };
-  }
-  return void 0;
-}
-var MaxDepth = 8;
-var MaxScenes = 2e3;
-var seen = /* @__PURE__ */ new Map();
-function describe(file, st) {
-  const known = seen.get(file);
-  if (known && known.size === st.size && known.mtime === st.mtimeMs) return known;
-  let out;
-  const fallback = path4.basename(file).slice(0, -SceneEnding.length);
-  try {
-    const data = JSON.parse(fs4.readFileSync(file, "utf8"));
-    if (typeof data.format !== "number" || !Array.isArray(data.objects)) throw new Error("not an EDGEbuilder scene");
-    out = { name: typeof data.name === "string" && data.name.trim() ? data.name : fallback, objects: data.objects.length };
-  } catch (err) {
-    out = { name: fallback, objects: 0, error: err.message };
-  }
-  seen.set(file, { size: st.size, mtime: st.mtimeMs, ...out });
-  return out;
-}
-function scanShelf(root) {
-  const shelf = { ...root, folders: [], scenes: [] };
-  const walk = (dir, rel, depth) => {
-    let names;
-    try {
-      names = fs4.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    names.sort((a, b) => a.name.localeCompare(b.name, void 0, { sensitivity: "base" }));
-    for (const d of names) {
-      if (shelf.scenes.length >= MaxScenes) return;
-      const full = path4.join(dir, d.name);
-      const sub2 = rel ? `${rel}/${d.name}` : d.name;
-      if (d.isDirectory()) {
-        if (d.name.startsWith(".") || d.name.toLowerCase().endsWith(".bake") || d.name === "node_modules" || depth >= MaxDepth) continue;
-        shelf.folders.push(sub2);
-        walk(full, sub2, depth + 1);
-      } else if (d.isFile() && d.name.toLowerCase().endsWith(SceneEnding)) {
-        let st;
-        try {
-          st = fs4.statSync(full);
-        } catch {
-          continue;
-        }
-        shelf.scenes.push({ place: root.place, file: full, folder: rel, changed: st.mtimeMs, ...describe(full, st) });
-      }
-    }
-  };
-  walk(root.dir, "", 0);
-  return shelf;
-}
-
-// src/bake.ts
-var Bakeable = /* @__PURE__ */ new Set(["mesh", "entity", "light"]);
-function bakeInput(name, game2, groups, objects) {
-  const kept = objects.filter((o) => Bakeable.has(o.kind));
-  return {
-    scene: {
-      format: 1,
-      name,
-      ...game2 ? { game: game2 } : {},
-      groups,
-      objects: kept.map(({ entityId: _entityId, ...o }) => o)
-    },
-    skipped: objects.filter((o) => !Bakeable.has(o.kind)).map((o) => ({ id: o.id, kind: o.kind }))
-  };
-}
-function bakeHash(objects) {
-  const parts = objects.filter((o) => Bakeable.has(o.kind)).map((o) => [o.id, o.kind, o.resource ?? "", o.appearance ?? "", o.transform, o.streaming ?? null, o.ref ?? "", o.props ?? null]);
-  return createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 16);
-}
-function checkBake(input) {
-  const out = [];
-  const say2 = (tone, text) => out.push({ tone, text });
-  if (!input.file) {
-    say2("error", "No scene is open: open one or make one on the Library tab.");
-    return out;
-  }
-  const { skipped, scene: scene2 } = bakeInput(input.name, void 0, [], input.objects);
-  if (!scene2.objects.length) say2("error", "The scene has nothing to bake yet.");
-  if (!input.project) say2("error", "No REDcode project is open. A bake goes into a project: open or make one in REDcode (VS Code), and this tab picks it up.");
-  if (!input.bridgeReady) say2("error", "REDbridge is not ready, and it writes the bake. The pills at the top say why.");
-  const ids = /* @__PURE__ */ new Set();
-  for (const o of scene2.objects) {
-    if (o.kind !== "light" && !o.resource) say2("error", `${o.id} has no resource.`);
-    if (ids.has(o.id)) say2("error", `Two objects are called ${o.id}.`);
-    ids.add(o.id);
-    const numbers = [...o.transform.position, ...o.transform.rotation, ...o.transform.scale];
-    if (numbers.some((n) => !Number.isFinite(n))) say2("error", `${o.id} has a position, turn or scale that is not a number.`);
-  }
-  if (skipped.length) say2("warn", `Left out, since a bake cannot make them yet: ${skipped.map((s) => s.id).join(", ")}.`);
-  if (input.sameNameFrom) say2("warn", `This project has a bake with this name, from ${input.sameNameFrom}. Baking replaces it. A different name keeps both.`);
-  if (input.needs.length) say2("warn", `Anyone playing this bake needs: ${input.needs.join(", ")}.`);
-  if (scene2.objects.some((o) => o.kind === "mesh")) say2("info", "Meshes bake without collision for now: V walks through them. Entities keep theirs.");
-  return out;
-}
-function settleXl(xlFile, slug, blockPath) {
-  const text = fs5.readFileSync(xlFile, "utf8");
-  if (/^streaming:/m.test(text)) return xlFile;
-  const file = path5.join(path5.dirname(xlFile), `${slug}.archive.xl`);
-  fs5.writeFileSync(file, `# Written by EDGEbuilder: adds the baked sector to the world.
-streaming:
-  blocks:
-    - ${blockPath}
-`);
-  if (path5.resolve(file) !== path5.resolve(xlFile)) fs5.rmSync(xlFile, { force: true });
-  return file;
-}
-var recordFile = (project2, slug) => path5.join(project2.raw, "edgebuilder", `${slug}.bake.json`);
-function writeRecord(project2, record) {
-  const file = recordFile(project2, record.slug);
-  fs5.mkdirSync(path5.dirname(file), { recursive: true });
-  fs5.writeFileSync(file, JSON.stringify(record, null, 2));
-}
-function bakesIn(project2) {
-  if (!project2) return [];
-  const root = path5.join(project2.archive, "edgebuilder");
-  let names;
-  try {
-    names = fs5.readdirSync(root);
-  } catch {
-    return [];
-  }
-  const out = [];
-  for (const slug of names) {
-    if (!fs5.existsSync(path5.join(root, slug, `${slug}.streamingsector`))) continue;
-    let record = { slug, name: slug };
-    try {
-      record = { ...record, ...JSON.parse(fs5.readFileSync(recordFile(project2, slug), "utf8")) };
-    } catch {
-    }
-    out.push(record);
-  }
-  return out.sort((a, b) => a.name.localeCompare(b.name));
-}
-function removeBake(project2, slug) {
-  if (slugOf(slug) !== slug) throw new Error(`${slug} is not a bake's name`);
-  fs5.rmSync(path5.join(project2.archive, "edgebuilder", slug), { recursive: true, force: true });
-  for (const name of [`${slug}.archive.xl`, `${slug}.xl`]) fs5.rmSync(path5.join(project2.resources, "archive", "pc", "mod", name), { force: true });
-  fs5.rmSync(recordFile(project2, slug), { force: true });
-}
-function deployedBakes(gameDir2) {
-  const found = /* @__PURE__ */ new Map();
-  if (!gameDir2) return found;
-  const redmods = path5.join(gameDir2, "mods");
-  const dirs = [path5.join(gameDir2, "archive", "pc", "mod"), ...namesIn(redmods).map((m) => path5.join(redmods, m, "archives"))];
-  for (const dir of dirs) {
-    for (const name of namesIn(dir)) {
-      if (!name.toLowerCase().endsWith(".xl")) continue;
-      let text = "";
-      try {
-        text = fs5.readFileSync(path5.join(dir, name), "utf8");
-      } catch {
-        continue;
-      }
-      for (const m of text.matchAll(/edgebuilder[\\/]([a-z0-9_]+)[\\/]\1\.streamingblock/gi)) found.set(m[1].toLowerCase(), name);
-    }
-  }
-  return found;
-}
-function namesIn(dir) {
-  try {
-    return fs5.readdirSync(dir);
-  } catch {
-    return [];
-  }
-}
-
-// src/scene.ts
-import * as fs6 from "node:fs";
-import * as path6 from "node:path";
 
 // src/math.ts
 var add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -978,8 +732,278 @@ function boxOf(objects) {
   }
   return min && max ? { min, max } : void 0;
 }
+function collisionKey(resource) {
+  return (resource ?? "").replace(/\//g, "\\").toLowerCase();
+}
+
+// src/bake.ts
+import { createHash } from "node:crypto";
+import * as fs5 from "node:fs";
+import * as path5 from "node:path";
+
+// src/scenes.ts
+import { execFileSync } from "node:child_process";
+import * as fs4 from "node:fs";
+import * as os from "node:os";
+import * as path4 from "node:path";
+var SceneEnding = ".scene.json";
+function libraryConfigFile() {
+  return path4.join(process.env.APPDATA ?? path4.join(os.homedir(), "AppData", "Roaming"), "EDGE", "library.json");
+}
+function readLibraryRoot(file = libraryConfigFile()) {
+  try {
+    const root = JSON.parse(fs4.readFileSync(file, "utf8")).root;
+    return typeof root === "string" && root.trim() ? root.trim() : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function writeLibraryRoot(root, file = libraryConfigFile()) {
+  root = path4.resolve(root);
+  fs4.mkdirSync(root, { recursive: true });
+  let data = {};
+  try {
+    data = JSON.parse(fs4.readFileSync(file, "utf8"));
+  } catch {
+  }
+  fs4.mkdirSync(path4.dirname(file), { recursive: true });
+  fs4.writeFileSync(file, JSON.stringify({ ...data, root }, null, 2));
+}
+function documentsFolder() {
+  const fallback = path4.join(os.homedir(), "Documents");
+  if (process.platform !== "win32") return fallback;
+  try {
+    const out = execFileSync("reg", ["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders", "/v", "Personal"], { encoding: "utf8", windowsHide: true, timeout: 5e3 });
+    const m = /Personal\s+REG_(?:EXPAND_)?SZ\s+(.+)/.exec(out);
+    if (!m) return fallback;
+    return m[1].trim().replace(/%([^%]+)%/g, (all, name) => process.env[name] ?? all);
+  } catch {
+    return fallback;
+  }
+}
+function suggestedLibraryRoot() {
+  return path4.join(documentsFolder(), "EDGE Library");
+}
+function slugOf(name) {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/^_+|_+$/g, "") || "scene";
+}
+function refOf(sceneName, o) {
+  return o.ref ?? `edgebuilder/${slugOf(sceneName)}/${o.id}`;
+}
+function fileNameOf(name) {
+  return slugOf(name) + SceneEnding;
+}
+function folderIn(root, folder) {
+  const full = path4.resolve(root, folder ?? "");
+  const rel = path4.relative(path4.resolve(root), full);
+  if (rel.startsWith("..") || path4.isAbsolute(rel)) throw new Error(`${folder} is outside ${root}`);
+  return full;
+}
+function cleanFolderName(name) {
+  const clean = name.replace(/[<>:"/\\|?*\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/, "");
+  if (!clean || clean === "." || clean === "..") throw new Error("Give the folder a name");
+  return clean;
+}
+function whereIs(file, roots) {
+  for (const r of roots) {
+    const rel = path4.relative(path4.resolve(r.dir), path4.resolve(file));
+    if (!rel.startsWith("..") && !path4.isAbsolute(rel)) return { place: r.place, folder: path4.dirname(rel).replace(/\\/g, "/").replace(/^\.$/, "") };
+  }
+  return void 0;
+}
+var MaxDepth = 8;
+var MaxScenes = 2e3;
+var seen = /* @__PURE__ */ new Map();
+function describe(file, st) {
+  const known = seen.get(file);
+  if (known && known.size === st.size && known.mtime === st.mtimeMs) return known;
+  let out;
+  const fallback = path4.basename(file).slice(0, -SceneEnding.length);
+  try {
+    const data = JSON.parse(fs4.readFileSync(file, "utf8"));
+    if (typeof data.format !== "number" || !Array.isArray(data.objects)) throw new Error("not an EDGEbuilder scene");
+    out = { name: typeof data.name === "string" && data.name.trim() ? data.name : fallback, objects: data.objects.length };
+  } catch (err) {
+    out = { name: fallback, objects: 0, error: err.message };
+  }
+  seen.set(file, { size: st.size, mtime: st.mtimeMs, ...out });
+  return out;
+}
+function scanShelf(root) {
+  const shelf = { ...root, folders: [], scenes: [] };
+  const walk = (dir, rel, depth) => {
+    let names;
+    try {
+      names = fs4.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    names.sort((a, b) => a.name.localeCompare(b.name, void 0, { sensitivity: "base" }));
+    for (const d of names) {
+      if (shelf.scenes.length >= MaxScenes) return;
+      const full = path4.join(dir, d.name);
+      const sub2 = rel ? `${rel}/${d.name}` : d.name;
+      if (d.isDirectory()) {
+        if (d.name.startsWith(".") || d.name.toLowerCase().endsWith(".bake") || d.name === "node_modules" || depth >= MaxDepth) continue;
+        shelf.folders.push(sub2);
+        walk(full, sub2, depth + 1);
+      } else if (d.isFile() && d.name.toLowerCase().endsWith(SceneEnding)) {
+        let st;
+        try {
+          st = fs4.statSync(full);
+        } catch {
+          continue;
+        }
+        shelf.scenes.push({ place: root.place, file: full, folder: rel, changed: st.mtimeMs, ...describe(full, st) });
+      }
+    }
+  };
+  walk(root.dir, "", 0);
+  return shelf;
+}
+
+// src/bake.ts
+var Bakeable = /* @__PURE__ */ new Set(["mesh", "entity", "light"]);
+function bakeInput(name, game2, groups, objects) {
+  const kept = objects.filter((o) => Bakeable.has(o.kind));
+  return {
+    scene: {
+      format: 1,
+      name,
+      ...game2 ? { game: game2 } : {},
+      groups,
+      objects: kept.map(({ entityId: _entityId, ...o }) => o)
+    },
+    skipped: objects.filter((o) => !Bakeable.has(o.kind)).map((o) => ({ id: o.id, kind: o.kind }))
+  };
+}
+function solidForBake(objects, noCollision) {
+  return objects.map((o) => {
+    if (!o.solid || !noCollision.has(collisionKey(o.resource))) return o;
+    const { solid: _solid, ...rest } = o;
+    return rest;
+  });
+}
+function atLeast(version, min) {
+  if (!version) return true;
+  const v2 = version.split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < min.length; i++) if ((v2[i] ?? 0) !== min[i]) return (v2[i] ?? 0) > min[i];
+  return true;
+}
+function bakeHash(objects) {
+  const parts = objects.filter((o) => Bakeable.has(o.kind)).map((o) => [o.id, o.kind, o.resource ?? "", o.appearance ?? "", o.transform, o.streaming ?? null, o.ref ?? "", o.props ?? null, ...o.kind === "mesh" && o.solid ? ["solid"] : []]);
+  return createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 16);
+}
+function checkBake(input) {
+  const out = [];
+  const say2 = (tone, text) => out.push({ tone, text });
+  if (!input.file) {
+    say2("error", "No scene is open: open one or make one on the Library tab.");
+    return out;
+  }
+  const { skipped, scene: scene2 } = bakeInput(input.name, void 0, [], input.objects);
+  if (!scene2.objects.length) say2("error", "The scene has nothing to bake yet.");
+  if (!input.project) say2("error", "No REDcode project is open. A bake goes into a project: open or make one in REDcode (VS Code), and this tab picks it up.");
+  if (!input.bridgeReady) say2("error", "REDbridge is not ready, and it writes the bake. The pills at the top say why.");
+  const ids = /* @__PURE__ */ new Set();
+  for (const o of scene2.objects) {
+    if (o.kind !== "light" && !o.resource) say2("error", `${o.id} has no resource.`);
+    if (ids.has(o.id)) say2("error", `Two objects are called ${o.id}.`);
+    ids.add(o.id);
+    const numbers = [...o.transform.position, ...o.transform.rotation, ...o.transform.scale];
+    if (numbers.some((n) => !Number.isFinite(n))) say2("error", `${o.id} has a position, turn or scale that is not a number.`);
+  }
+  if (skipped.length) say2("warn", `Left out, since a bake cannot make them yet: ${skipped.map((s) => s.id).join(", ")}.`);
+  if (input.sameNameFrom) say2("warn", `This project has a bake with this name, from ${input.sameNameFrom}. Baking replaces it. A different name keeps both.`);
+  if (input.needs.length) say2("warn", `Anyone playing this bake needs: ${input.needs.join(", ")}.`);
+  const meshes = scene2.objects.filter((o) => o.kind === "mesh");
+  const noData = meshes.filter((o) => o.solid && input.noCollision?.has(collisionKey(o.resource)));
+  const solid = meshes.filter((o) => o.solid && !noData.includes(o));
+  const plain = meshes.length - solid.length - noData.length;
+  if (noData.length) {
+    const names = [...new Set(noData.map((o) => path5.win32.basename(o.resource ?? o.id)))];
+    say2("warn", `${noData.length === 1 ? "A mesh has" : `${noData.length} meshes have`} no collision data, so V walks through ${noData.length === 1 ? "it" : "them"}: ${names.slice(0, 5).join(", ")}${names.length > 5 ? ` and ${names.length - 5} more` : ""}. An entity with a collider can stand in.`);
+  }
+  if (solid.length && !atLeast(input.bridgeVersion, [0, 12, 0])) say2("warn", `REDbridge ${input.bridgeVersion} writes no solid meshes: V walks through all of them. Update it to 0.12.0 or later (EDGEdeck: Get REDbridge).`);
+  if (plain) say2("info", `${plain} mesh${plain === 1 ? " is" : "es are"} set not solid: V walks through ${plain === 1 ? "it" : "them"}. The Solid switch on the Scene tab changes that.`);
+  if (solid.length) say2("info", `${solid.length} mesh${solid.length === 1 ? "" : "es"} will stop V, bullets and cars. Entities keep their own collision.`);
+  return out;
+}
+function settleXl(xlFile, slug, blockPath) {
+  const text = fs5.readFileSync(xlFile, "utf8");
+  if (/^streaming:/m.test(text)) return xlFile;
+  const file = path5.join(path5.dirname(xlFile), `${slug}.archive.xl`);
+  fs5.writeFileSync(file, `# Written by EDGEbuilder: adds the baked sector to the world.
+streaming:
+  blocks:
+    - ${blockPath}
+`);
+  if (path5.resolve(file) !== path5.resolve(xlFile)) fs5.rmSync(xlFile, { force: true });
+  return file;
+}
+var recordFile = (project2, slug) => path5.join(project2.raw, "edgebuilder", `${slug}.bake.json`);
+function writeRecord(project2, record) {
+  const file = recordFile(project2, record.slug);
+  fs5.mkdirSync(path5.dirname(file), { recursive: true });
+  fs5.writeFileSync(file, JSON.stringify(record, null, 2));
+}
+function bakesIn(project2) {
+  if (!project2) return [];
+  const root = path5.join(project2.archive, "edgebuilder");
+  let names;
+  try {
+    names = fs5.readdirSync(root);
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const slug of names) {
+    if (!fs5.existsSync(path5.join(root, slug, `${slug}.streamingsector`))) continue;
+    let record = { slug, name: slug };
+    try {
+      record = { ...record, ...JSON.parse(fs5.readFileSync(recordFile(project2, slug), "utf8")) };
+    } catch {
+    }
+    out.push(record);
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+function removeBake(project2, slug) {
+  if (slugOf(slug) !== slug) throw new Error(`${slug} is not a bake's name`);
+  fs5.rmSync(path5.join(project2.archive, "edgebuilder", slug), { recursive: true, force: true });
+  for (const name of [`${slug}.archive.xl`, `${slug}.xl`]) fs5.rmSync(path5.join(project2.resources, "archive", "pc", "mod", name), { force: true });
+  fs5.rmSync(recordFile(project2, slug), { force: true });
+}
+function deployedBakes(gameDir2) {
+  const found = /* @__PURE__ */ new Map();
+  if (!gameDir2) return found;
+  const redmods = path5.join(gameDir2, "mods");
+  const dirs = [path5.join(gameDir2, "archive", "pc", "mod"), ...namesIn(redmods).map((m) => path5.join(redmods, m, "archives"))];
+  for (const dir of dirs) {
+    for (const name of namesIn(dir)) {
+      if (!name.toLowerCase().endsWith(".xl")) continue;
+      let text = "";
+      try {
+        text = fs5.readFileSync(path5.join(dir, name), "utf8");
+      } catch {
+        continue;
+      }
+      for (const m of text.matchAll(/edgebuilder[\\/]([a-z0-9_]+)[\\/]\1\.streamingblock/gi)) found.set(m[1].toLowerCase(), name);
+    }
+  }
+  return found;
+}
+function namesIn(dir) {
+  try {
+    return fs5.readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
 
 // src/scene.ts
+import * as fs6 from "node:fs";
+import * as path6 from "node:path";
 function readSceneFile(file) {
   const data = JSON.parse(fs6.readFileSync(file, "utf8"));
   if (data.format !== 1 || !Array.isArray(data.objects)) throw new Error(`not a format 1 scene`);
@@ -1149,6 +1173,7 @@ var blockedRetry;
 var ownBridge;
 var gameKey = "";
 var state = {
+  noCollision: [],
   ready: true,
   world: "unknown",
   bridge: { status: "off" },
@@ -1889,6 +1914,7 @@ async function drop(assetPath, appearance, at) {
     const place2 = await dropPlace(at);
     const o = scene.add(kind, assetPath, { position: place2.position, rotation: yawToQuaternion(place2.yaw), scale: [1, 1, 1] }, appearance);
     added = o;
+    if (kind === "mesh") o.solid = true;
     let sized = true;
     if (bridge?.running) {
       try {
@@ -2500,6 +2526,9 @@ channel.on((m) => {
       case "floor":
         await inTurn("Drop to floor", () => dropToFloor(m.ids));
         break;
+      case "solid":
+        await inTurn("Solid", () => setSolid(m.ids, m.on));
+        break;
       case "log":
         console.log(m.text);
         break;
@@ -2523,6 +2552,43 @@ function bakeProject() {
   return project ? { name: project.name, dir: project.dir, archive: project.archive, raw: project.raw, resources: project.resources } : null;
 }
 var needsOf = () => sceneNeeds(scene.objects.map((o) => o.resource), index.extra);
+function setSolid(ids, on) {
+  const meshes = ids.map((id) => scene.get(id)).filter((o) => o?.kind === "mesh");
+  const none = new Set(state.noCollision);
+  const change = meshes.filter((o) => on ? !o.solid && !none.has(collisionKey(o.resource)) : o.solid);
+  if (!change.length) return publish();
+  step();
+  for (const o of change) {
+    if (on) o.solid = true;
+    else delete o.solid;
+  }
+  scene.save();
+  lookAtBakes();
+  say(`${change.length === 1 ? change[0].id : `${change.length} meshes`}: ${on ? "solid" : "not solid"} once baked.`, "ok");
+}
+var collisionAsked = "";
+var collisionBusy = false;
+async function lookAtCollision() {
+  const b = bridge;
+  if (!b?.running || state.bridge.status !== "ready" || collisionBusy) return;
+  const paths = [...new Set(scene.objects.filter((o) => o.kind === "mesh" && o.resource).map((o) => o.resource))];
+  const asked = paths.map(collisionKey).sort().join("|");
+  if (asked === collisionAsked) return;
+  collisionBusy = true;
+  try {
+    const none = [];
+    for (const p of paths) {
+      const info = await assetInfo(b, p).catch(() => void 0);
+      if (info?.hasCollision === false) none.push(collisionKey(p));
+    }
+    collisionAsked = asked;
+    state.noCollision = none;
+    lookAtBakes();
+    publish();
+  } finally {
+    collisionBusy = false;
+  }
+}
 function lookAtBakes() {
   const target = bakeProject();
   const slug = slugOf(scene.name);
@@ -2540,7 +2606,9 @@ function lookAtBakes() {
       project: target,
       bridgeReady: !!bridge?.running && state.bridge.status === "ready",
       needs: needsOf(),
-      sameNameFrom: fromElsewhere ? whereText(fromElsewhere.file) : void 0
+      sameNameFrom: fromElsewhere ? whereText(fromElsewhere.file) : void 0,
+      noCollision: new Set(state.noCollision),
+      bridgeVersion: state.bridge.version
     }),
     current,
     stale: !!current?.hash && !fromElsewhere && current.hash !== bakeHash(scene.objects),
@@ -2551,8 +2619,10 @@ function lookAtBakes() {
 var bakeSoon = debounced(() => {
   lookAtBakes();
   publish();
+  void lookAtCollision();
 });
 async function bakeOpenScene() {
+  await lookAtCollision();
   lookAtBakes();
   const stop = state.bake.checks.find((c) => c.tone === "error");
   if (stop) {
@@ -2560,7 +2630,7 @@ async function bakeOpenScene() {
     return say(stop.text, "warn");
   }
   const target = bakeProject();
-  const { scene: input } = bakeInput(scene.name, scene.game, scene.groups, scene.objects);
+  const { scene: input } = bakeInput(scene.name, scene.game, scene.groups, solidForBake(scene.objects, new Set(state.noCollision)));
   const b = bridge;
   const byPath = new Map(index.extra.map((e) => [e.path.toLowerCase(), e]));
   for (const o of input.objects) {
@@ -2676,7 +2746,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.7.3"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.8.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs7.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

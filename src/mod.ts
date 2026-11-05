@@ -11,7 +11,8 @@ import { api, channel, game, kernel, pkg, service, ui, world, type GameRef } fro
 import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge, type SectorBuilt } from "./bridge";
 import { AssetIndex, kindOf } from "./index";
 import { ModSources, modArchives, modFolders, sceneNeeds } from "./sources";
-import { bakeHash, bakeInput, bakesIn, checkBake, deployedBakes, removeBake as removeBakeFiles, settleXl, writeRecord, type BakeProject } from "./bake";
+import { collisionKey } from "./arrange";
+import { bakeHash, bakeInput, bakesIn, checkBake, deployedBakes, removeBake as removeBakeFiles, settleXl, solidForBake, writeRecord, type BakeProject } from "./bake";
 import { Scene, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, type Clip } from "./arrange";
@@ -84,6 +85,7 @@ let ownBridge: string | undefined;
 let gameKey = "";
 
 const state: Snapshot = {
+  noCollision: [],
   ready: true,
   world: "unknown",
   bridge: { status: "off" },
@@ -1013,6 +1015,7 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
     const place = await dropPlace(at);
     const o = scene.add(kind, assetPath, { position: place.position, rotation: yawToQuaternion(place.yaw), scale: [1, 1, 1] }, appearance);
     added = o;
+    if (kind === "mesh") o.solid = true;
     let sized = true;
     if (bridge?.running) {
       try {
@@ -1752,6 +1755,9 @@ channel.on<PageMessage>((m) => {
       case "floor":
         await inTurn("Drop to floor", () => dropToFloor(m.ids));
         break;
+      case "solid":
+        await inTurn("Solid", () => setSolid(m.ids, m.on));
+        break;
       case "log":
         console.log(m.text);
         break;
@@ -1786,6 +1792,47 @@ function bakeProject(): BakeProject | null {
 
 const needsOf = () => sceneNeeds(scene.objects.map((o) => o.resource), index.extra);
 
+/** The Solid switch: a mesh with no collision data cannot turn on, and any can turn off. */
+function setSolid(ids: string[], on: boolean): void {
+  const meshes = ids.map((id) => scene.get(id)).filter((o): o is SceneObject => o?.kind === "mesh");
+  const none = new Set(state.noCollision);
+  const change = meshes.filter((o) => (on ? !o.solid && !none.has(collisionKey(o.resource)) : o.solid));
+  if (!change.length) return publish();
+  step();
+  for (const o of change) {
+    if (on) o.solid = true;
+    else delete o.solid;
+  }
+  scene.save();
+  lookAtBakes();
+  say(`${change.length === 1 ? change[0].id : `${change.length} meshes`}: ${on ? "solid" : "not solid"} once baked.`, "ok");
+}
+
+/** Which of the scene's meshes have no collision data, asked in the background: REDbridge reads each mesh once. */
+let collisionAsked = "";
+let collisionBusy = false;
+async function lookAtCollision(): Promise<void> {
+  const b = bridge;
+  if (!b?.running || state.bridge.status !== "ready" || collisionBusy) return;
+  const paths = [...new Set(scene.objects.filter((o) => o.kind === "mesh" && o.resource).map((o) => o.resource!))];
+  const asked = paths.map(collisionKey).sort().join("|");
+  if (asked === collisionAsked) return;
+  collisionBusy = true;
+  try {
+    const none: string[] = [];
+    for (const p of paths) {
+      const info = await assetInfo(b, p).catch(() => undefined);
+      if (info?.hasCollision === false) none.push(collisionKey(p));
+    }
+    collisionAsked = asked;
+    state.noCollision = none;
+    lookAtBakes();
+    publish();
+  } finally {
+    collisionBusy = false;
+  }
+}
+
 /** What the Bake tab shows, from the project's files and the game's. */
 function lookAtBakes(): void {
   const target = bakeProject();
@@ -1805,6 +1852,8 @@ function lookAtBakes(): void {
       bridgeReady: !!bridge?.running && state.bridge.status === "ready",
       needs: needsOf(),
       sameNameFrom: fromElsewhere ? whereText(fromElsewhere.file!) : undefined,
+      noCollision: new Set(state.noCollision),
+      bridgeVersion: state.bridge.version,
     }),
     current,
     stale: !!current?.hash && !fromElsewhere && current.hash !== bakeHash(scene.objects),
@@ -1816,9 +1865,11 @@ function lookAtBakes(): void {
 const bakeSoon = debounced(() => {
   lookAtBakes();
   publish();
+  void lookAtCollision();
 });
 
 async function bakeOpenScene(): Promise<void> {
+  await lookAtCollision();
   lookAtBakes();
   const stop = state.bake.checks.find((c) => c.tone === "error");
   if (stop) {
@@ -1826,7 +1877,7 @@ async function bakeOpenScene(): Promise<void> {
     return say(stop.text, "warn");
   }
   const target = bakeProject()!;
-  const { scene: input } = bakeInput(scene.name, scene.game, scene.groups, scene.objects);
+  const { scene: input } = bakeInput(scene.name, scene.game, scene.groups, solidForBake(scene.objects, new Set(state.noCollision)));
   // A file that is not the game's needs its size from where it is; sector.build reads the game's itself.
   const b = bridge!;
   const byPath = new Map(index.extra.map((e) => [e.path.toLowerCase(), e]));

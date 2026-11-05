@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { BakeCheck, BakeRecord, SceneGroup, SceneObject } from "./protocol";
+import { collisionKey } from "./arrange";
 import { slugOf } from "./scenes";
 
 /** The folders of a REDcode project a bake uses. */
@@ -34,11 +35,34 @@ export function bakeInput(name: string, game: string | undefined, groups: SceneG
   };
 }
 
-/** What changes a bake's result, and nothing else: moving a group in the tree or a preview coming and going does not. */
+/**
+ * The meshes a bake can make solid: `solid`, and not known to have no collision data. REDbridge would write
+ * those anyway, with a warning, as a node that only draws; the Bake tab has already named them.
+ */
+export function solidForBake<T extends { kind: string; resource?: string; solid?: boolean }>(objects: T[], noCollision: ReadonlySet<string>): T[] {
+  return objects.map((o) => {
+    if (!o.solid || !noCollision.has(collisionKey(o.resource))) return o;
+    const { solid: _solid, ...rest } = o;
+    return rest as T;
+  });
+}
+
+/** Whether a version is `min` or later, numbers compared one by one. Unknown counts as later: REDbridge itself warns. */
+function atLeast(version: string | undefined, min: number[]): boolean {
+  if (!version) return true;
+  const v = version.split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < min.length; i++) if ((v[i] ?? 0) !== min[i]) return (v[i] ?? 0) > min[i];
+  return true;
+}
+
+/**
+ * What changes a bake's result, and nothing else: moving a group in the tree or a preview coming and going does not.
+ * `solid` joins only when set, so a bake from before the Solid switch does not read as changed.
+ */
 export function bakeHash(objects: SceneObject[]): string {
   const parts = objects
     .filter((o) => Bakeable.has(o.kind))
-    .map((o) => [o.id, o.kind, o.resource ?? "", o.appearance ?? "", o.transform, o.streaming ?? null, o.ref ?? "", o.props ?? null]);
+    .map((o) => [o.id, o.kind, o.resource ?? "", o.appearance ?? "", o.transform, o.streaming ?? null, o.ref ?? "", o.props ?? null, ...(o.kind === "mesh" && o.solid ? ["solid"] : [])]);
   return createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 16);
 }
 
@@ -54,6 +78,10 @@ export function checkBake(input: {
   needs: string[];
   /** A bake with this scene's file name in the project, that came from another scene. */
   sameNameFrom?: string;
+  /** The meshes known to have no collision data: `collisionKey` of each. */
+  noCollision?: ReadonlySet<string>;
+  /** REDbridge's version: before 0.12.0 it writes no solid meshes. */
+  bridgeVersion?: string;
 }): BakeCheck[] {
   const out: BakeCheck[] = [];
   const say = (tone: BakeCheck["tone"], text: string) => out.push({ tone, text });
@@ -76,7 +104,17 @@ export function checkBake(input: {
   if (skipped.length) say("warn", `Left out, since a bake cannot make them yet: ${skipped.map((s) => s.id).join(", ")}.`);
   if (input.sameNameFrom) say("warn", `This project has a bake with this name, from ${input.sameNameFrom}. Baking replaces it. A different name keeps both.`);
   if (input.needs.length) say("warn", `Anyone playing this bake needs: ${input.needs.join(", ")}.`);
-  if (scene.objects.some((o) => o.kind === "mesh")) say("info", "Meshes bake without collision for now: V walks through them. Entities keep theirs.");
+  const meshes = scene.objects.filter((o) => o.kind === "mesh");
+  const noData = meshes.filter((o) => o.solid && input.noCollision?.has(collisionKey(o.resource)));
+  const solid = meshes.filter((o) => o.solid && !noData.includes(o));
+  const plain = meshes.length - solid.length - noData.length;
+  if (noData.length) {
+    const names = [...new Set(noData.map((o) => path.win32.basename(o.resource ?? o.id)))];
+    say("warn", `${noData.length === 1 ? "A mesh has" : `${noData.length} meshes have`} no collision data, so V walks through ${noData.length === 1 ? "it" : "them"}: ${names.slice(0, 5).join(", ")}${names.length > 5 ? ` and ${names.length - 5} more` : ""}. An entity with a collider can stand in.`);
+  }
+  if (solid.length && !atLeast(input.bridgeVersion, [0, 12, 0])) say("warn", `REDbridge ${input.bridgeVersion} writes no solid meshes: V walks through all of them. Update it to 0.12.0 or later (EDGEdeck: Get REDbridge).`);
+  if (plain) say("info", `${plain} mesh${plain === 1 ? " is" : "es are"} set not solid: V walks through ${plain === 1 ? "it" : "them"}. The Solid switch on the Scene tab changes that.`);
+  if (solid.length) say("info", `${solid.length} mesh${solid.length === 1 ? "" : "es"} will stop V, bullets and cars. Entities keep their own collision.`);
   return out;
 }
 

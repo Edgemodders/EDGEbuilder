@@ -33,6 +33,8 @@ export interface MeshInfoResult {
   bounds: { min: number[]; max: number[] } | null;
   appearances: string[];
   parts?: unknown[] | null;
+  /** REDbridge 0.12.0 and later: whether a mesh has collision data; null for an entity. */
+  hasCollision?: boolean | null;
   error: string | null;
 }
 

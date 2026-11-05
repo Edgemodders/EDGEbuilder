@@ -26,7 +26,7 @@ Last updated 2026-10-30.
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
 | [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 passed on 0.6.5; 32 to 34 passed on 0.6.7; released as 0.6.7 |
-| [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. **B4-1, the Bake tab, passed in game on 2026-11-05 on 0.7.1**, all 16 steps; released as 0.7.3 |
+| [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. **B4-1, the Bake tab, passed in game on 2026-11-05 on 0.7.1**, all 16 steps; released as 0.7.3. B4-2, the Solid switch, built as 0.8.0: checked in REDnode's host with real clicks, waiting for its test |
 
 ## Automated
 
@@ -495,6 +495,30 @@ The logs: all five game starts of the test loaded; ArchiveXL merged the block in
 **What it decides.** The second row of "what the answers decide" did not quite come: boxes did nothing, so it is the third. **Solid means an instanced destructible mesh node, Kinematic, `isDestructible` 0, no impulse**: the mesh's real shape, as `f_big` shows with its open top; Kinematic rather than Static because the game's own nodes use it and V got onto it more easily. A mesh with no collision data cannot be made solid this way, so the panel must know which those are and say so. The way to make one solid is an entity with a collider, as `crate_red.ent` in round 2.
 
 **Boxes are not ruled out for good:** only this form of them. `worldCollisionNode`'s `sectorHash`, `resourceVersion` and proxy type were best guesses from the cooked form, and no sector sampled uses the plain node.
+
+#### The test of B4-2, the Solid switch, on 0.8.0
+
+Round 3 proved the node by rewriting sectors by hand; here `sector.build` writes it (REDbridge 0.12.0, checked byte for byte against round 3's, and in the smoke test, never yet in the game). It answers what round 3 left open: S2's untouched crates, S4's lean, S7's distance, S8's drawn-before-solid, S10's people. Checked before the game in REDnode's host with real clicks: the switch for one object, several and a mesh with no data; Undo and Redo; the file; the Bake tab's lines; "changed since"; a bake with both node types in it. Ctrl+A was not tried there.
+
+| # | Do | Expected | Answers |
+|---|---|---|---|
+| 1 | Open a new scene. Drop a cargo crate; select it | **Solid when baked** on. Hovering it says previews stay walk-through | |
+| 2 | Drop the sofa `bar_sofa_02_k.mesh`, select it | The switch greyed out, "No collision data, so this mesh can't be solid." | S5 |
+| 3 | Select a `crate_red.ent` entity | No switch | |
+| 4 | Copy a crate and turn off **Solid** on the copy; Ctrl+Z, Ctrl+Y; leave it off | Undo and Redo flip it. Name it, or note where it stands | |
+| 5 | Add a crate at scale 2, one turned and leaning, one with another appearance | They stand as placed, and the switch is on for each | S3, S4, S7 |
+| 6 | Ctrl+A, with the sofa selected too | Everything selected, the note says how many can't be solid. Off and on again leaves the sofa as it was | |
+| 7 | **Bake** tab | It names the sofa as having no collision data, counts the one set not solid and the ones that will stop V; **Bake**. Then flip a switch: "The scene changed since"; flip it back | |
+| 8 | Quit. REDcode **Pack and Install**; start; load near them | Everything stands, with no previews | |
+| 9 | Walk into each | The solid crates stop V, and V can stand on one; the sofa and the crate set not solid let V through; `crate_red.ent` stops V | S1, S5 |
+| 10 | Shoot, melee and drive into the solid crates, the scaled and leaning ones too | They stop all of it, stay put and nothing breaks | S2, S10 |
+| 11 | Stand against the leaning crate's low side and walk around it, or jump at it. Claude can also send rays at it | The collision leans with what you see | S4 |
+| 12 | Walk or drive far away and come back fast, watching a crate as it comes in | Note how far off it appears, and whether V can run through a crate that has drawn but is not yet solid | S7, S8 |
+| 13 | Lead or wait for a person near a crate on a walkway | Note whether people walk through or around: people follow paths made ahead of time | S10 |
+| 14 | Open **200 Crates**, Ctrl+A, switch Solid on; Bake; Pack and Install; start. Load the save where V stood (-2013.3, -2877.6, 98.0). Claude reads the frame rate | Against 67 fps (not solid) and 65 fps (none) in the same view | W14 |
+| 15 | Save among solid crates, quit, turn the bake off, load the save | The save is fine, and V is not stuck | S9 |
+| 16 | Turn `redcode.pack.redmod` off in VS Code. Pack and Install; start. Turn it back on after | The bake goes in `archive\\pc\\mod` and stands; EDGEbuilder says it is baked | W15 |
+| 17 | Hover **New** on the Scene tab | The tooltip says `press "New Scene Here"` (0.7.3's wording, not looked at yet) | |
 
 #### Questions for the Bake panel: the test of B4-1
 

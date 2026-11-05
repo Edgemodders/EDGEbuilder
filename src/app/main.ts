@@ -1,6 +1,6 @@
 // The editor page: shows the mod's state and sends requests. No truth lives here.
 import { channel } from "rednode";
-import { applyChange, boxOf, centreOf, membersOf, pickMany, pickSelection, selectionUnits } from "../arrange";
+import { applyChange, boxOf, centreOf, collisionKey, membersOf, pickMany, pickSelection, selectionUnits } from "../arrange";
 import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
 import type { AssetEntry, AssetFrom, AssetKind, PageMessage, Place, SceneEntry, SceneObject, SceneTransform, Snapshot } from "../protocol";
 import { held } from "./held";
@@ -226,7 +226,26 @@ const fields = ["px", "py", "pz", "yaw", "scale"] as const;
 const field = (id: (typeof fields)[number]) => $<Field>(id);
 
 /** The Selected panel: one object's numbers, or for several their middle, a turn and a factor. */
+/** The Solid switch, for the meshes selected: on when all that can be solid are. */
+function renderSolid(sel: SceneObject[], s: Snapshot): void {
+  const meshes = sel.filter((o) => o.kind === "mesh");
+  $("solidRow").hidden = !meshes.length;
+  if (!meshes.length) return;
+  const none = new Set(s.noCollision);
+  const able = meshes.filter((o) => !none.has(collisionKey(o.resource)));
+  const solid = able.filter((o) => o.solid).length;
+  const toggle = $("solid") as HTMLElement & { checked: boolean };
+  toggle.checked = able.length > 0 && solid === able.length;
+  toggle.toggleAttribute("disabled", !able.length);
+  const cannot = meshes.length - able.length;
+  const lines: string[] = [];
+  if (meshes.length > 1 && solid && solid < able.length) lines.push(`${solid} of ${able.length} solid.`);
+  if (cannot) lines.push(meshes.length === 1 ? "No collision data, so this mesh can't be solid." : cannot === 1 ? "1 of these has no collision data, so it can't be solid." : `${cannot} of these have no collision data, so they can't be solid.`);
+  $("solidNote").textContent = lines.join(" ");
+}
+
 function renderSelected(sel: SceneObject[], s: Snapshot): void {
+  renderSolid(sel, s);
   const focused = document.activeElement?.id;
   const units = selectionUnits(s.selected, s.scene.objects, s.scene.groups);
   const oneGroup = units.groups.length === 1 && !units.objects.length ? s.scene.groups.find((g) => g.id === units.groups[0]) : undefined;
@@ -907,7 +926,7 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
     $("message").className = "message warn";
   },
 });
-// Undo, redo, duplicate, copy, cut, paste, group and save: Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z), Ctrl+D, Ctrl+C, Ctrl+X, Ctrl+V,
+// Select all, undo, redo, duplicate, copy, cut, paste, group and save: Ctrl+A, Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z), Ctrl+D, Ctrl+C, Ctrl+X, Ctrl+V,
 // Ctrl+G, Ctrl+Shift+G, Ctrl+S, Ctrl+Shift+S. Not while
 // typing in a field (the field undoes its own text), and not in the middle of a drag or a box.
 window.addEventListener("keydown", (e) => {
@@ -918,6 +937,7 @@ window.addEventListener("keydown", (e) => {
   const ids = selection();
   if (key === "z" && !e.shiftKey) post({ type: "undo" });
   else if (key === "y" || (key === "z" && e.shiftKey)) post({ type: "redo" });
+  else if (key === "a" && !e.shiftKey && state) post({ type: "select", ids: state.scene.objects.map((o) => o.id) });
   else if (key === "d") duplicate();
   else if (key === "c" && ids.length) post({ type: "copy", ids });
   else if (key === "x" && ids.length) post({ type: "cut", ids });
@@ -936,6 +956,11 @@ for (const id of ["editorCamera", "hideHud"] as const) {
   $(id).addEventListener("change", (e) => post({ type: "settings", [id]: !!(e as CustomEvent<{ checked: boolean }>).detail.checked }));
 }
 $("edit").addEventListener("change", (e) => viewport.setEdit(!!(e as CustomEvent<{ checked: boolean }>).detail.checked));
+$("solid").addEventListener("change", (e) => {
+  if (!state) return;
+  const ids = state.scene.objects.filter((o) => o.kind === "mesh" && state!.selected.includes(o.id)).map((o) => o.id);
+  post({ type: "solid", ids, on: !!(e as CustomEvent<{ checked: boolean }>).detail.checked });
+});
 $("rebuild").addEventListener("click", () => post({ type: "rebuild" }));
 $("clear").addEventListener("click", () => post({ type: "clear" }));
 $("buildIndex").addEventListener("click", () => post({ type: "index.build" }));

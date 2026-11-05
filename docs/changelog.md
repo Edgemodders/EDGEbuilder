@@ -10,6 +10,12 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**New**
+
+- The Solid switch: on the Scene tab, for one mesh, several or a group. A solid mesh stops V, bullets and cars once baked. New meshes start solid; meshes already in your scenes stay as they were until you switch them.
+- EDGEbuilder says which meshes can't be solid, because they have no collision data, on the Scene tab and the Bake tab.
+- Ctrl+A selects the whole scene.
+
 ## 0.7.3 (2026-11-05)
 
 **New**
