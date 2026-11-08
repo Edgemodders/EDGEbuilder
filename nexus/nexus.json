@@ -1,0 +1,17 @@
+{
+  "page": 36627,
+  "upload": {
+    "name": "EDGEbuilder",
+    "category": "main",
+    "primary": true,
+    "modManager": true,
+    "archivePrevious": true,
+    "description": "EDGEbuilder {version} for game 2.5, a world builder inside the game. Needs REDnode 0.58.0 or later and Codeware; REDbridge 0.12.1 or later (Get REDbridge in EDGEdeck) for the asset list and baking. Install with Vortex or EDGEdeck, or extract into the game folder."
+  },
+  "mod": "14315126034195",
+  "pulled": {
+    "sha256": "e88e9f9149515b2c8b8b2d5c00bc829cf0233541f0d737c25f86055af384ab8a",
+    "at": "2026-11-08T18:24:19.097Z",
+    "version": "1.0"
+  }
+}

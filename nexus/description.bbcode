@@ -1,0 +1,85 @@
+[center][img]https://raw.githubusercontent.com/Edgemodders/EDGEbuilder/main/docs/assets/brand/banner.png[/img][/center]
+
+[center][size=5][b][color=#fcee0a]Build in Night City while you play: pick an asset, drop it into the live world, put it in place, bake it into the game.[/color][/b][/size][/center]
+
+[center][size=3]EDGEbuilder is a world builder inside Cyberpunk 2077. It lists every mesh and entity in your game, your mods and your REDcode project, drops the one you pick where you look, and gives you a gizmo, a free camera, groups, copy and paste and undo to arrange a scene. Then it bakes the scene into a real streaming sector, so the objects stand in the world with EDGEbuilder uninstalled. It runs on [url=https://www.nexusmods.com/cyberpunk2077/mods/35419]REDnode[/url].[/size][/center]
+
+[center][size=3]What changed in each version: [url=https://edgemodders.github.io/EDGEbuilder/changelog.html]changelog[/url] · Guide: [url=https://edgemodders.ai/wiki/edgebuilder/]EDGEbuilder in the wiki[/url] · Walk-through: [url=https://edgemodders.ai/wiki/edgebuilder/first-scene.html]Your first scene[/url][/size][/center]
+
+[line]
+
+[quote][size=4][b][color=#fcee0a]STATUS: PREVIEW[/color][/b][/size]
+Built in the open and tested in the game after every phase, on [b]game version 2.5[/b]. Meshes and entities can be placed and baked today; lights, decals, sounds and NPCs come in later phases.[/quote][line]
+
+[color=#19f3ff][i](SCREENSHOT: overview.webp, EDGEbuilder in the game: Edit on, a crate selected with its gizmo, the panel with its six tabs)[/i][/color]
+
+[size=5][b][color=#fcee0a]What you can do[/color][/b][/size]
+
+[list]
+[*][b]Browse.[/b] Search about 31,500 meshes and entities from your own game files, plus your installed mods' and the open REDcode project's, each tagged with where it comes from. No lists to download: the index is built from your game in a few seconds.[/*]
+[*][b]Drop.[/b] Pick one and it appears where you look, or where you click, with the game's own lighting and selection outline.[/*]
+[*][b]Position.[/b] Move, turn and scale with a gizmo, the keys G, R and S with axis locks, or typed numbers; snap, and drop to the floor.[/*]
+[*][b]A camera of its own.[/b] Switch [b]Edit[/b] on and fly anywhere: V stays where V stood, the HUD gets out of the way, and other mods' windows hide.[/*]
+[*][b]Arrange.[/b] Select several objects with Ctrl+click or a box, group them, duplicate, copy, cut and paste, and undo the last 100 changes.[/*]
+[*][b]Scenes you keep.[/b] Named scenes, saved after every change, in the EDGE Library, your REDcode project or on this PC, and back where you left them at the next start. Show another scene beside the one you edit.[/*]
+[*][b]Bake.[/b] Turn a scene into part of the world: a streaming sector in your REDcode project, packed and installed like any mod. Meshes can be solid (they stop V, bullets and cars), and you choose how far off they are seen.[/*]
+[*][b]Bakes in the Library.[/b] Keep a bake of one or more scenes in your Library and include it in any project, with Update when it changes.[/*]
+[/list]
+[color=#19f3ff][i](SCREENSHOT: first-two-stacks.webp, two stacks of crates arranged with the gizmo)[/i][/color]
+[color=#19f3ff][i](SCREENSHOT: scenes-library.webp, the Library tab with folders, scenes and the Picked panel)[/i][/color]
+[color=#19f3ff][i](SCREENSHOT: scenes-bake.webp, the Bake tab)[/i][/color]
+[color=#19f3ff][i](SCREENSHOT: first-baked.webp, V against baked crates, EDGEbuilder closed)[/i][/color]
+
+[size=5][b][color=#fcee0a]Requirements[/color][/b][/size]
+
+[list]
+[*][url=https://www.nexusmods.com/cyberpunk2077/mods/35419]REDnode[/url] 0.58.0 or later, with what it needs (RED4ext, redscript).[/*]
+[*][url=https://www.nexusmods.com/cyberpunk2077/mods/7780]Codeware[/url] 1.14 or later.[/*]
+[*][b]REDbridge[/b] 0.12.1 or later, which reads the game's files for the asset list and writes your bakes. The easy way: open [url=https://www.nexusmods.com/cyberpunk2077/mods/35420]EDGEdeck[/url] once and press [b]Get REDbridge[/b].[/*]
+[*]To bake: [url=https://www.nexusmods.com/cyberpunk2077/mods/35421]REDcode[/url] 0.10.5 or later, with a project open to bake into, and [url=https://www.nexusmods.com/cyberpunk2077/mods/4198]ArchiveXL[/url] in the game for what you bake.[/*]
+[*]Cyberpunk 2077 on PC, Windows 10 or 11, 64-bit, [b]game version 2.5[/b].[/*]
+[/list][size=5][b][color=#fcee0a]Install[/color][/b][/size]
+
+[list]
+[*][b]Vortex:[/b] Mod Manager Download, then enable and deploy. Install REDnode first.[/*]
+[*][b]EDGEdeck:[/b] Add mod, pick the zip, Deploy. A newer version takes the old one's place.[/*]
+[*][b]By hand:[/b] extract the zip into the game folder, so EDGEbuilder lands in [i]red4ext/plugins/REDnode/apps/edgebuilder/[/i].[/*]
+[/list][size=5][b][color=#fcee0a]First run[/color][/b][/size]
+
+[list=1]
+[*]Start the game and load a save.[/*]
+[*]Press [b]F10[/b] for the REDnode launcher and open the [b]Mod Manager[/b]. Select [b]EDGEbuilder[/b], switch it on, and pin it to the launcher.[/*]
+[*]Under [b]Permissions[/b], switch [b]Allowed[/b] on for REDbridge, and for solo mode, which hides other mods' windows while you edit.[/*]
+[*]The panel opens at the right. When its three pills are green (World ready, REDbridge, the asset count), you're ready: [url=https://edgemodders.ai/wiki/edgebuilder/first-scene.html]Your first scene[/url] takes it from there.[/*]
+[/list][color=#19f3ff][i](SCREENSHOT: install-permissions.webp, the Mod Manager with EDGEbuilder's permissions)[/i][/color]
+
+[size=5][b][color=#fcee0a]Questions[/color][/b][/size]
+
+[b]Do my baked objects need EDGEbuilder?[/b]
+No. A bake is ordinary game files in your REDcode project. Pack and install the project, and the objects stand with EDGEbuilder uninstalled. Players of your mod need ArchiveXL, and any mod whose assets you placed: the Bake tab names them.
+
+[b]What happens to what I place before I bake it?[/b]
+It's a preview: in the world while EDGEbuilder runs, and kept in your scene. When a save loads, EDGEbuilder puts it back by itself.
+
+[b]Can I place the game's own objects, and my mods'?[/b]
+Yes: every mesh and entity in the game's archives, in your installed mods and in the open REDcode project.
+
+[b]Something isn't working.[/b]
+See [url=https://edgemodders.ai/wiki/edgebuilder/troubleshooting.html]Troubleshooting[/url], or ask on the Discord below.
+
+[line]
+
+[size=5][b][color=#fcee0a]Links[/color][/b][/size]
+
+[list]
+[*]Guide: [url=https://edgemodders.ai/wiki/edgebuilder/]edgemodders.ai/wiki/edgebuilder[/url][/*]
+[*]Source and issues: [url=https://github.com/Edgemodders/EDGEbuilder]github.com/Edgemodders/EDGEbuilder[/url][/*]
+[*]REDnode: [url=https://www.nexusmods.com/cyberpunk2077/mods/35419]Nexus page[/url], [url=https://edgemodders.github.io/REDnode/]docs[/url][/*]
+[*]EDGEmodders: [url=https://edgemodders.ai/]edgemodders.ai[/url][/*]
+[*]Community Discord: [url=https://discord.gg/63qP3Erw43]discord.gg/63qP3Erw43[/url][/*]
+[/list][size=5][b][color=#fcee0a]Credits[/color][/b][/size]
+
+[list]
+[*]Inspired by [b]World Builder[/b] by keanuWheeze, a Cyber Engine Tweaks mod that showed a world editor can live inside the running game. EDGEbuilder is its own design and uses none of World Builder's code, files or data.[/*]
+[*]The Cyberpunk 2077 modding community: RED4ext, redscript, Codeware, ArchiveXL, WolvenKit and the research REDnode and REDbridge build on.[/*]
+[/list][size=2]EDGEbuilder is not affiliated with or endorsed by CD PROJEKT RED. Cyberpunk 2077 is a trademark of CD PROJEKT.[/size]

@@ -10,6 +10,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**Other**
+
+- The download is now EDGEbuilder-<version>.zip, laid out like the game folder (red4ext/plugins/REDnode/apps/edgebuilder), with a README.txt and the license, so Vortex, EDGEdeck and an extract by hand all install it.
+
 ## 0.9.0 (2026-11-08)
 
 B4-3, Library bakes, the last phase before the public preview. Tested on game 2.5 with REDnode 0.58.0 and REDbridge 0.12.1.

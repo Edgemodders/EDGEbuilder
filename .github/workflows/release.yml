@@ -1,20 +1,30 @@
-# Releases EDGEbuilder: the package zip (tools/package.ps1) and a GitHub release. The same workflow as
-# REDnode's, EDGEmat's and EDGEchat's release.yml, so every EDGE tool releases the same way.
+# Releases EDGEbuilder: the player zip (tools/release/zip.mjs), a GitHub release and the Nexus Mods
+# page. The same workflow as REDnode's and REDagent's release.yml, so every EDGE tool releases the
+# same way.
 #
 #   Run workflow (Actions tab)                  builds the zip and keeps it as the run's artifact,
 #                                               to install with EDGEdeck and test before a release
 #   Run workflow, "Make a release" ticked       also tags the commit v<version> and makes the GitHub
 #                                               release with the zip. Stops first if that tag exists
 #                                               (raise "version" in edgebuilder/rednode-app.json and
-#                                               package.json), if it is not run on main, or if
+#                                               package.json), if it is not run on main, if
 #                                               docs/changelog.md has no section for the version
 #                                               (tools/release/notes.mjs), or if README.md's status
 #                                               line and badge do not say the version
 #                                               (tools/release/readme-check.mjs)
-#
-# No Nexus Mods step yet: EDGEbuilder's builds are test builds until the public preview after B4
-# (docs/design.md, "Release stages"). The preview adds nexus/ and the "Update Nexus Mods" input,
-# with tools/nexus/ copied from REDnode, as the other EDGE tools have them.
+#   ... and "Update Nexus Mods" ticked          also, after the GitHub release, uploads the zip to
+#                                               the Nexus page (mod 36627) as the main file's new
+#                                               version (the old one archived; the first one on a
+#                                               new page), adds the version's changelog and pushes
+#                                               nexus/description.bbcode (tools/nexus/nexus.mjs,
+#                                               copied from REDnode; the organization's NEXUS_KEY
+#                                               secret). It checks the page first and stops before
+#                                               building if the description changed on Nexus since
+#                                               the last pull (npm run nexus:pull, merge, commit,
+#                                               run again). If the upload fails after the GitHub
+#                                               release, run tools/nexus/nexus.mjs release on the
+#                                               dev PC with the release's zip: it skips what is
+#                                               already done (nexus/README.md).
 #
 # Release gate: make a release only after every in-game test of the builds since the last release
 # has passed (docs/testing.md). Untested or failed means no release.
@@ -27,19 +37,30 @@ on:
         description: Make a release (tags this commit v<version>). Only after every in-game test has passed
         type: boolean
         default: false
+      nexus:
+        description: Update Nexus Mods (with Make a release) - upload the zip, its changelog and the page's description
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+# One release at a time.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   build:
-    # Windows: the zip is written by PowerShell's Compress-Archive, as on the dev PC.
+    # Windows: the zip is written by Windows' own tar, as on the dev PC.
     runs-on: windows-latest
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the tags: the Nexus check compares with the previous release's description
 
       - uses: actions/setup-node@v5
         with:
@@ -54,9 +75,13 @@ jobs:
             echo "::error::edgebuilder/rednode-app.json says ${version}, package.json says ${npm_version}. Raise both."
             exit 1
           fi
+          if [ "${{ inputs.nexus }}" = "true" ] && [ "${{ inputs.release }}" != "true" ]; then
+            echo "::error::Update Nexus Mods needs Make a release ticked too."
+            exit 1
+          fi
           {
             echo "VERSION=${version}"
-            echo "ZIP=${GITHUB_WORKSPACE}/dist/edgebuilder-${version}.zip"
+            echo "ZIP=${GITHUB_WORKSPACE}/dist/EDGEbuilder-${version}.zip"
           } >> "$GITHUB_ENV"
 
       - name: The version is not released yet
@@ -79,7 +104,19 @@ jobs:
 
       - name: Release notes from docs/changelog.md
         if: inputs.release
-        run: node tools/release/notes.mjs "${VERSION}" --out "${RUNNER_TEMP}/notes.md"
+        run: |
+          node tools/release/notes.mjs "${VERSION}" --out "${RUNNER_TEMP}/notes.md"
+          node tools/release/notes.mjs "${VERSION}" --nexus --out "${RUNNER_TEMP}/nexus-notes.txt"
+
+      # Before anything is built or published: Nexus takes this release, and its description has no
+      # edit the repo lacks.
+      - name: Nexus Mods can take this release
+        if: inputs.release && inputs.nexus
+        env:
+          NEXUS_KEY: ${{ secrets.NEXUS_KEY }}
+        run: |
+          node tools/check-bbcode.mjs nexus/description.bbcode
+          node tools/nexus/nexus.mjs check --version "${VERSION}"
 
       - name: Install dependencies
         run: npm ci
@@ -91,12 +128,20 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: edgebuilder-build
-          path: dist/edgebuilder-*.zip
+          path: dist/EDGEbuilder-*.zip
           if-no-files-found: error
 
       - name: GitHub release
+        id: github
         if: ${{ inputs.release && !cancelled() && steps.package.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "v${VERSION}" "${ZIP}" --target "${GITHUB_SHA}" --title "EDGEbuilder ${VERSION}" --notes-file "${RUNNER_TEMP}/notes.md"
+
+      # Skips what is already on Nexus, so a re-run is safe.
+      - name: Nexus Mods
+        if: ${{ inputs.release && inputs.nexus && !cancelled() && steps.github.outcome == 'success' }}
+        env:
+          NEXUS_KEY: ${{ secrets.NEXUS_KEY }}
+        run: node tools/nexus/nexus.mjs release --version "${VERSION}" --zip "${ZIP}" --notes "${RUNNER_TEMP}/nexus-notes.txt"
