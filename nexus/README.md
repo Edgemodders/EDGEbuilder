@@ -14,7 +14,9 @@ The page is [36627](https://www.nexusmods.com/cyberpunk2077/mods/36627), made by
 
 From the first release on, the Release workflow's **Update Nexus Mods** box uploads each release: the zip as the main file (the first one on a new page, then a new version with the old one archived), the version's changelog, and `description.bbcode`. It stops first if the description was edited on Nexus since the last pull: then `npm run nexus:pull`, merge with `git diff nexus/`, commit, and run it again.
 
-## Before the first release: the pictures
+## The pictures
+
+Done on 2026-11-08: the owner uploaded the six pictures to the page and put them in the description on Nexus, and `npm run nexus:pull` brought them back here. For a new picture, the same way:
 
 | In `description.bbcode` | Replace with |
 |---|---|
