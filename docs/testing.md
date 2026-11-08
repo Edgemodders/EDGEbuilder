@@ -666,3 +666,14 @@ Before: deploy 0.9.0 with the game closed; `redcode.pack.redmod` is off. The RED
 | L2 | The included bake's two blocks loaded beside the project's own bakes (Market Corner copy 2, VoodDoo Inside), so ArchiveXL merged blocks from a Library bake and the project in one start. Two bakes from different mods in one game were not tried: each mod's blocks go through its own `.xl`, as W15 showed |
 | L3 | Moving an object in Yard tagged Kabuki Bakes STALE; a second bake of Yard (Corner Copy) tagged both COLLIDES, and deleting it cleared the flag |
 | L4 | After step 5 the note listed Kabuki Bakes v2 and its eight files, the project's copies identical to the bake's. After step 11: one item, `kind` bake, `id` 89b9385f65241231, `path` `Alleys/Kabuki/kabuki_bakes.bake`, `version` 4, the four files of 200 Cargo Crates; Yard's files gone from the project, the project's own bakes untouched. After step 13 the record has no `library` mark and the note has no items: the bake is the project's own again |
+
+#### The check of 0.9.1, the preview candidate
+
+Built on 2026-11-08: no change in the window or the mod since 0.9.0. The zip is now `EDGEbuilder-<version>.zip`, laid out like the game folder (`red4ext/plugins/REDnode/apps/edgebuilder/`, with README.txt and LICENSE.txt), for Vortex and Nexus. EDGEdeck took it as a new version of EDGEbuilder 0.9.0 and deployed its seven files.
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Start, load a save, open EDGEbuilder | The pills go green; the log says EDGEbuilder 0.9.1 |
+| 2 | On the wide monitor: Edit on, select a crate (B3-2 step 16) | The gizmo sits on the crate; the panel at the right edge; the view's tint covers the whole width |
+| 3 | Click crates near the far left and the far right; box-select near each edge; drop at a click near each edge | Each click selects what it is on, the box takes what it covers, each drop lands where clicked |
+| 4 | Look at the help line | At the bottom centre of the wide screen |
