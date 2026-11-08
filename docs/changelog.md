@@ -10,8 +10,13 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.9.1 (2026-11-08)
+
+The first public preview, on Nexus Mods (https://www.nexusmods.com/cyberpunk2077/mods/36627). The same EDGEbuilder as 0.9.0, tested on game 2.5 with REDnode 0.58.0 and REDbridge 0.12.1, and now checked on a wide screen too.
+
 **Other**
 
+- The editor covers a screen wider than 16:9 as it should: checked on an ultrawide monitor, with the gizmo, clicks, box select and drops lining up to both edges.
 - The download is now EDGEbuilder-<version>.zip, laid out like the game folder (red4ext/plugins/REDnode/apps/edgebuilder), with a README.txt and the license, so Vortex, EDGEdeck and an extract by hand all install it.
 
 ## 0.9.0 (2026-11-08)

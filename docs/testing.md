@@ -677,3 +677,5 @@ Built on 2026-11-08: no change in the window or the mod since 0.9.0. The zip is 
 | 2 | On the wide monitor: Edit on, select a crate (B3-2 step 16) | The gizmo sits on the crate; the panel at the right edge; the view's tint covers the whole width |
 | 3 | Click crates near the far left and the far right; box-select near each edge; drop at a click near each edge | Each click selects what it is on, the box takes what it covers, each drop lands where clicked |
 | 4 | Look at the help line | At the bottom centre of the wide screen |
+
+**Passed in game on 2026-11-08 on 0.9.1**, on the owner's wide monitor: every step as expected. EDGEdeck installed the new zip as a new version of EDGEbuilder. This also answers B3-2's step 16 (ultrawide), open since 0.6.7.
