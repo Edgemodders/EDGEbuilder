@@ -6,6 +6,7 @@
 # Output (committed):
 #   docs/assets/brand/banner.png   2560 x 640  (1280 x 320 at 2x), README header
 #   docs/assets/brand/social.png   1280 x 640, upload in Settings > General > Social preview
+#   docs/assets/brand/nexus.png    1280 x 640, the Nexus page's primary image (room for the header)
 #   docs/assets/brand/badges/*.svg
 #   docs/assets/brand/icon.png           256 x 256, app and site icon
 
@@ -42,6 +43,7 @@ function Render($query, $file, $width, $height, $scale) {
 
 Render 'banner' 'banner.png' 1280 320 2
 Render 'social' 'social.png' 1280 640 1
+Render 'nexus' 'nexus.png' 1280 640 1
 
 # Square icon, 256 x 256 with transparent cut corners.
 $iconUrl = 'file:///' + ((Join-Path $PSScriptRoot 'icon.html') -replace '\\', '/')

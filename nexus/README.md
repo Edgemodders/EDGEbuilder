@@ -32,7 +32,7 @@ The pictures are the owner's wiki screenshots: full size in `Documents\EDGE Scre
 | Brief overview | A world builder inside Cyberpunk 2077: pick any mesh or entity from your game or mods, drop it into the live world, position and arrange it from a free camera, save scenes, and bake them into the world as a real mod. Runs on REDnode. (255 characters at most; this is 233) |
 | Author | Edgemodders |
 | Language | English |
-| Primary image | The owner's thumbnail, or `docs/assets/brand/social.png` (1280 x 640). The banner (`docs/assets/brand/banner.png`) is already at the top of the description |
+| Primary image | `docs/assets/brand/nexus.png` (1280 x 640, `tools/brand/render.ps1`): the social layout with room at the top for the EDGEmodders header the owner adds by hand, as REDnode's and REDsave's. The banner (`docs/assets/brand/banner.png`) is already at the top of the description |
 | Requirements | REDnode (its Nexus page; note: "0.58.0 or later"), Codeware (note: "1.14 or later"), EDGEdeck (note: "For REDbridge 0.12.1 or later: open EDGEdeck once and press Get REDbridge."). Optional, noted as such: REDcode (note: "To bake: a project to bake into, 0.10.5 or later."), ArchiveXL (note: "In the game, for what you bake.") |
 | Permissions | MIT: open source, free to modify and redistribute with the license notice |
 | Tags | Modders resource, utility, world editing |

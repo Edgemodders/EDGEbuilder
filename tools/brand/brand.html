@@ -1,8 +1,10 @@
 <!doctype html>
-<!-- Source for the README banner and the GitHub social preview.
+<!-- Source for the README banner, the GitHub social preview and the Nexus picture.
      Rendered to PNG by tools/brand/render.ps1 with headless Chrome:
        brand.html?banner  -> 1280 x 320
-       brand.html?social  -> 1280 x 640 -->
+       brand.html?social  -> 1280 x 640
+       brand.html?nexus   -> 1280 x 640, the social layout 55 px lower, with room at the top for the
+                             EDGEmodders header the owner adds by hand (as REDnode's and REDsave's) -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -37,6 +39,7 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
     var(--bg);
 }
 .social .frame { height: 640px; padding: 72px 80px; grid-template-columns: 1fr; gap: 44px; align-content: center; }
+.nexus .frame { padding-top: 127px; padding-bottom: 17px; }
 
 /* corner brackets */
 .frame::before, .frame::after {
@@ -86,6 +89,8 @@ h1 span { color: var(--yellow); }
 </div>
 <script>
   if (location.search.includes("social")) document.body.classList.add("social");
+  // The Nexus picture is the social layout, lower.
+  if (location.search.includes("nexus")) document.body.classList.add("social", "nexus");
 </script>
 </body>
 </html>
