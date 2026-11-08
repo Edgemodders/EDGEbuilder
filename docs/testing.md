@@ -656,4 +656,4 @@ Before: deploy 0.9.0 with the game closed; `redcode.pack.redmod` is off. The RED
 | 10 | Pick Kabuki Bakes, **Bake again** | Version 3. The Bake tab shows **Update to v3** beside both scenes; press it: `from Kabuki Bakes v3` | |
 | 11 | Pick Kabuki Bakes, the trash icon by the second scene, Yes; then **Update in project to v4** (Include in project, named so when the project has an older version) | Version 4, 1 scene; the project's copy of the second scene goes (the Bake tab lists only 200 Cargo Crates) | |
 | 12 | Claude reads `source\library.json` in the project | One EDGEbuilder item: `kind` bake, its `id`, `path` `Alleys/Kabuki/kabuki_bakes.bake`, `version` 4, the four files of 200 Cargo Crates | L4 |
-| 13 | Bake tab: open 200 Cargo Crates and press **Bake** (straight into the project) | It bakes, and the Bake tab no longer says it came from the Library: a project needs no Library | L4 |
+| 13 | Library tab: pick 200 Cargo Crates, **Open** (if it is not open already). Bake tab: press **Bake** (straight into the project) | It bakes, and the Bake tab no longer says it came from the Library: a project needs no Library | L4 |
