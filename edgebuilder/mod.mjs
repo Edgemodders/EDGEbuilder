@@ -1008,6 +1008,144 @@ function namesIn(dir) {
     return [];
   }
 }
+var BakeFolderEnding = ".bake";
+function bakeFolderProject(dir) {
+  const source = path5.join(dir, "source");
+  return { name: path5.basename(dir).replace(/\.bake$/i, ""), dir, archive: path5.join(source, "archive"), raw: path5.join(source, "raw"), resources: path5.join(source, "resources") };
+}
+function newBakeId() {
+  return createHash("sha256").update(`${Date.now()}-${Math.random()}-${process.pid}`).digest("hex").slice(0, 16);
+}
+function readBakeMeta(dir) {
+  const data = JSON.parse(fs5.readFileSync(path5.join(dir, "bake.json"), "utf8"));
+  if (data.format !== 1 || typeof data.id !== "string" || !Array.isArray(data.scenes)) throw new Error("not an EDGEbuilder bake");
+  return data;
+}
+function writeBakeMeta(dir, meta) {
+  fs5.mkdirSync(dir, { recursive: true });
+  fs5.writeFileSync(path5.join(dir, "bake.json"), JSON.stringify(meta, null, 2));
+}
+function freeBakeDir(parent, name) {
+  const base = slugOf(name);
+  for (let n = 1; ; n++) {
+    const dir = path5.join(parent, `${base}${n === 1 ? "" : `_${n}`}${BakeFolderEnding}`);
+    if (!fs5.existsSync(dir)) return dir;
+  }
+}
+function libraryPath(root, file) {
+  const rel = path5.relative(root, file);
+  return rel.startsWith("..") || path5.isAbsolute(rel) ? file : rel.replace(/\\/g, "/");
+}
+function fromLibraryPath(root, p) {
+  return path5.isAbsolute(p) ? p : path5.join(root, ...p.split("/"));
+}
+function scanBakes(root) {
+  const out = [];
+  if (!root) return out;
+  const walk = (dir, rel, depth) => {
+    let names;
+    try {
+      names = fs5.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const d of names) {
+      if (!d.isDirectory() || d.name.startsWith(".") || d.name === "node_modules") continue;
+      const full = path5.join(dir, d.name);
+      if (d.name.toLowerCase().endsWith(BakeFolderEnding)) {
+        try {
+          out.push({ dir: full, folder: rel, meta: readBakeMeta(full) });
+        } catch (err) {
+          out.push({ dir: full, folder: rel, error: err.message });
+        }
+      } else if (depth < 8) walk(full, rel ? `${rel}/${d.name}` : d.name, depth + 1);
+    }
+  };
+  walk(root, "", 0);
+  return out.sort((a, b) => a.dir.localeCompare(b.dir));
+}
+function bakeFilesOf(slug) {
+  return [
+    `source/archive/edgebuilder/${slug}/${slug}.streamingsector`,
+    `source/archive/edgebuilder/${slug}/${slug}.streamingblock`,
+    `source/resources/archive/pc/mod/${slug}.archive.xl`,
+    `source/raw/edgebuilder/${slug}.bake.json`
+  ];
+}
+var noteFile = (projectDir) => path5.join(projectDir, "source", "library.json");
+function readNote(projectDir) {
+  try {
+    const data = JSON.parse(fs5.readFileSync(noteFile(projectDir), "utf8"));
+    if (Array.isArray(data?.items)) return { ...data, format: 1, items: data.items };
+  } catch {
+  }
+  return { format: 1, items: [] };
+}
+function writeNote(projectDir, note) {
+  fs5.mkdirSync(path5.dirname(noteFile(projectDir)), { recursive: true });
+  fs5.writeFileSync(noteFile(projectDir), JSON.stringify(note, null, 2));
+}
+function libraryBakesIn(projectDir) {
+  const out = /* @__PURE__ */ new Map();
+  for (const item of readNote(projectDir).items) {
+    if (item.by !== "edgebuilder" || item.kind !== "bake" || !item.id) continue;
+    for (const f of item.files) {
+      const m = /^source\/archive\/edgebuilder\/([^/]+)\//.exec(f);
+      if (m) out.set(m[1], { id: item.id, version: item.version, path: item.path });
+    }
+  }
+  return out;
+}
+function includeClashes(project2, meta) {
+  const fromLibrary = libraryBakesIn(project2.dir);
+  const have = new Set(bakesIn(project2).map((b) => b.slug));
+  return meta.scenes.map((s) => s.slug).filter((slug) => have.has(slug) && fromLibrary.get(slug)?.id !== meta.id);
+}
+function includeBake(dir, meta, project2, libraryRoot2) {
+  const note = readNote(project2.dir);
+  const before = note.items.find((i) => i.by === "edgebuilder" && i.kind === "bake" && i.id === meta.id);
+  const files = [];
+  for (const s of meta.scenes) {
+    for (const rel of bakeFilesOf(s.slug)) {
+      const from = path5.join(dir, ...rel.split("/"));
+      if (!fs5.existsSync(from)) continue;
+      const to = path5.join(project2.dir, ...rel.split("/"));
+      fs5.mkdirSync(path5.dirname(to), { recursive: true });
+      if (rel.endsWith(".bake.json")) {
+        const record = JSON.parse(fs5.readFileSync(from, "utf8"));
+        fs5.writeFileSync(to, JSON.stringify({ ...record, library: { id: meta.id, name: meta.name, version: meta.version } }, null, 2));
+      } else fs5.copyFileSync(from, to);
+      files.push(rel);
+    }
+  }
+  for (const old of before?.files ?? []) {
+    if (files.includes(old) || !/^source\/(archive\/edgebuilder|resources\/archive\/pc\/mod|raw\/edgebuilder)\//.test(old)) continue;
+    const file = path5.join(project2.dir, ...old.split("/"));
+    fs5.rmSync(file, { force: true });
+    if (/^source\/archive\/edgebuilder\/[^/]+\//.test(old)) {
+      try {
+        fs5.rmdirSync(path5.dirname(file));
+      } catch {
+      }
+    }
+  }
+  const item = { id: meta.id, kind: "bake", path: libraryPath(libraryRoot2, dir), version: meta.version, added: (/* @__PURE__ */ new Date()).toISOString(), by: "edgebuilder", files };
+  note.items = [...note.items.filter((i) => i !== before), item];
+  writeNote(project2.dir, note);
+  return files;
+}
+function forgetInNote(projectDir, slug) {
+  const note = readNote(projectDir);
+  const mine = new Set(bakeFilesOf(slug));
+  let changed = false;
+  note.items = note.items.flatMap((i) => {
+    if (i.by !== "edgebuilder" || i.kind !== "bake" || !i.files.some((f) => mine.has(f))) return [i];
+    changed = true;
+    const files = i.files.filter((f) => !mine.has(f));
+    return files.length ? [{ ...i, files }] : [];
+  });
+  if (changed) writeNote(projectDir, note);
+}
 
 // src/scene.ts
 import * as fs6 from "node:fs";
@@ -1190,7 +1328,7 @@ var state = {
   query: { text: "", kind: "all", from: "all" },
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
   scene: { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: [] },
-  library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [] },
+  library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [], bakes: [] },
   bake: { project: null, checks: [], stale: false, list: [] },
   selected: [],
   history: { undo: 0, redo: 0 },
@@ -2147,6 +2285,8 @@ function rootOf(place2) {
 }
 function scanLibrary() {
   state.library.shelves = placeRoots().map(scanShelf);
+  libraryBakeDirs = scanBakes(libraryRoot).map(({ dir, folder }) => ({ dir, folder }));
+  lookAtLibraryBakes();
 }
 function whereText(file) {
   const roots = placeRoots();
@@ -2507,6 +2647,24 @@ channel.on((m) => {
       case "bake.remove":
         await inTurn("Remove bake", () => removeBake2(m.slug));
         break;
+      case "lbake.new":
+        await inTurn("Bake into the Library", () => newLibraryBake(m.file, m.name, m.folder));
+        break;
+      case "lbake.add":
+        await inTurn("Bake into the Library", () => editLibraryBake(m.dir, "add", m.file));
+        break;
+      case "lbake.drop":
+        await inTurn("Take a scene out of a bake", () => editLibraryBake(m.dir, "drop", m.slug));
+        break;
+      case "lbake.rebake":
+        await inTurn("Bake again", () => editLibraryBake(m.dir, "rebake"));
+        break;
+      case "lbake.include":
+        await inTurn("Include in project", () => includeLibraryBake(m.dir));
+        break;
+      case "lbake.delete":
+        await inTurn("Delete bake", () => deleteLibraryBake(m.dir));
+        break;
       case "redo":
         await inTurn("Redo", () => travel(future, past, "Redo"));
         break;
@@ -2621,6 +2779,11 @@ function lookAtBakes() {
   const list2 = bakesIn(target);
   const current = scene.file ? list2.find((b) => b.slug === slug) : void 0;
   inGameNow = deployedBakes(gameDir());
+  lookAtLibraryBakes();
+  for (const r of list2) {
+    const lib = r.library && state.library.bakes.find((b) => b.id === r.library.id);
+    if (lib && r.library && lib.version > r.library.version) r.library = { ...r.library, latest: lib.version, dir: lib.dir };
+  }
   const fromElsewhere = current?.file && !sameFile(current.file, scene.file) ? current : void 0;
   state.bake = {
     ...state.bake,
@@ -2647,17 +2810,23 @@ var bakeSoon = debounced(() => {
   publish();
   void lookAtCollision();
 });
-async function bakeOpenScene() {
-  await lookAtCollision();
-  lookAtBakes();
-  const stop = state.bake.checks.find((c) => c.tone === "error");
-  if (stop) {
-    publish();
-    return say(stop.text, "warn");
+async function noCollisionFor(b, objects) {
+  const none = /* @__PURE__ */ new Set();
+  for (const p of new Set(objects.filter((o) => o.kind === "mesh" && o.solid && o.resource).map((o) => o.resource))) {
+    const info = await assetInfo(b, p).catch(() => void 0);
+    if (info?.hasCollision === false) none.add(collisionKey(p));
   }
-  const target = bakeProject();
-  const { scene: input } = bakeInput(scene.name, scene.game, scene.groups, solidForBake(scene.objects, new Set(state.noCollision)));
+  return none;
+}
+function sceneToBake(file) {
+  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, game: scene.game, groups: scene.groups, objects: scene.objects };
+  const d = readSceneFile(file);
+  return { name: d.name, game: d.game, groups: d.groups ?? [], objects: d.objects };
+}
+async function bakeSceneInto(target, file, root) {
+  const src = sceneToBake(file);
   const b = bridge;
+  const { scene: input } = bakeInput(src.name, src.game, src.groups, solidForBake(src.objects, await noCollisionFor(b, src.objects)));
   const byPath = new Map(index.extra.map((e) => [e.path.toLowerCase(), e]));
   for (const o of input.objects) {
     if (o.bounds || !o.resource) continue;
@@ -2668,41 +2837,57 @@ async function bakeOpenScene() {
   }
   let built;
   try {
-    try {
-      built = await b.sectorBuild({ project: target.dir, scene: input, root: target.archive });
-    } catch (err) {
-      if (!/param|argument|signature|method/i.test(err.message)) throw err;
-      built = await b.sectorBuild({ project: target.dir, scene: input });
-    }
+    built = await b.sectorBuild({ project: target.dir, scene: input, ...root ? { root } : {} });
+  } catch (err) {
+    if (!root || !/param|argument|signature|method/i.test(err.message)) throw err;
+    built = await b.sectorBuild({ project: target.dir, scene: input });
+  }
+  const xl = settleXl(built.xl, built.name, built.blockPath);
+  const record = {
+    slug: built.name,
+    name: src.name,
+    file,
+    hash: bakeHash(src.objects),
+    objects: built.nodes,
+    date: (/* @__PURE__ */ new Date()).toISOString(),
+    bridge: state.bridge.version,
+    box: built.streamingBox,
+    needs: sceneNeeds(src.objects.map((o) => o.resource), index.extra)
+  };
+  writeRecord(target, record);
+  console.log(`Baked ${src.name}: ${built.nodes} objects into ${target.dir} (${built.sector})${built.warnings.length ? `; ${built.warnings.length} warnings: ${built.warnings.join(" | ")}` : ""}`);
+  return { built, xl, record };
+}
+async function bakeOpenScene() {
+  await lookAtCollision();
+  lookAtBakes();
+  const stop = state.bake.checks.find((c) => c.tone === "error");
+  if (stop) {
+    publish();
+    return say(stop.text, "warn");
+  }
+  const target = bakeProject();
+  let done;
+  try {
+    done = await bakeSceneInto(target, scene.file, target.archive);
   } catch (err) {
     console.log(`Bake ${scene.name}: ${err.message}`);
     state.bake.last = void 0;
     lookAtBakes();
     return say(`The bake did not go through: ${err.message}`, "error");
   }
-  const xl = settleXl(built.xl, built.name, built.blockPath);
-  const needs = needsOf();
-  writeRecord(target, {
-    slug: built.name,
-    name: scene.name,
-    file: scene.file,
-    hash: bakeHash(scene.objects),
-    objects: built.nodes,
-    date: (/* @__PURE__ */ new Date()).toISOString(),
-    bridge: state.bridge.version,
-    box: built.streamingBox,
-    needs
-  });
-  state.bake.last = { slug: built.name, files: [built.sector, built.block, xl].map((f) => path7.relative(target.dir, f)), warnings: built.warnings };
+  forgetInNote(target.dir, done.built.name);
+  state.bake.last = { slug: done.built.name, files: [done.built.sector, done.built.block, done.xl].map((f) => path7.relative(target.dir, f)), warnings: done.built.warnings };
   lookAtBakes();
-  console.log(`Baked ${scene.name}: ${built.nodes} objects into ${target.name} (${built.sector})${built.warnings.length ? `; ${built.warnings.length} warnings: ${built.warnings.join(" | ")}` : ""}`);
-  say(`Baked ${scene.name}: ${built.nodes} object${built.nodes === 1 ? "" : "s"} into ${target.name}. Pack and install the project, and start the game again.`, "ok");
+  const n = done.built.nodes;
+  say(`Baked ${scene.name}: ${n} object${n === 1 ? "" : "s"} into ${target.name}. Pack and install the project, and start the game again.`, "ok");
 }
 async function removeBake2(slug) {
   const target = bakeProject();
   if (!target) return say("No REDcode project is open.", "warn");
   try {
     removeBake(target, slug);
+    forgetInNote(target.dir, slug);
   } catch (err) {
     return say(`${slug} could not be removed: ${err.message}`, "error");
   }
@@ -2710,6 +2895,185 @@ async function removeBake2(slug) {
   lookAtBakes();
   const stillIn = inGameNow.get(slug);
   say(`Took the bake ${slug} out of ${target.name}. Its scene is untouched.${stillIn ? ` It stays in the game (${stillIn}) until you pack and install the project again.` : ""}`, "ok");
+}
+var libraryBakeDirs = [];
+var sceneHashes = /* @__PURE__ */ new Map();
+function sceneNow(file) {
+  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, hash: bakeHash(scene.objects) };
+  let st;
+  try {
+    st = fs7.statSync(file);
+  } catch {
+    return void 0;
+  }
+  const known = sceneHashes.get(file);
+  if (known && known.size === st.size && known.mtime === st.mtimeMs) return known;
+  try {
+    const d = readSceneFile(file);
+    const now = { size: st.size, mtime: st.mtimeMs, name: d.name, hash: bakeHash(d.objects) };
+    sceneHashes.set(file, now);
+    return now;
+  } catch {
+    return void 0;
+  }
+}
+function lookAtLibraryBakes() {
+  const root = libraryRoot ?? "";
+  const versions = /* @__PURE__ */ new Map();
+  if (project) for (const v2 of libraryBakesIn(project.dir).values()) versions.set(v2.id, v2.version);
+  const out = [];
+  for (const { dir, folder } of libraryBakeDirs) {
+    let meta;
+    try {
+      meta = readBakeMeta(dir);
+    } catch (err) {
+      out.push({ dir, folder, name: path7.basename(dir), id: "", version: 0, scenes: [], inGame: false, collides: [], error: err.message });
+      continue;
+    }
+    const scenes = meta.scenes.map((s) => {
+      const file = fromLibraryPath(root, s.path);
+      const now = sceneNow(file);
+      return { name: s.name, slug: s.slug, file, ...now ? {} : { missing: true }, ...now && s.hash && now.hash !== s.hash ? { stale: true } : {} };
+    });
+    out.push({
+      dir,
+      folder,
+      name: meta.name,
+      id: meta.id,
+      version: meta.version,
+      date: meta.date,
+      bridge: meta.bridge,
+      scenes,
+      inGame: scenes.some((s) => inGameNow.has(s.slug)),
+      collides: [],
+      ...versions.has(meta.id) ? { inProject: versions.get(meta.id) ?? 0 } : {}
+    });
+  }
+  for (const a of out) a.collides = out.filter((b) => b !== a && b.scenes.some((s) => a.scenes.some((t) => t.slug === s.slug || sameFile(t.file, s.file)))).map((b) => b.name);
+  state.library.bakes = out;
+}
+function libraryBakeDir(dir) {
+  if (!libraryRoot) throw new Error("Set the Library folder first (Library tab or Settings).");
+  const rel = path7.relative(path7.resolve(libraryRoot), path7.resolve(dir));
+  if (rel.startsWith("..") || path7.isAbsolute(rel) || !dir.toLowerCase().endsWith(BakeFolderEnding)) throw new Error("That is not a bake in the Library.");
+  return path7.resolve(dir);
+}
+async function changeLibraryBake(dir, meta, files, drop2 = []) {
+  const root = libraryRoot;
+  const target = bakeFolderProject(dir);
+  if (files.length && (!bridge?.running || state.bridge.status !== "ready")) throw new Error("REDbridge is not ready, and it writes the bake. The pills at the top say why.");
+  const plan = files.map((file) => ({ file, src: sceneToBake(file) }));
+  for (const { file, src } of plan) {
+    const slug = slugOf(src.name);
+    const other = meta.scenes.find((s) => s.slug === slug && !sameFile(fromLibraryPath(root, s.path), file)) ?? plan.find((p) => p.file !== file && slugOf(p.src.name) === slug);
+    if (other) throw new Error(`Two scenes called ${src.name} can't be in one bake: a bake's files go by the scene's name. Rename one first.`);
+    const stop = checkBake({ file, name: src.name, objects: src.objects, project: target, bridgeReady: true, needs: [], bridgeVersion: state.bridge.version }).find((c) => c.tone === "error");
+    if (stop) throw new Error(`${src.name}: ${stop.text}`);
+  }
+  const warnings = [];
+  const isNew = !fs7.existsSync(dir);
+  fs7.mkdirSync(dir, { recursive: true });
+  for (const { file } of plan) {
+    let done;
+    try {
+      done = await bakeSceneInto(target, file, project?.archive);
+    } catch (err) {
+      if (isNew) fs7.rmSync(dir, { recursive: true, force: true });
+      throw err;
+    }
+    const { record, built } = done;
+    warnings.push(...built.warnings);
+    const at = libraryPath(root, file);
+    meta.scenes = [...meta.scenes.filter((s) => s.path !== at && s.slug !== record.slug), { name: record.name, slug: record.slug, path: at, hash: record.hash }];
+  }
+  for (const slug of drop2) {
+    removeBake(target, slug);
+    meta.scenes = meta.scenes.filter((s) => s.slug !== slug);
+  }
+  meta.version += 1;
+  meta.date = (/* @__PURE__ */ new Date()).toISOString();
+  meta.bridge = state.bridge.version;
+  writeBakeMeta(dir, meta);
+  scanLibrary();
+  lookAtBakes();
+  return warnings;
+}
+var warned = (w) => w.length ? ` REDbridge says: ${w.slice(0, 3).join(" ")}${w.length > 3 ? ` (and ${w.length - 3} more)` : ""}` : "";
+async function newLibraryBake(file, name, folder) {
+  try {
+    if (!libraryRoot) throw new Error("Set the Library folder first (Library tab or Settings).");
+    const src = sceneToBake(file);
+    const bakeName = name.trim() || src.name;
+    const dir = freeBakeDir(folderIn(libraryRoot, folder), bakeName);
+    const meta = { format: 1, id: newBakeId(), name: bakeName, version: 0, scenes: [] };
+    const w = await changeLibraryBake(dir, meta, [file]);
+    say(`Baked ${src.name} into the Library as ${bakeName} (${libraryPath(libraryRoot, dir)}). Include it in a REDcode project to put it in the game.${warned(w)}`, "ok");
+  } catch (err) {
+    say(`The bake did not go through: ${err.message}`, "error");
+  }
+}
+async function editLibraryBake(dir, what, arg) {
+  try {
+    dir = libraryBakeDir(dir);
+    const meta = readBakeMeta(dir);
+    const root = libraryRoot;
+    if (what === "add") {
+      const w2 = await changeLibraryBake(dir, meta, [arg]);
+      return say(`${sceneToBake(arg).name} is baked into ${meta.name} (version ${meta.version}).${meta.version > 1 ? " Projects that include it can update it on their Bake tab." : ""}${warned(w2)}`, "ok");
+    }
+    if (what === "drop") {
+      const gone2 = meta.scenes.find((s) => s.slug === arg);
+      if (!gone2) return say(`${meta.name} has no scene ${arg}.`, "warn");
+      await changeLibraryBake(dir, meta, [], [arg]);
+      return say(`${gone2.name} is out of ${meta.name} (version ${meta.version}); the scene itself stays.${meta.scenes.length ? "" : " The bake is empty now: add a scene or delete it."}`, "ok");
+    }
+    const here = meta.scenes.map((s) => fromLibraryPath(root, s.path)).filter((f) => fs7.existsSync(f));
+    const missing = meta.scenes.filter((s) => !fs7.existsSync(fromLibraryPath(root, s.path))).map((s) => s.name);
+    if (!here.length) return say(`None of ${meta.name}'s scenes is where it was: ${missing.join(", ")}.`, "warn");
+    const w = await changeLibraryBake(dir, meta, here);
+    say(`Baked ${meta.name} again (version ${meta.version}).${missing.length ? ` Not found, so kept as baked before: ${missing.join(", ")}.` : ""}${warned(w)}`, missing.length ? "warn" : "ok");
+  } catch (err) {
+    lookAtBakes();
+    say(`${what === "drop" ? "The scene could not be taken out" : "The bake did not go through"}: ${err.message}`, "error");
+  }
+}
+async function includeLibraryBake(dir) {
+  try {
+    dir = libraryBakeDir(dir);
+    const target = bakeProject();
+    if (!target) throw new Error("No REDcode project is open. Open one in REDcode (VS Code), and include the bake there.");
+    const meta = readBakeMeta(dir);
+    if (!meta.scenes.length) throw new Error(`${meta.name} is empty: add a scene to it first.`);
+    const clashes = includeClashes(target, meta);
+    if (clashes.length) throw new Error(`${target.name} already has a bake of ${clashes.join(", ")} that is not from ${meta.name}. Take it out on the Bake tab first, or the two would overwrite each other.`);
+    const before = libraryBakesIn(target.dir);
+    const had = [...before.values()].find((v2) => v2.id === meta.id)?.version;
+    includeBake(dir, meta, target, libraryRoot);
+    lookAtBakes();
+    const scenes = `${meta.scenes.length} scene${meta.scenes.length === 1 ? "" : "s"}`;
+    const what = had === void 0 ? `Included ${meta.name} (version ${meta.version}, ${scenes}) in ${target.name}.` : had === meta.version ? `Copied ${meta.name} (version ${meta.version}) into ${target.name} again.` : `Updated ${meta.name} in ${target.name} from version ${had} to ${meta.version} (${scenes}).`;
+    say(`${what} Pack and install the project, and start the game again.`, "ok");
+  } catch (err) {
+    say(`The bake was not included: ${err.message}`, "error");
+  }
+}
+function deleteLibraryBake(dir) {
+  try {
+    dir = libraryBakeDir(dir);
+    const name = (() => {
+      try {
+        return readBakeMeta(dir).name;
+      } catch {
+        return path7.basename(dir);
+      }
+    })();
+    fs7.rmSync(dir, { recursive: true, force: true });
+    scanLibrary();
+    lookAtBakes();
+    say(`Deleted the bake ${name} from the Library. Its scenes stay, and projects that included it keep their copies.`, "ok");
+  } catch (err) {
+    say(`The bake could not be deleted: ${err.message}`, "error");
+  }
 }
 var linked;
 game.onState((s) => {
@@ -2772,7 +3136,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.8.1"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.9.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs7.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

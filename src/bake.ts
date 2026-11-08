@@ -202,3 +202,212 @@ function namesIn(dir: string): string[] {
     return [];
   }
 }
+
+// ---- Library bakes (B4-3) ------------------------------------------------------------------------------
+//
+// A bake in the Library is a folder `<name>.bake`, laid out like a small project: each of its scenes is
+// baked into it exactly as into a project (source/archive/edgebuilder/<slug>/, the `.xl`, the record),
+// with `bake.json` on top. Include in project copies those files over and notes them in the project's
+// came-from note, `source/library.json` (docs/library.md, "Shared rules"). The scenes stay in the Library.
+
+export const BakeFolderEnding = ".bake";
+
+/** `bake.json`: what a Library bake is made of. `id` is made once; `version` goes up with each change. */
+export interface BakeMeta {
+  format: 1;
+  id: string;
+  name: string;
+  version: number;
+  date?: string;
+  game?: string;
+  bridge?: string;
+  /** Each scene: its name and slug when baked, where it is under the Library root (with `/`), and `bakeHash` then. */
+  scenes: { name: string; slug: string; path: string; hash?: string }[];
+}
+
+/** The folders of a Library bake, in a project's shape, so a project bake's code bakes into it as it is. */
+export function bakeFolderProject(dir: string): BakeProject {
+  const source = path.join(dir, "source");
+  return { name: path.basename(dir).replace(/\.bake$/i, ""), dir, archive: path.join(source, "archive"), raw: path.join(source, "raw"), resources: path.join(source, "resources") };
+}
+
+export function newBakeId(): string {
+  return createHash("sha256").update(`${Date.now()}-${Math.random()}-${process.pid}`).digest("hex").slice(0, 16);
+}
+
+export function readBakeMeta(dir: string): BakeMeta {
+  const data = JSON.parse(fs.readFileSync(path.join(dir, "bake.json"), "utf8")) as BakeMeta;
+  if (data.format !== 1 || typeof data.id !== "string" || !Array.isArray(data.scenes)) throw new Error("not an EDGEbuilder bake");
+  return data;
+}
+
+export function writeBakeMeta(dir: string, meta: BakeMeta): void {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "bake.json"), JSON.stringify(meta, null, 2));
+}
+
+/** A folder for a new bake in `parent` that no bake there has yet: `name.bake`, `name_2.bake`, ... */
+export function freeBakeDir(parent: string, name: string): string {
+  const base = slugOf(name);
+  for (let n = 1; ; n++) {
+    const dir = path.join(parent, `${base}${n === 1 ? "" : `_${n}`}${BakeFolderEnding}`);
+    if (!fs.existsSync(dir)) return dir;
+  }
+}
+
+/** A path under the Library root with `/`, as the shared rules keep paths; the file itself when it is outside. */
+export function libraryPath(root: string, file: string): string {
+  const rel = path.relative(root, file);
+  return rel.startsWith("..") || path.isAbsolute(rel) ? file : rel.replace(/\\/g, "/");
+}
+
+export function fromLibraryPath(root: string, p: string): string {
+  return path.isAbsolute(p) ? p : path.join(root, ...p.split("/"));
+}
+
+/** Every `.bake` folder under the Library root, with its folder there and what its `bake.json` says. */
+export function scanBakes(root: string | undefined): { dir: string; folder: string; meta?: BakeMeta; error?: string }[] {
+  const out: { dir: string; folder: string; meta?: BakeMeta; error?: string }[] = [];
+  if (!root) return out;
+  const walk = (dir: string, rel: string, depth: number) => {
+    let names: fs.Dirent[];
+    try {
+      names = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const d of names) {
+      if (!d.isDirectory() || d.name.startsWith(".") || d.name === "node_modules") continue;
+      const full = path.join(dir, d.name);
+      if (d.name.toLowerCase().endsWith(BakeFolderEnding)) {
+        try {
+          out.push({ dir: full, folder: rel, meta: readBakeMeta(full) });
+        } catch (err) {
+          out.push({ dir: full, folder: rel, error: (err as Error).message });
+        }
+      } else if (depth < 8) walk(full, rel ? `${rel}/${d.name}` : d.name, depth + 1);
+    }
+  };
+  walk(root, "", 0);
+  return out.sort((a, b) => a.dir.localeCompare(b.dir));
+}
+
+/** The files one scene's bake has, relative to a project-shaped folder, with `/`. */
+export function bakeFilesOf(slug: string): string[] {
+  return [
+    `source/archive/edgebuilder/${slug}/${slug}.streamingsector`,
+    `source/archive/edgebuilder/${slug}/${slug}.streamingblock`,
+    `source/resources/archive/pc/mod/${slug}.archive.xl`,
+    `source/raw/edgebuilder/${slug}.bake.json`,
+  ];
+}
+
+// ---- the came-from note -------------------------------------------------------------------------------
+
+/** One item of a project's `source/library.json`. Other tools' items are kept as they are. */
+export interface NoteItem {
+  id?: string;
+  kind: string;
+  path: string;
+  version?: number;
+  hash?: string;
+  added: string;
+  by: string;
+  files: string[];
+  [more: string]: unknown;
+}
+
+const noteFile = (projectDir: string) => path.join(projectDir, "source", "library.json");
+
+export function readNote(projectDir: string): { format: 1; items: NoteItem[] } {
+  try {
+    const data = JSON.parse(fs.readFileSync(noteFile(projectDir), "utf8"));
+    if (Array.isArray(data?.items)) return { ...data, format: 1, items: data.items };
+  } catch {
+    // None yet, or not readable: a new one is written.
+  }
+  return { format: 1, items: [] };
+}
+
+function writeNote(projectDir: string, note: { format: 1; items: NoteItem[] }): void {
+  fs.mkdirSync(path.dirname(noteFile(projectDir)), { recursive: true });
+  fs.writeFileSync(noteFile(projectDir), JSON.stringify(note, null, 2));
+}
+
+/** The project's bakes that came from the Library, by slug: the bake's id, version and Library path. */
+export function libraryBakesIn(projectDir: string): Map<string, { id: string; version?: number; path: string }> {
+  const out = new Map<string, { id: string; version?: number; path: string }>();
+  for (const item of readNote(projectDir).items) {
+    if (item.by !== "edgebuilder" || item.kind !== "bake" || !item.id) continue;
+    for (const f of item.files) {
+      const m = /^source\/archive\/edgebuilder\/([^/]+)\//.exec(f);
+      if (m) out.set(m[1], { id: item.id, version: item.version, path: item.path });
+    }
+  }
+  return out;
+}
+
+/**
+ * The project's bakes a Library bake would replace that are not from it: baked straight into the project,
+ * or from another Library bake. Include in project stops on these.
+ */
+export function includeClashes(project: BakeProject, meta: BakeMeta): string[] {
+  const fromLibrary = libraryBakesIn(project.dir);
+  const have = new Set(bakesIn(project).map((b) => b.slug));
+  return meta.scenes.map((s) => s.slug).filter((slug) => have.has(slug) && fromLibrary.get(slug)?.id !== meta.id);
+}
+
+/**
+ * Include in project: copies a Library bake's files into the project, takes out what an older version of
+ * it had and this one has not, and notes it in `source/library.json`. Returns the files copied.
+ */
+export function includeBake(dir: string, meta: BakeMeta, project: BakeProject, libraryRoot: string): string[] {
+  const note = readNote(project.dir);
+  const before = note.items.find((i) => i.by === "edgebuilder" && i.kind === "bake" && i.id === meta.id);
+  const files: string[] = [];
+  for (const s of meta.scenes) {
+    for (const rel of bakeFilesOf(s.slug)) {
+      const from = path.join(dir, ...rel.split("/"));
+      if (!fs.existsSync(from)) continue;
+      const to = path.join(project.dir, ...rel.split("/"));
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      if (rel.endsWith(".bake.json")) {
+        // The record says where it came from, for the Bake tab.
+        const record = JSON.parse(fs.readFileSync(from, "utf8")) as BakeRecord;
+        fs.writeFileSync(to, JSON.stringify({ ...record, library: { id: meta.id, name: meta.name, version: meta.version } }, null, 2));
+      } else fs.copyFileSync(from, to);
+      files.push(rel);
+    }
+  }
+  // What the older version had and this one has not: a scene taken out of the bake since.
+  for (const old of before?.files ?? []) {
+    if (files.includes(old) || !/^source\/(archive\/edgebuilder|resources\/archive\/pc\/mod|raw\/edgebuilder)\//.test(old)) continue;
+    const file = path.join(project.dir, ...old.split("/"));
+    fs.rmSync(file, { force: true });
+    if (/^source\/archive\/edgebuilder\/[^/]+\//.test(old)) {
+      try {
+        fs.rmdirSync(path.dirname(file));
+      } catch {
+        // Not empty yet, or gone already.
+      }
+    }
+  }
+  const item: NoteItem = { id: meta.id, kind: "bake", path: libraryPath(libraryRoot, dir), version: meta.version, added: new Date().toISOString(), by: "edgebuilder", files };
+  note.items = [...note.items.filter((i) => i !== before), item];
+  writeNote(project.dir, note);
+  return files;
+}
+
+/** A bake taken out of the project: its files leave the came-from note, and an item with none left goes. */
+export function forgetInNote(projectDir: string, slug: string): void {
+  const note = readNote(projectDir);
+  const mine = new Set(bakeFilesOf(slug));
+  let changed = false;
+  note.items = note.items.flatMap((i) => {
+    if (i.by !== "edgebuilder" || i.kind !== "bake" || !i.files.some((f) => mine.has(f))) return [i];
+    changed = true;
+    const files = i.files.filter((f) => !mine.has(f));
+    return files.length ? [{ ...i, files }] : [];
+  });
+  if (changed) writeNote(projectDir, note);
+}

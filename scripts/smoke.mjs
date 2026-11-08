@@ -115,6 +115,72 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.doesNotMatch(says([plainCrate], { bridgeVersion: "0.12.0" }), /Seen from on/);
   assert.doesNotMatch(says([entity]), /solid/i, "an entity is no mesh to speak of");
   console.log("bake: ok");
+
+  // Library bakes (B4-3): a .bake folder shaped like a project, Include in project, the came-from note.
+  {
+    const lib = path.join(tmp, "lib-root");
+    const dir = core.freeBakeDir(path.join(lib, "Alleys"), "Kabuki Night");
+    assert.equal(path.basename(dir), "kabuki_night.bake");
+    const folder = core.bakeFolderProject(dir);
+    assert.equal(folder.name, "kabuki_night");
+    // Two scenes baked into it, as sector.build would write them.
+    const fake = (into, slug) => {
+      fs.mkdirSync(path.join(into.archive, "edgebuilder", slug), { recursive: true });
+      for (const end of ["streamingsector", "streamingblock"]) fs.writeFileSync(path.join(into.archive, "edgebuilder", slug, `${slug}.${end}`), slug);
+      fs.mkdirSync(path.join(into.resources, "archive", "pc", "mod"), { recursive: true });
+      fs.writeFileSync(path.join(into.resources, "archive", "pc", "mod", `${slug}.archive.xl`), `streaming:\n  blocks:\n    - edgebuilder\\${slug}\\${slug}.streamingblock\n`);
+      writeRecord(into, { slug, name: slug, hash: "h" });
+    };
+    fake(folder, "yard");
+    fake(folder, "corner");
+    const meta = { format: 1, id: core.newBakeId(), name: "Kabuki Night", version: 1, scenes: [{ name: "Yard", slug: "yard", path: "Alleys/yard.scene.json", hash: "h" }, { name: "Corner", slug: "corner", path: "Alleys/corner.scene.json", hash: "h" }] };
+    core.writeBakeMeta(dir, meta);
+    assert.equal(core.freeBakeDir(path.join(lib, "Alleys"), "Kabuki Night"), path.join(lib, "Alleys", "kabuki_night_2.bake"));
+    assert.equal(core.libraryPath(lib, path.join(lib, "Alleys", "yard.scene.json")), "Alleys/yard.scene.json");
+    assert.equal(core.fromLibraryPath(lib, "Alleys/yard.scene.json"), path.join(lib, "Alleys", "yard.scene.json"));
+    fs.mkdirSync(path.join(lib, "broken.bake"), { recursive: true });
+    const found = core.scanBakes(lib);
+    assert.deepEqual(found.map((b) => [path.basename(b.dir), b.folder, b.meta?.name ?? b.error]), [["kabuki_night.bake", "Alleys", "Kabuki Night"], ["broken.bake", "", found[1].error]]);
+    assert.ok(found[1].error, "a .bake without bake.json says why");
+    assert.deepEqual(core.scanBakes(undefined), []);
+    // Bakes are not scene folders.
+    fs.writeFileSync(path.join(lib, "Alleys", "yard.scene.json"), JSON.stringify({ format: 1, name: "Yard", groups: [], objects: [] }));
+    assert.deepEqual(scanShelf({ place: "library", dir: lib, label: "Library" }).folders, ["Alleys"]);
+
+    // Include in project: the files, the record's "from", the came-from note; another tool's item is kept.
+    const proj = path.join(tmp, "lib-project");
+    const target = { name: "P", dir: proj, archive: path.join(proj, "source", "archive"), raw: path.join(proj, "source", "raw"), resources: path.join(proj, "source", "resources") };
+    fs.mkdirSync(path.join(proj, "source"), { recursive: true });
+    fs.writeFileSync(path.join(proj, "source", "library.json"), JSON.stringify({ format: 1, items: [{ id: "x", kind: "prop", path: "Props/a.prop.asset", version: 2, added: "t", by: "edgefab", files: ["source/archive/a.ent"] }] }));
+    assert.deepEqual(core.includeClashes(target, meta), []);
+    const files = core.includeBake(dir, meta, target, lib);
+    assert.equal(files.length, 8, "two scenes, four files each");
+    assert.deepEqual(bakesIn(target).map((b) => [b.slug, b.library?.name, b.library?.version]), [["corner", "Kabuki Night", 1], ["yard", "Kabuki Night", 1]]);
+    const note = core.readNote(proj);
+    assert.equal(note.items.length, 2, "EDGEfab's item stays");
+    const mine = note.items.find((i) => i.by === "edgebuilder");
+    assert.deepEqual([mine.kind, mine.id, mine.path, mine.version], ["bake", meta.id, "Alleys/kabuki_night.bake", 1]);
+    assert.ok(mine.files.every((f) => !f.includes("\\")), "paths with /");
+    assert.deepEqual([...core.libraryBakesIn(proj).keys()].sort(), ["corner", "yard"]);
+    // Version 2 without Corner: the project's copy of Corner goes, Yard's version goes up.
+    removeBake(folder, "corner");
+    const v2 = { ...meta, version: 2, scenes: meta.scenes.filter((x) => x.slug !== "corner") };
+    core.writeBakeMeta(dir, v2);
+    core.includeBake(dir, v2, target, lib);
+    assert.deepEqual(bakesIn(target).map((b) => [b.slug, b.library?.version]), [["yard", 2]]);
+    assert.ok(!fs.existsSync(path.join(target.archive, "edgebuilder", "corner")), "a scene taken out of the bake leaves the project");
+    assert.equal(core.readNote(proj).items.length, 2, "one item per bake");
+    // A bake of the same name baked straight into the project clashes; one from this bake does not.
+    fake(target, "corner");
+    assert.deepEqual(core.includeClashes(target, meta), ["corner"]);
+    assert.deepEqual(core.includeClashes(target, v2), []);
+    // Taking a bake out of the project forgets it in the note; the item goes with its last files.
+    removeBake(target, "yard");
+    core.forgetInNote(proj, "yard");
+    assert.deepEqual(core.readNote(proj).items.map((i) => i.by), ["edgefab"]);
+    assert.equal(core.libraryBakesIn(proj).size, 0);
+    console.log("library bakes: ok");
+  }
 }
 
 // Scene store: add, select ids, remove, save and load round trip, previews forgotten.
@@ -572,6 +638,13 @@ if (!exe || !game) {
       assert.equal(typeof looked.hasCollision, "boolean", "mesh.info says whether a mesh has collision data");
       console.log(`solid through REDbridge: ok (hasCollision ${looked.hasCollision})`);
     }
+    // The same scene into a Library bake's folder: sector.build takes any project-shaped folder.
+    const libBake = core.bakeFolderProject(path.join(tmp, "lib-real", "smoke.bake"));
+    fs.mkdirSync(libBake.dir, { recursive: true });
+    const intoLib = await bridge.sectorBuild({ project: libBake.dir, scene: bakeInput("Smoke Bake", undefined, [], [object]).scene });
+    settleXl(intoLib.xl, intoLib.name, intoLib.blockPath);
+    writeRecord(libBake, { slug: intoLib.name, name: "Smoke Bake" });
+    assert.deepEqual(core.bakeFilesOf("smoke_bake").map((f) => fs.existsSync(path.join(libBake.dir, ...f.split("/")))), [true, true, true, true], "a Library bake has a project bake's files");
     removeBake(target, "smoke_bake");
     assert.deepEqual(bakesIn(target), []);
     console.log(`bake through REDbridge: ok (${built.nodes} node)`);

@@ -45,6 +45,9 @@
   #objects { --rn-list-height: 200px; }
   #shelves { --rn-list-height: 380px; }
   .tag { font-family: var(--rn-mono, monospace); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--rn-ok, #5dffa1); margin-left: 6px; }
+  .tag.warn { color: var(--rn-warn, #ffcc4d); }
+  .tag.dim { color: var(--rn-dim, #999); }
+  .update { background: none; border: 1px solid var(--rn-line, #333); color: var(--rn-accent, #f2e600); cursor: pointer; font: 11px var(--rn-mono, monospace); padding: 0 6px; margin-right: 6px; }
   .section { font-family: var(--rn-mono, monospace); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
   .fold { display: inline-block; width: 14px; color: var(--rn-dim, #999); cursor: pointer; }
   .row { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
@@ -99,7 +102,7 @@
         <div class="row">
           <rn-button id="saveScene" variant="ghost" title="Ctrl+S. EDGEbuilder saves after every change; this confirms it">Save</rn-button>
           <rn-button id="saveAsScene" variant="ghost" title="Ctrl+Shift+S: a copy under a new name, in a folder you pick">Save as</rn-button>
-          <rn-button id="newScene" variant="ghost" title="An empty scene. This opens the Library tab: type a name, pick a folder, then press &quot;New Scene Here&quot;">New</rn-button>
+          <rn-button id="newScene" variant="ghost" title="An empty scene. This opens the Library tab: type a name, pick a folder, then press &quot;New scene here&quot;">New</rn-button>
           <rn-button id="openScene" variant="ghost" title="The Library tab">Open</rn-button>
           <rn-button id="closeScene" variant="ghost" title="Its objects leave the world and no scene is open. It stays saved">Close</rn-button>
         </div>
@@ -150,9 +153,18 @@
             <rn-button id="pickedClose" variant="ghost" disabled title="Its objects leave the world and no scene is open. It stays saved">Close</rn-button>
             <rn-button id="pickedOn" variant="ghost" disabled title="Show its objects in the world beside the open scene; they cannot be selected">Show in world</rn-button>
             <rn-button id="pickedObjects" variant="ghost" title="The objects of the picked scene (or the open one), in a drawer beside this window">Objects</rn-button>
+            <rn-button id="pickedBake" variant="ghost" hidden title="Bake this scene into a new bake in its Library folder, named by the Name field (empty: the scene's name). A bake in the Library can hold several scenes; Include in project puts it in a REDcode project">Bake into Library</rn-button>
             <rn-button id="libraryRefresh" variant="ghost" title="Look at the folders again">Refresh</rn-button>
           </div>
-          <rn-input id="newName" label="Name" placeholder="A name for a new scene or folder"></rn-input>
+          <div class="row" id="lbakeRow" hidden>
+            <rn-button id="lbakeInclude" title="Copy this bake into the REDcode project open in VS Code (or bring the project's copy up to date). Then Pack and Install there, and start the game again">Include in project</rn-button>
+            <rn-button id="lbakeAdd" variant="ghost" title="Bake the open scene into this bake too, or again when it is in it already">Add open scene</rn-button>
+            <rn-button id="lbakeRebake" variant="ghost" title="Bake every scene of this bake again, as the scenes are now. Projects that include it can then update">Bake again</rn-button>
+            <rn-button id="lbakeDelete" variant="ghost" title="Delete this bake from the Library. Its scenes stay, and projects that included it keep their copies">Delete</rn-button>
+          </div>
+          <div id="lbakeAsk" class="confirm" hidden>Delete this bake from the Library?<button id="lbakeYes">Yes</button><button id="lbakeNo">No</button></div>
+          <rn-list id="lbakeScenes" hidden></rn-list>
+          <rn-input id="newName" label="Name" placeholder="A name for a new scene, folder or bake"></rn-input>
           <div id="newWhere" class="detail"></div>
           <div class="row">
             <rn-button id="createScene" variant="ghost" title="An empty scene in this folder, opened">New scene here</rn-button>
@@ -172,7 +184,7 @@
         </div>
         <rn-panel id="bakeDone" title="The last bake" hidden>
           <div id="bakeFiles" class="detail"></div>
-          <div class="detail">Next: pack and install the project, with Pack and Play in REDcode, or Add from REDcode project and Deploy in EDGEdeck. Then start the game again: a bake comes in as the game starts.</div>
+          <div class="detail">Next: Pack and Install in REDcode (or Add from REDcode project and Deploy in EDGEdeck), then start the game again: a bake comes in as the game starts, so Pack and Play does not bring it in.</div>
         </rn-panel>
         <rn-panel title="Bakes in this project">
           <rn-list id="bakeList"></rn-list>
@@ -205,7 +217,8 @@
         <p>To arrange: Ctrl+click adds an object to the selection, Shift+drag selects everything in a box, Ctrl+A the whole scene, and a move, turn or scale then acts on all of them, around their middle. Ctrl+G groups the selection and Ctrl+Shift+G ungroups; a click on an object in a group selects the group, Alt+click just that object. Ctrl+D duplicates the selection, which then follows the mouse until a click places it (Esc or right-click: no copy). Ctrl+C copies the selection, Ctrl+X cuts it (copies, then deletes), and Ctrl+V pastes it where the cursor points, standing on the surface there, as often as you like. Ctrl+Z undoes, Ctrl+Y redoes, Clear scene included; Undo, Redo, Copy, Group and Ungroup are buttons on the Scene tab too. Groups open and close with the arrow.</p>
         <p>Scenes: the open scene is saved after every change, and <b>Close</b> takes its objects out of the world with no scene open; Ctrl+S confirms it and Ctrl+Shift+S saves a copy under a new name. Its name is at the top of the Scene tab (Enter renames it). <b>Objects</b> on the Library tab lists a scene's objects beside this window: two clicks fly the camera to one and select it, and its trash icon deletes it wherever it is. The Library tab lists every scene: in the Library (your own folders, shared by the EDGE tools; set it in Settings), in the open REDcode project, and on This PC. Pick one to open it, or <b>Show in world</b> to see it beside the one you are editing (shown, not editable). EDGEbuilder opens the last scene again when it starts.</p>
         <p>Bake: the Bake tab writes the open scene into the open REDcode project, as a streaming sector of its own. Pack and install the project, and it stands in the world from the next game start, with EDGEbuilder off. Its previews then stay off, so nothing stands twice.</p>
-        <p>Next: bakes in the Library.</p>
+        <p>Bakes in the Library: pick a scene on the Library tab and <b>Bake into Library</b>. A bake there can hold several scenes (<b>Add open scene</b>); <b>Include in project</b> copies it into the REDcode project open in VS Code, and the Bake tab offers <b>Update</b> when the Library's bake is newer. Flags: stale (a scene changed since), collides (two bakes hold the same scene), in game, in project.</p>
+        <p>Next: the first public preview.</p>
         <p>Design and guide: <code>edgemodders.github.io/EDGEbuilder</code></p>
       </rn-tab>
     </rn-tabs>

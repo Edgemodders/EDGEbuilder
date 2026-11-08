@@ -1,5 +1,29 @@
 // The REDnode-free parts of the mod, bundled on their own for the smoke test.
-export { bakeHash, bakeInput, bakesIn, checkBake, deployedBakes, removeBake, settleXl, solidForBake, writeRecord } from "./bake";
+export {
+  bakeFilesOf,
+  bakeFolderProject,
+  bakeHash,
+  bakeInput,
+  bakesIn,
+  checkBake,
+  deployedBakes,
+  forgetInNote,
+  freeBakeDir,
+  fromLibraryPath,
+  includeBake,
+  includeClashes,
+  libraryBakesIn,
+  libraryPath,
+  newBakeId,
+  readBakeMeta,
+  readNote,
+  removeBake,
+  scanBakes,
+  settleXl,
+  solidForBake,
+  writeBakeMeta,
+  writeRecord,
+} from "./bake";
 export { BridgeClient, BridgeError, defaultDotnetRoot, findBridge, isGameFolder } from "./bridge";
 export { applyChange, collisionKey, boxOf, centreOf, copyOf, duplicate, makeGroup, membersOf, pasteOf, pickMany, pickSelection, pruneGroups, seenFromBySize, selectionUnits, standPoint, streamingFor, ungroup } from "./arrange";
 export { AssetIndex, IndexPrefixes, kindOf } from "./index";

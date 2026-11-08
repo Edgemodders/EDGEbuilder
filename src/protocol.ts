@@ -132,6 +132,32 @@ export interface BakeRecord {
   box?: { min: number[]; max: number[] };
   /** The mods and the project its objects need. */
   needs?: string[];
+  /**
+   * B4-3: the Library bake it came from, by Include in project. `latest` and `dir`: the version the
+   * Library has now and where, when that is newer.
+   */
+  library?: { id: string; name: string; version: number; latest?: number; dir?: string };
+}
+
+/** B4-3: a bake in the Library, `<name>.bake`: one or more scenes, each baked as into a project. */
+export interface LibraryBake {
+  dir: string;
+  /** Its folder under the Library root, with forward slashes; "" at the root. */
+  folder: string;
+  name: string;
+  id: string;
+  version: number;
+  date?: string;
+  bridge?: string;
+  /** `file`: where the scene is now; `missing`: not there; `stale`: changed since the bake. */
+  scenes: { name: string; slug: string; file: string; missing?: boolean; stale?: boolean }[];
+  /** Any of its scenes' bakes is in the game, from this bake or another. */
+  inGame: boolean;
+  /** Other Library bakes holding one of its scenes: both would put it in the world. */
+  collides: string[];
+  /** The version the open REDcode project holds, when it holds this bake. */
+  inProject?: number;
+  error?: string;
 }
 
 export interface Snapshot {
@@ -159,7 +185,7 @@ export interface Snapshot {
    * B3-2: the Library root (absent until the player sets one) and the folder offered for it; the
    * three places with their folders and scenes; the scenes switched on (shown, not edited), by file.
    */
-  library: { root?: string; suggested: string; shelves: Shelf[]; on: string[]; peek?: ScenePeek };
+  library: { root?: string; suggested: string; shelves: Shelf[]; on: string[]; peek?: ScenePeek; bakes: LibraryBake[] };
   /**
    * B4: the Bake tab. The project a bake goes into, what the checks say, the open scene's bake in that
    * project and whether the scene changed since, the `.xl` that has its bake in the game, every bake in
@@ -257,6 +283,17 @@ export type PageMessage =
   | { type: "bake.refresh" }
   /** Take a bake out of the project, by its slug. */
   | { type: "bake.remove"; slug: string }
+  /** B4-3: a new bake in the Library folder `folder`, of the scene `file`. */
+  | { type: "lbake.new"; file: string; name: string; folder: string }
+  /** Add a scene to a Library bake, or take one out; either bakes it again. */
+  | { type: "lbake.add"; dir: string; file: string }
+  | { type: "lbake.drop"; dir: string; slug: string }
+  /** Bake every scene of a Library bake again. */
+  | { type: "lbake.rebake"; dir: string }
+  /** Copy a Library bake into the open REDcode project (or bring the project's copy up to date). */
+  | { type: "lbake.include"; dir: string }
+  /** Delete a Library bake's folder. Projects that include it keep their copies. */
+  | { type: "lbake.delete"; dir: string }
   /** Set the Library root (made when missing), for every EDGE tool. */
   | { type: "library.root"; root: string }
   /** A new folder `name` inside `folder` of the Library. */

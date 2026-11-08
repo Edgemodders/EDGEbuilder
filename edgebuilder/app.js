@@ -1596,6 +1596,19 @@ function whereLabel(s, place, folder) {
   if (!label) return "";
   return folder ? `${label} > ${folder.replace(/\//g, " > ")}` : label;
 }
+function findBake(s, dir) {
+  return s.library.bakes.find((b) => sameFile(b.dir, dir));
+}
+function bakeTags(b) {
+  const tags = [];
+  if (b.error) tags.push('<span class="tag warn">cannot be read</span>');
+  if (b.scenes.some((x) => x.stale)) tags.push('<span class="tag warn">stale</span>');
+  if (b.scenes.some((x) => x.missing)) tags.push('<span class="tag warn">scene missing</span>');
+  if (b.collides.length) tags.push('<span class="tag warn">collides</span>');
+  if (b.inGame) tags.push('<span class="tag">in game</span>');
+  if (b.inProject !== void 0) tags.push(`<span class="tag${b.inProject < b.version ? " warn" : ""}">in project</span>`);
+  return tags.join("");
+}
 function findScene(s, file) {
   for (const sh of s.library.shelves) for (const sc of sh.scenes) if (sameFile(sc.file, file)) return sc;
   return void 0;
@@ -1606,6 +1619,10 @@ function target(s) {
   if (picked?.kind === "scene") {
     const sc = findScene(s, picked.file);
     if (sc) return { place: sc.place, folder: sc.folder };
+  }
+  if (picked?.kind === "bake") {
+    const b = findBake(s, picked.dir);
+    if (b) return { place: "library", folder: b.folder };
   }
   return { place: s.library.root ? "library" : "data", folder: "" };
 }
@@ -1636,6 +1653,14 @@ function libraryRows(s) {
 ${sc.error}` : sc.file)}"${isPicked({ kind: "scene", file: sc.file }) ? " selected" : ""}${pad(depth)}><span class="fold"></span>${esc(sc.name)}${tags}<span slot="end">${esc(end)}</span></rn-item>`
         );
       }
+      if (sh.place !== "library") return;
+      for (const b of s.library.bakes.filter((x) => x.folder === folder)) {
+        const end = b.error ? "" : `${b.scenes.length} scene${b.scenes.length === 1 ? "" : "s"} \xB7 v${b.version}`;
+        rows.push(
+          `<rn-item value="b:${esc(b.dir)}" title="${esc(b.error ? `${b.dir}
+${b.error}` : b.dir)}"${isPicked({ kind: "bake", dir: b.dir }) ? " selected" : ""}${pad(depth)}><span class="fold"></span>${esc(b.name)}<span class="tag dim">bake</span>${bakeTags(b)}<span slot="end">${esc(end)}</span></rn-item>`
+        );
+      }
     };
     const key = `${sh.place}|`;
     rows.push(
@@ -1658,6 +1683,7 @@ function renderBake(s) {
   const when2 = (iso) => iso ? new Date(iso).toLocaleString() : "";
   const lines = [];
   if (b.current) lines.push(`Baked ${when2(b.current.date)}${b.current.objects === void 0 ? "" : `, ${b.current.objects} object${b.current.objects === 1 ? "" : "s"}`}.${b.stale ? " The scene changed since: bake again to bring it in." : ""}`);
+  if (b.current?.library) lines.push(`This bake came from the Library's ${b.current.library.name} (version ${b.current.library.version}). Bake here makes it the project's own; to keep it the Library's, bake it on the Library tab and update it here.`);
   if (b.inGame) lines.push(`Its bake is in the game (${b.inGame}), so its previews stay off and nothing stands twice. Rebuild previews on the Scene tab brings them back to edit it.`);
   $("bakeState").textContent = lines.join("\n");
   $("bakeGo").toggleAttribute("disabled", b.checks.some((c) => c.tone === "error"));
@@ -1665,7 +1691,7 @@ function renderBake(s) {
   $("bakeDone").toggleAttribute("hidden", !last);
   if (last) $("bakeFiles").textContent = [...last.files, ...last.warnings].join("\n");
   const html = b.list.map((r) => {
-    const end = bakeConfirm === r.slug ? `<span slot="end" class="confirm">Take it out?<button data-act="yes" data-id="${esc(r.slug)}">Yes</button><button data-act="no">No</button></span>` : `<span slot="end"><span class="grouptag">${r.objects === void 0 ? "" : `${r.objects} object${r.objects === 1 ? "" : "s"}`}</span><button class="act" data-act="trash" data-id="${esc(r.slug)}" title="Take this bake out of the project. Its scene stays">${TrashIcon}</button></span>`;
+    const end = bakeConfirm === r.slug ? `<span slot="end" class="confirm">Take it out?<button data-act="yes" data-id="${esc(r.slug)}">Yes</button><button data-act="no">No</button></span>` : `<span slot="end">${r.library?.latest && r.library.dir ? `<button class="update" data-act="update" data-id="${esc(r.library.dir)}" title="The Library's ${esc(r.library.name)} is at version ${r.library.latest}; this project has version ${r.library.version}. Copies the new version in">Update to v${r.library.latest}</button>` : ""}<span class="grouptag">${r.library ? `from ${esc(r.library.name)} v${r.library.version} \xB7 ` : ""}${r.objects === void 0 ? "" : `${r.objects} object${r.objects === 1 ? "" : "s"}`}</span><button class="act" data-act="trash" data-id="${esc(r.slug)}" title="Take this bake out of the project. Its scene stays">${TrashIcon}</button></span>`;
     return `<rn-item value="${esc(r.slug)}" title="${esc([r.file, when2(r.date)].filter(Boolean).join("\n"))}">${esc(r.name)}${end}</rn-item>`;
   }).join("");
   if (html !== bakeHtml) $("bakeList").innerHTML = bakeHtml = html;
@@ -1679,6 +1705,10 @@ $("bakeList").addEventListener(
     if (!act) return;
     e.stopPropagation();
     const id = act.dataset.id;
+    if (act.dataset.act === "update") {
+      if (id) post({ type: "lbake.include", dir: id });
+      return;
+    }
     if (act.dataset.act === "trash") bakeConfirm = id;
     else {
       bakeConfirm = void 0;
@@ -1688,6 +1718,47 @@ $("bakeList").addEventListener(
   },
   true
 );
+var lbakeAsking = false;
+var lbakeDropping;
+var lbakeHtml = "";
+function bakeText(s, b) {
+  if (b.error) return `${b.name}: cannot be read (${b.error})
+${b.dir}`;
+  const lines = [`${b.name}: a bake in ${whereLabel(s, "library", b.folder)}, version ${b.version}${b.date ? `, baked ${new Date(b.date).toLocaleString()}` : ""}`];
+  const stale = b.scenes.filter((x) => x.stale).map((x) => x.name);
+  const missing = b.scenes.filter((x) => x.missing).map((x) => x.name);
+  if (!b.scenes.length) lines.push("Empty: Add open scene puts the open scene in it.");
+  if (stale.length) lines.push(`Changed since the bake: ${stale.join(", ")}. Bake again to bring that in.`);
+  if (missing.length) lines.push(`Not where it was baked from: ${missing.join(", ")}. Bake again keeps what was baked.`);
+  if (b.collides.length) lines.push(`Shares a scene with ${b.collides.join(", ")}: in one game, the objects would stand twice. Keep one of them in your projects.`);
+  if (b.inGame) lines.push("In the game: its scenes' previews stay off, so nothing stands twice.");
+  if (b.inProject !== void 0) lines.push(b.inProject < b.version ? `The open project has version ${b.inProject}: Include in project brings it up to date.` : "In the open project.");
+  else if (s.bake.project) lines.push(`Not in the open project, ${s.bake.project.name}.`);
+  else lines.push("No REDcode project is open to include it in.");
+  return lines.join("\n");
+}
+function renderLibraryBake(s, b) {
+  $("lbakeRow").hidden = !b;
+  $("lbakeScenes").hidden = !b || !b.scenes.length;
+  $("lbakeAsk").hidden = !b || !lbakeAsking;
+  if (!b) {
+    lbakeAsking = false;
+    lbakeDropping = void 0;
+    return;
+  }
+  const inIt = !!s.scene.file && b.scenes.some((x) => sameFile(x.file, s.scene.file));
+  $("lbakeAdd").textContent = inIt ? "Bake open scene again" : "Add open scene";
+  $("lbakeAdd").toggleAttribute("disabled", !s.scene.file || !!b.error);
+  $("lbakeRebake").toggleAttribute("disabled", !b.scenes.length || !!b.error);
+  $("lbakeInclude").toggleAttribute("disabled", !s.bake.project || !b.scenes.length || !!b.error);
+  $("lbakeInclude").textContent = b.inProject !== void 0 && b.inProject < b.version ? `Update in project to v${b.version}` : "Include in project";
+  const html = b.scenes.map((x) => {
+    const flags = `${x.stale ? '<span class="tag warn">changed</span>' : ""}${x.missing ? '<span class="tag warn">missing</span>' : ""}`;
+    const end = lbakeDropping === x.slug ? `<span slot="end" class="confirm">Take it out of the bake?<button data-act="yes" data-id="${esc(x.slug)}">Yes</button><button data-act="no">No</button></span>` : `<span slot="end"><button class="act" data-act="trash" data-id="${esc(x.slug)}" title="Take this scene out of the bake. The scene stays">${TrashIcon}</button></span>`;
+    return `<rn-item value="${esc(x.slug)}" title="${esc(x.file)}">${esc(x.name)}${flags}${end}</rn-item>`;
+  }).join("");
+  if (html !== lbakeHtml) $("lbakeScenes").innerHTML = lbakeHtml = html;
+}
 var renameTo;
 function renderLibrary(s) {
   const name = $("sceneName");
@@ -1708,8 +1779,10 @@ function renderLibrary(s) {
   $("libraryMakeRow").hidden = !!root;
   $("libraryMake").title = s.library.suggested;
   if (picked?.kind === "scene" && !findScene(s, picked.file)) picked = void 0;
+  if (picked?.kind === "bake" && !findBake(s, picked.dir)) picked = void 0;
   $("shelves").innerHTML = libraryRows(s);
   const sc = picked?.kind === "scene" ? findScene(s, picked.file) : void 0;
+  const lb = picked?.kind === "bake" ? findBake(s, picked.dir) : void 0;
   const open = !!sc && sameFile(sc.file, s.scene.file ?? "");
   const on = !!sc && s.library.on.some((f) => sameFile(f, sc.file));
   if (sc)
@@ -1718,11 +1791,16 @@ ${whereLabel(s, sc.place, sc.folder)}
 ${sc.error ? `Cannot be read: ${sc.error}` : `${open ? s.scene.objects.length : sc.objects} objects, changed ${when(sc.changed)}`}
 ${sc.file}`;
   else if (picked?.kind === "folder") $("pickedText").textContent = `Folder: ${whereLabel(s, picked.place, picked.folder)}`;
+  else if (lb) $("pickedText").textContent = bakeText(s, lb);
   else $("pickedText").textContent = "Pick a scene to open or show it, or a folder for a new scene. A double-click opens a scene.";
   $("pickedOpen").toggleAttribute("disabled", !sc || open || !!sc.error);
   $("pickedClose").toggleAttribute("disabled", !open);
   $("pickedOn").toggleAttribute("disabled", !sc || open || !!sc.error);
   $("pickedOn").textContent = on ? "Hide from world" : "Show in world";
+  for (const id of ["pickedOpen", "pickedClose", "pickedOn"]) $(id).hidden = !!lb;
+  $("pickedBake").hidden = !sc || !root;
+  $("pickedBake").toggleAttribute("disabled", !sc || !!sc.error || !sc.objects && !open);
+  renderLibraryBake(s, lb);
   const t = target(s);
   $("newWhere").textContent = `In ${whereLabel(s, t.place, t.folder)}`;
   $("createScene").hidden = saveAsAsked;
@@ -1771,7 +1849,9 @@ $("shelves").addEventListener(
 );
 $("shelves").addEventListener("select", (e) => {
   const value = e.detail.value;
+  lbakeAsking = false;
   if (value.startsWith("f:")) picked = { kind: "scene", file: value.slice(2) };
+  else if (value.startsWith("b:")) picked = { kind: "bake", dir: value.slice(2) };
   else {
     const key = value.slice(2);
     const bar = key.indexOf("|");
@@ -1801,6 +1881,45 @@ $("pickedOn").addEventListener("click", () => {
   post({ type: "scene.on", file, on: !state.library.on.some((f) => sameFile(f, file)) });
 });
 $("libraryRefresh").addEventListener("click", () => post({ type: "library.refresh" }));
+$("pickedBake").addEventListener("click", () => {
+  if (!state || picked?.kind !== "scene") return;
+  const sc = findScene(state, picked.file);
+  if (!sc) return;
+  post({ type: "lbake.new", file: sc.file, name: newName().value?.trim() || sc.name, folder: sc.folder });
+  newName().value = "";
+});
+$("lbakeInclude").addEventListener("click", () => picked?.kind === "bake" && post({ type: "lbake.include", dir: picked.dir }));
+$("lbakeAdd").addEventListener("click", () => picked?.kind === "bake" && state?.scene.file && post({ type: "lbake.add", dir: picked.dir, file: state.scene.file }));
+$("lbakeRebake").addEventListener("click", () => picked?.kind === "bake" && post({ type: "lbake.rebake", dir: picked.dir }));
+$("lbakeDelete").addEventListener("click", () => {
+  lbakeAsking = true;
+  if (state) render(state);
+});
+$("lbakeNo").addEventListener("click", () => {
+  lbakeAsking = false;
+  if (state) render(state);
+});
+$("lbakeYes").addEventListener("click", () => {
+  lbakeAsking = false;
+  if (picked?.kind === "bake") post({ type: "lbake.delete", dir: picked.dir });
+  if (state) render(state);
+});
+$("lbakeScenes").addEventListener(
+  "click",
+  (e) => {
+    const act = e.target.closest?.("[data-act]");
+    if (!act) return;
+    e.stopPropagation();
+    const slug = act.dataset.id;
+    if (act.dataset.act === "trash") lbakeDropping = slug;
+    else {
+      lbakeDropping = void 0;
+      if (act.dataset.act === "yes" && slug && picked?.kind === "bake") post({ type: "lbake.drop", dir: picked.dir, slug });
+    }
+    if (state) render(state);
+  },
+  true
+);
 $("libraryMake").addEventListener("click", () => state && post({ type: "library.root", root: state.library.suggested }));
 $("setLibrary").addEventListener("click", () => {
   if (!state) return;

@@ -12,12 +12,37 @@ import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge, type
 import { AssetIndex, kindOf } from "./index";
 import { ModSources, modArchives, modFolders, sceneNeeds } from "./sources";
 import { collisionKey, streamingFor } from "./arrange";
-import { bakeHash, bakeInput, bakesIn, checkBake, deployedBakes, removeBake as removeBakeFiles, settleXl, solidForBake, writeRecord, type BakeProject } from "./bake";
+import {
+  BakeFolderEnding,
+  bakeFolderProject,
+  bakeHash,
+  bakeInput,
+  bakesIn,
+  checkBake,
+  deployedBakes,
+  forgetInNote,
+  freeBakeDir,
+  fromLibraryPath,
+  includeBake,
+  includeClashes,
+  libraryBakesIn,
+  libraryPath,
+  newBakeId,
+  readBakeMeta,
+  removeBake as removeBakeFiles,
+  scanBakes,
+  settleXl,
+  solidForBake,
+  writeBakeMeta,
+  writeRecord,
+  type BakeMeta,
+  type BakeProject,
+} from "./bake";
 import { Scene, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
-import type { AssetEntry, AssetFrom, AssetInfo, AssetKind, PageMessage, Place, PlaceRoot, SceneObject, SceneTransform, Snapshot } from "./protocol";
+import type { AssetEntry, AssetFrom, AssetInfo, AssetKind, BakeRecord, LibraryBake, PageMessage, Place, PlaceRoot, SceneObject, SceneTransform, Snapshot } from "./protocol";
 
 /** A base-game entity template that is a bare entity: no components, no appearances. The editor camera is this with a camera component attached. */
 const EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
@@ -94,7 +119,7 @@ const state: Snapshot = {
   query: { text: "", kind: "all", from: "all" },
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
   scene: { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: [] },
-  library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [] },
+  library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [], bakes: [] },
   bake: { project: null, checks: [], stale: false, list: [] },
   selected: [],
   history: { undo: 0, redo: 0 },
@@ -1300,6 +1325,8 @@ function rootOf(place: Place): PlaceRoot {
 /** Reads the three places again, for the Library tab. */
 function scanLibrary(): void {
   state.library.shelves = placeRoots().map(scanShelf);
+  libraryBakeDirs = scanBakes(libraryRoot).map(({ dir, folder }) => ({ dir, folder }));
+  lookAtLibraryBakes();
 }
 
 /** Where a scene file is, for messages: "Library > Alleys", "This PC", or the file itself. */
@@ -1728,6 +1755,24 @@ channel.on<PageMessage>((m) => {
       case "bake.remove":
         await inTurn("Remove bake", () => removeBake(m.slug));
         break;
+      case "lbake.new":
+        await inTurn("Bake into the Library", () => newLibraryBake(m.file, m.name, m.folder));
+        break;
+      case "lbake.add":
+        await inTurn("Bake into the Library", () => editLibraryBake(m.dir, "add", m.file));
+        break;
+      case "lbake.drop":
+        await inTurn("Take a scene out of a bake", () => editLibraryBake(m.dir, "drop", m.slug));
+        break;
+      case "lbake.rebake":
+        await inTurn("Bake again", () => editLibraryBake(m.dir, "rebake"));
+        break;
+      case "lbake.include":
+        await inTurn("Include in project", () => includeLibraryBake(m.dir));
+        break;
+      case "lbake.delete":
+        await inTurn("Delete bake", () => deleteLibraryBake(m.dir));
+        break;
       case "redo":
         await inTurn("Redo", () => travel(future, past, "Redo"));
         break;
@@ -1860,6 +1905,12 @@ function lookAtBakes(): void {
   const list = bakesIn(target);
   const current = scene.file ? list.find((b) => b.slug === slug) : undefined;
   inGameNow = deployedBakes(gameDir());
+  lookAtLibraryBakes();
+  // A bake from the Library: whether the Library has a newer version of it now.
+  for (const r of list) {
+    const lib = r.library && state.library.bakes.find((b) => b.id === r.library!.id);
+    if (lib && r.library && lib.version > r.library.version) r.library = { ...r.library, latest: lib.version, dir: lib.dir };
+  }
   const fromElsewhere = current?.file && !sameFile(current.file, scene.file) ? current : undefined;
   state.bake = {
     ...state.bake,
@@ -1888,18 +1939,32 @@ const bakeSoon = debounced(() => {
   void lookAtCollision();
 });
 
-async function bakeOpenScene(): Promise<void> {
-  await lookAtCollision();
-  lookAtBakes();
-  const stop = state.bake.checks.find((c) => c.tone === "error");
-  if (stop) {
-    publish();
-    return say(stop.text, "warn");
+/** The meshes among `objects` set solid that have no collision data, as `collisionKey`s: REDbridge reads each once. */
+async function noCollisionFor(b: Bridge, objects: Omit<SceneObject, "entityId">[]): Promise<Set<string>> {
+  const none = new Set<string>();
+  for (const p of new Set(objects.filter((o) => o.kind === "mesh" && o.solid && o.resource).map((o) => o.resource!))) {
+    const info = await assetInfo(b, p).catch(() => undefined);
+    if (info?.hasCollision === false) none.add(collisionKey(p));
   }
-  const target = bakeProject()!;
-  const { scene: input } = bakeInput(scene.name, scene.game, scene.groups, solidForBake(scene.objects, new Set(state.noCollision)));
-  // A file that is not the game's needs its size from where it is; sector.build reads the game's itself.
+  return none;
+}
+
+/** A scene to bake: the open one as it is now, any other from its file. */
+function sceneToBake(file: string): { name: string; game?: string; groups: SceneFile["groups"]; objects: SceneObject[] } {
+  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, game: scene.game, groups: scene.groups, objects: scene.objects };
+  const d = readSceneFile(file);
+  return { name: d.name, game: d.game, groups: d.groups ?? [], objects: d.objects as SceneObject[] };
+}
+
+/**
+ * Bakes one scene into a project-shaped folder (a project, or a Library bake's folder) through REDbridge's
+ * sector.build, and writes its record there. `root`: a project's source\archive, for the project's own files.
+ */
+async function bakeSceneInto(target: BakeProject, file: string, root?: string): Promise<{ built: SectorBuilt; xl: string; record: BakeRecord }> {
+  const src = sceneToBake(file);
   const b = bridge!;
+  const { scene: input } = bakeInput(src.name, src.game, src.groups, solidForBake(src.objects, await noCollisionFor(b, src.objects)));
+  // A file that is not the game's needs its size from where it is; sector.build reads the game's itself.
   const byPath = new Map(index.extra.map((e) => [e.path.toLowerCase(), e]));
   for (const o of input.objects) {
     if (o.bounds || !o.resource) continue;
@@ -1910,36 +1975,53 @@ async function bakeOpenScene(): Promise<void> {
   }
   let built: SectorBuilt;
   try {
-    try {
-      built = await b.sectorBuild({ project: target.dir, scene: input, root: target.archive });
-    } catch (err) {
-      // REDbridge before 0.12.0 takes no `root`, and reads only the game's files.
-      if (!/param|argument|signature|method/i.test((err as Error).message)) throw err;
-      built = await b.sectorBuild({ project: target.dir, scene: input });
-    }
+    built = await b.sectorBuild({ project: target.dir, scene: input, ...(root ? { root } : {}) });
+  } catch (err) {
+    // REDbridge before 0.12.0 takes no `root`, and reads only the game's files.
+    if (!root || !/param|argument|signature|method/i.test((err as Error).message)) throw err;
+    built = await b.sectorBuild({ project: target.dir, scene: input });
+  }
+  const xl = settleXl(built.xl, built.name, built.blockPath);
+  const record: BakeRecord = {
+    slug: built.name,
+    name: src.name,
+    file,
+    hash: bakeHash(src.objects),
+    objects: built.nodes,
+    date: new Date().toISOString(),
+    bridge: state.bridge.version,
+    box: built.streamingBox,
+    needs: sceneNeeds(src.objects.map((o) => o.resource), index.extra),
+  };
+  writeRecord(target, record);
+  console.log(`Baked ${src.name}: ${built.nodes} objects into ${target.dir} (${built.sector})${built.warnings.length ? `; ${built.warnings.length} warnings: ${built.warnings.join(" | ")}` : ""}`);
+  return { built, xl, record };
+}
+
+async function bakeOpenScene(): Promise<void> {
+  await lookAtCollision();
+  lookAtBakes();
+  const stop = state.bake.checks.find((c) => c.tone === "error");
+  if (stop) {
+    publish();
+    return say(stop.text, "warn");
+  }
+  const target = bakeProject()!;
+  let done: Awaited<ReturnType<typeof bakeSceneInto>>;
+  try {
+    done = await bakeSceneInto(target, scene.file, target.archive);
   } catch (err) {
     console.log(`Bake ${scene.name}: ${(err as Error).message}`);
     state.bake.last = undefined;
     lookAtBakes();
     return say(`The bake did not go through: ${(err as Error).message}`, "error");
   }
-  const xl = settleXl(built.xl, built.name, built.blockPath);
-  const needs = needsOf();
-  writeRecord(target, {
-    slug: built.name,
-    name: scene.name,
-    file: scene.file,
-    hash: bakeHash(scene.objects),
-    objects: built.nodes,
-    date: new Date().toISOString(),
-    bridge: state.bridge.version,
-    box: built.streamingBox,
-    needs,
-  });
-  state.bake.last = { slug: built.name, files: [built.sector, built.block, xl].map((f) => path.relative(target.dir, f)), warnings: built.warnings };
+  // Baked straight into the project: no longer the copy of a Library bake, if it was one.
+  forgetInNote(target.dir, done.built.name);
+  state.bake.last = { slug: done.built.name, files: [done.built.sector, done.built.block, done.xl].map((f) => path.relative(target.dir, f)), warnings: done.built.warnings };
   lookAtBakes();
-  console.log(`Baked ${scene.name}: ${built.nodes} objects into ${target.name} (${built.sector})${built.warnings.length ? `; ${built.warnings.length} warnings: ${built.warnings.join(" | ")}` : ""}`);
-  say(`Baked ${scene.name}: ${built.nodes} object${built.nodes === 1 ? "" : "s"} into ${target.name}. Pack and install the project, and start the game again.`, "ok");
+  const n = done.built.nodes;
+  say(`Baked ${scene.name}: ${n} object${n === 1 ? "" : "s"} into ${target.name}. Pack and install the project, and start the game again.`, "ok");
 }
 
 async function removeBake(slug: string): Promise<void> {
@@ -1947,6 +2029,7 @@ async function removeBake(slug: string): Promise<void> {
   if (!target) return say("No REDcode project is open.", "warn");
   try {
     removeBakeFiles(target, slug);
+    forgetInNote(target.dir, slug);
   } catch (err) {
     return say(`${slug} could not be removed: ${(err as Error).message}`, "error");
   }
@@ -1954,6 +2037,216 @@ async function removeBake(slug: string): Promise<void> {
   lookAtBakes();
   const stillIn = inGameNow.get(slug);
   say(`Took the bake ${slug} out of ${target.name}. Its scene is untouched.${stillIn ? ` It stays in the game (${stillIn}) until you pack and install the project again.` : ""}`, "ok");
+}
+
+// ---- Library bakes (B4-3) -------------------------------------------------------------------------------
+//
+// A bake in the Library holds one or more scenes, each baked as into a project, in a `<name>.bake` folder
+// (bake.ts). The Library tab makes and changes them; Include in project copies one into the open project.
+
+/** The Library's `.bake` folders, as the last scan found them. */
+let libraryBakeDirs: { dir: string; folder: string }[] = [];
+
+/** What a scene file holds now, for the stale flag, kept until the file changes. */
+const sceneHashes = new Map<string, { size: number; mtime: number; name: string; hash: string }>();
+
+function sceneNow(file: string): { name: string; hash: string } | undefined {
+  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, hash: bakeHash(scene.objects) };
+  let st: fs.Stats;
+  try {
+    st = fs.statSync(file);
+  } catch {
+    return undefined;
+  }
+  const known = sceneHashes.get(file);
+  if (known && known.size === st.size && known.mtime === st.mtimeMs) return known;
+  try {
+    const d = readSceneFile(file);
+    const now = { size: st.size, mtime: st.mtimeMs, name: d.name, hash: bakeHash(d.objects as SceneObject[]) };
+    sceneHashes.set(file, now);
+    return now;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The Library's bakes with their flags: stale, missing scenes, in the game, colliding, in the open project. */
+function lookAtLibraryBakes(): void {
+  const root = libraryRoot ?? "";
+  const versions = new Map<string, number | undefined>();
+  if (project) for (const v of libraryBakesIn(project.dir).values()) versions.set(v.id, v.version);
+  const out: LibraryBake[] = [];
+  for (const { dir, folder } of libraryBakeDirs) {
+    let meta: BakeMeta;
+    try {
+      meta = readBakeMeta(dir);
+    } catch (err) {
+      out.push({ dir, folder, name: path.basename(dir), id: "", version: 0, scenes: [], inGame: false, collides: [], error: (err as Error).message });
+      continue;
+    }
+    const scenes = meta.scenes.map((s) => {
+      const file = fromLibraryPath(root, s.path);
+      const now = sceneNow(file);
+      return { name: s.name, slug: s.slug, file, ...(now ? {} : { missing: true }), ...(now && s.hash && now.hash !== s.hash ? { stale: true } : {}) };
+    });
+    out.push({
+      dir,
+      folder,
+      name: meta.name,
+      id: meta.id,
+      version: meta.version,
+      date: meta.date,
+      bridge: meta.bridge,
+      scenes,
+      inGame: scenes.some((s) => inGameNow.has(s.slug)),
+      collides: [],
+      ...(versions.has(meta.id) ? { inProject: versions.get(meta.id) ?? 0 } : {}),
+    });
+  }
+  // Two bakes with the same scene, or scenes of one name (their files are named by it), both put it in the world.
+  for (const a of out) a.collides = out.filter((b) => b !== a && b.scenes.some((s) => a.scenes.some((t) => t.slug === s.slug || sameFile(t.file, s.file)))).map((b) => b.name);
+  state.library.bakes = out;
+}
+
+/** A Library bake's folder, checked to be one: inside the Library and named `.bake`. */
+function libraryBakeDir(dir: string): string {
+  if (!libraryRoot) throw new Error("Set the Library folder first (Library tab or Settings).");
+  const rel = path.relative(path.resolve(libraryRoot), path.resolve(dir));
+  if (rel.startsWith("..") || path.isAbsolute(rel) || !dir.toLowerCase().endsWith(BakeFolderEnding)) throw new Error("That is not a bake in the Library.");
+  return path.resolve(dir);
+}
+
+/**
+ * Bakes `files` into a Library bake (each replacing its earlier bake there) and takes `drop` (slugs) out,
+ * then raises its version. Every scene is checked first: nothing is written when one cannot be baked.
+ */
+async function changeLibraryBake(dir: string, meta: BakeMeta, files: string[], drop: string[] = []): Promise<string[]> {
+  const root = libraryRoot!;
+  const target = bakeFolderProject(dir);
+  if (files.length && (!bridge?.running || state.bridge.status !== "ready")) throw new Error("REDbridge is not ready, and it writes the bake. The pills at the top say why.");
+  const plan = files.map((file) => ({ file, src: sceneToBake(file) }));
+  for (const { file, src } of plan) {
+    const slug = slugOf(src.name);
+    const other = meta.scenes.find((s) => s.slug === slug && !sameFile(fromLibraryPath(root, s.path), file)) ?? plan.find((p) => p.file !== file && slugOf(p.src.name) === slug);
+    if (other) throw new Error(`Two scenes called ${src.name} can't be in one bake: a bake's files go by the scene's name. Rename one first.`);
+    const stop = checkBake({ file, name: src.name, objects: src.objects, project: target, bridgeReady: true, needs: [], bridgeVersion: state.bridge.version }).find((c) => c.tone === "error");
+    if (stop) throw new Error(`${src.name}: ${stop.text}`);
+  }
+  const warnings: string[] = [];
+  const isNew = !fs.existsSync(dir);
+  // sector.build wants the folder to be there; a new bake that fails leaves nothing behind.
+  fs.mkdirSync(dir, { recursive: true });
+  for (const { file } of plan) {
+    let done: Awaited<ReturnType<typeof bakeSceneInto>>;
+    try {
+      done = await bakeSceneInto(target, file, project?.archive);
+    } catch (err) {
+      if (isNew) fs.rmSync(dir, { recursive: true, force: true });
+      throw err;
+    }
+    const { record, built } = done;
+    warnings.push(...built.warnings);
+    const at = libraryPath(root, file);
+    meta.scenes = [...meta.scenes.filter((s) => s.path !== at && s.slug !== record.slug), { name: record.name, slug: record.slug, path: at, hash: record.hash }];
+  }
+  for (const slug of drop) {
+    removeBakeFiles(target, slug);
+    meta.scenes = meta.scenes.filter((s) => s.slug !== slug);
+  }
+  meta.version += 1;
+  meta.date = new Date().toISOString();
+  meta.bridge = state.bridge.version;
+  writeBakeMeta(dir, meta);
+  scanLibrary();
+  lookAtBakes();
+  return warnings;
+}
+
+const warned = (w: string[]) => (w.length ? ` REDbridge says: ${w.slice(0, 3).join(" ")}${w.length > 3 ? ` (and ${w.length - 3} more)` : ""}` : "");
+
+async function newLibraryBake(file: string, name: string, folder: string): Promise<void> {
+  try {
+    if (!libraryRoot) throw new Error("Set the Library folder first (Library tab or Settings).");
+    const src = sceneToBake(file);
+    const bakeName = name.trim() || src.name;
+    const dir = freeBakeDir(folderIn(libraryRoot, folder), bakeName);
+    const meta: BakeMeta = { format: 1, id: newBakeId(), name: bakeName, version: 0, scenes: [] };
+    const w = await changeLibraryBake(dir, meta, [file]);
+    say(`Baked ${src.name} into the Library as ${bakeName} (${libraryPath(libraryRoot, dir)}). Include it in a REDcode project to put it in the game.${warned(w)}`, "ok");
+  } catch (err) {
+    say(`The bake did not go through: ${(err as Error).message}`, "error");
+  }
+}
+
+async function editLibraryBake(dir: string, what: "add" | "drop" | "rebake", arg?: string): Promise<void> {
+  try {
+    dir = libraryBakeDir(dir);
+    const meta = readBakeMeta(dir);
+    const root = libraryRoot!;
+    if (what === "add") {
+      const w = await changeLibraryBake(dir, meta, [arg!]);
+      return say(`${sceneToBake(arg!).name} is baked into ${meta.name} (version ${meta.version}).${meta.version > 1 ? " Projects that include it can update it on their Bake tab." : ""}${warned(w)}`, "ok");
+    }
+    if (what === "drop") {
+      const gone = meta.scenes.find((s) => s.slug === arg);
+      if (!gone) return say(`${meta.name} has no scene ${arg}.`, "warn");
+      await changeLibraryBake(dir, meta, [], [arg!]);
+      return say(`${gone.name} is out of ${meta.name} (version ${meta.version}); the scene itself stays.${meta.scenes.length ? "" : " The bake is empty now: add a scene or delete it."}`, "ok");
+    }
+    const here = meta.scenes.map((s) => fromLibraryPath(root, s.path)).filter((f) => fs.existsSync(f));
+    const missing = meta.scenes.filter((s) => !fs.existsSync(fromLibraryPath(root, s.path))).map((s) => s.name);
+    if (!here.length) return say(`None of ${meta.name}'s scenes is where it was: ${missing.join(", ")}.`, "warn");
+    const w = await changeLibraryBake(dir, meta, here);
+    say(`Baked ${meta.name} again (version ${meta.version}).${missing.length ? ` Not found, so kept as baked before: ${missing.join(", ")}.` : ""}${warned(w)}`, missing.length ? "warn" : "ok");
+  } catch (err) {
+    lookAtBakes();
+    say(`${what === "drop" ? "The scene could not be taken out" : "The bake did not go through"}: ${(err as Error).message}`, "error");
+  }
+}
+
+async function includeLibraryBake(dir: string): Promise<void> {
+  try {
+    dir = libraryBakeDir(dir);
+    const target = bakeProject();
+    if (!target) throw new Error("No REDcode project is open. Open one in REDcode (VS Code), and include the bake there.");
+    const meta = readBakeMeta(dir);
+    if (!meta.scenes.length) throw new Error(`${meta.name} is empty: add a scene to it first.`);
+    const clashes = includeClashes(target, meta);
+    if (clashes.length) throw new Error(`${target.name} already has a bake of ${clashes.join(", ")} that is not from ${meta.name}. Take it out on the Bake tab first, or the two would overwrite each other.`);
+    const before = libraryBakesIn(target.dir);
+    const had = [...before.values()].find((v) => v.id === meta.id)?.version;
+    includeBake(dir, meta, target, libraryRoot!);
+    lookAtBakes();
+    const scenes = `${meta.scenes.length} scene${meta.scenes.length === 1 ? "" : "s"}`;
+    const what =
+      had === undefined
+        ? `Included ${meta.name} (version ${meta.version}, ${scenes}) in ${target.name}.`
+        : had === meta.version
+          ? `Copied ${meta.name} (version ${meta.version}) into ${target.name} again.`
+          : `Updated ${meta.name} in ${target.name} from version ${had} to ${meta.version} (${scenes}).`;
+    say(`${what} Pack and install the project, and start the game again.`, "ok");
+  } catch (err) {
+    say(`The bake was not included: ${(err as Error).message}`, "error");
+  }
+}
+
+function deleteLibraryBake(dir: string): void {
+  try {
+    dir = libraryBakeDir(dir);
+    const name = (() => {
+      try {
+        return readBakeMeta(dir).name;
+      } catch {
+        return path.basename(dir);
+      }
+    })();
+    fs.rmSync(dir, { recursive: true, force: true });
+    scanLibrary();
+    lookAtBakes();
+    say(`Deleted the bake ${name} from the Library. Its scenes stay, and projects that included it keep their copies.`, "ok");
+  } catch (err) {
+    say(`The bake could not be deleted: ${(err as Error).message}`, "error");
+  }
 }
 
 // ---- lifecycle --------------------------------------------------------------------------------
