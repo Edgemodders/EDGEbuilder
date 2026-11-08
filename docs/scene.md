@@ -49,7 +49,7 @@ A scene is the contract between EDGEbuilder's two halves and the input to REDbri
 | `objects[].appearance` | The appearance name, default `default` |
 | `objects[].solid` | For a mesh, optional: `true` bakes a node that stops V, bullets and cars (REDbridge 0.12.0 and later). A mesh with no collision data stays draw-only. EDGEbuilder sets it on new meshes; absent means not solid |
 | `objects[].transform` | `position` [x, y, z] in metres, world space; `rotation` a quaternion [x, y, z, w]; `scale` [x, y, z] |
-| `objects[].streaming` | `primary`: the distance in metres the node streams in at; `secondary`: its maximum streaming distance. Both optional: the bake derives them from the object's size |
+| `objects[].streaming` | `primary`: the distance in metres the node streams in at; `secondary`: a second distance, from the node's secondary reference point (its middle, as REDbridge writes it). The game hides the node beyond either, so the nearer one is how far it is seen (measured in game on 2026-11-08: 120/96 reached 96 m). EDGEbuilder's Seen from writes both the same. Both optional: the bake derives them from the object's size |
 | `objects[].ref` | The node reference, unique in the scene. Generated as `edgebuilder/<scene>/<id>` when missing |
 | `objects[].bounds` | The resource's local bounding box, from the asset index, so the bake need not read the game. Read from the game when missing |
 | `objects[].group` | The group the object belongs to |

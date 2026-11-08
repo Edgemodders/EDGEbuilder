@@ -303,9 +303,12 @@ export function seenFromBySize(o: SceneObject): number | undefined {
 /** The nearest and farthest a modder can set: below 5 m an object would come and go at V's feet. */
 export const SeenFromRange = [5, 2000] as const;
 
-/** A scene object's `streaming` for a "Seen from" in metres, or none for REDbridge's rule by size. The secondary distance keeps REDbridge's own ratio. */
+/**
+ * A scene object's `streaming` for a "Seen from" in metres, or none for REDbridge's rule by size.
+ * Both distances are the same: the game hides a node beyond either, so a secondary of 80% made 120 m reach 96 (measured in game, 2026-11-08).
+ */
 export function streamingFor(metres: number | null): SceneObject["streaming"] {
   if (metres === null) return undefined;
   const m = Math.round(Math.min(SeenFromRange[1], Math.max(SeenFromRange[0], metres)));
-  return { primary: m, secondary: Math.round(m * 0.8) };
+  return { primary: m, secondary: m };
 }

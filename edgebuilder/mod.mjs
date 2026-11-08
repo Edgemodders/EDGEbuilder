@@ -739,7 +739,7 @@ var SeenFromRange = [5, 2e3];
 function streamingFor(metres) {
   if (metres === null) return void 0;
   const m = Math.round(Math.min(SeenFromRange[1], Math.max(SeenFromRange[0], metres)));
-  return { primary: m, secondary: Math.round(m * 0.8) };
+  return { primary: m, secondary: m };
 }
 
 // src/bake.ts
