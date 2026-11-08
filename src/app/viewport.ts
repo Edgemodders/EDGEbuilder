@@ -185,6 +185,18 @@ export class Viewport {
       if (this.builderAsked) this.hooks.builderStop();
     });
     game.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
+    // A game menu (pause, Settings, inventory, map) hides the whole window ("hideWith": ["menu"]
+    // in the manifest) and takes the mouse and keys: the page never hears the button come up, so
+    // whatever was under way stops here. Not hidden with "scene": Edit raises the scene tier itself.
+    game.onState((s) => {
+      if (!s.menu) return;
+      this.cancel();
+      this.disarm();
+      this.box = undefined;
+      this.rmb = this.mmb = false;
+      this.unlock();
+      this.keys.clear();
+    });
   }
 
   /** The line through the cursor, for a paste, when the cursor is over the world in Edit. */

@@ -10,6 +10,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**Fixed**
+
+- The gizmo and the EDGEbuilder window no longer show over the game's menus (pause, Settings, inventory, map): the window hides while a menu is open and comes back when it closes. A move or a look under way when the menu opened stops there.
+
 ## 0.9.1 (2026-11-08)
 
 The first public preview, on Nexus Mods (https://www.nexusmods.com/cyberpunk2077/mods/36627). The same EDGEbuilder as 0.9.0, tested on game 2.5 with REDnode 0.58.0 and REDbridge 0.12.1, and now checked on a wide screen too.

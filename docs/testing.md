@@ -679,3 +679,16 @@ Built on 2026-11-08: no change in the window or the mod since 0.9.0. The zip is 
 | 4 | Look at the help line | At the bottom centre of the wide screen |
 
 **Passed in game on 2026-11-08 on 0.9.1**, on the owner's wide monitor: every step as expected. EDGEdeck installed the new zip as a new version of EDGEbuilder. This also answers B3-2's step 16 (ultrawide), open since 0.6.7.
+
+### 0.9.2 Menus
+
+Found by the owner on 2026-11-08 with 0.9.1: the gizmo stayed on screen over the pause menu and Settings. 0.9.2 hides the whole window while a game menu is open (`"hideWith": ["menu"]` in the manifest: REDnode's plugin reads the game's own "in a menu" flag), and the page drops a move, look, box or Drop at click under way when a menu opens. Not hidden with REDnode's `scene` state: that is scene tier 4 or more, which Edit sets itself to hide the HUD.
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Load a save, open EDGEbuilder, Edit on, select a crate | The log says EDGEbuilder 0.9.2; the gizmo on the crate |
+| 2 | Open the pause menu, then Settings | No gizmo, no EDGEbuilder window over either |
+| 3 | Close the menus | The window and the gizmo come back; Edit still on, the editor camera where it was |
+| 4 | Start dragging the crate's arrow, open the pause menu mid-drag, close it | The crate is back where the drag started; no drag follows the mouse |
+| 5 | Edit off, open the inventory and the map | EDGEbuilder hidden in both, back after |
+| 6 | Edit on again, fly a little, move a crate | All as before: the HUD stays hidden, the window never blinks out in Edit without a menu |

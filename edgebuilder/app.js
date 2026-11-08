@@ -312,6 +312,15 @@ var Viewport = class {
       if (this.builderAsked) this.hooks.builderStop();
     });
     game2.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
+    game2.onState((s) => {
+      if (!s.menu) return;
+      this.cancel();
+      this.disarm();
+      this.box = void 0;
+      this.rmb = this.mmb = false;
+      this.unlock();
+      this.keys.clear();
+    });
   }
   ctx;
   edit = false;
