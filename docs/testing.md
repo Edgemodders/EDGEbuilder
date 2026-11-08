@@ -657,3 +657,12 @@ Before: deploy 0.9.0 with the game closed; `redcode.pack.redmod` is off. The RED
 | 11 | Pick Kabuki Bakes, the trash icon by the second scene, Yes; then **Update in project to v4** (Include in project, named so when the project has an older version) | Version 4, 1 scene; the project's copy of the second scene goes (the Bake tab lists only 200 Cargo Crates) | |
 | 12 | Claude reads `source\library.json` in the project | One EDGEbuilder item: `kind` bake, its `id`, `path` `Alleys/Kabuki/kabuki_bakes.bake`, `version` 4, the four files of 200 Cargo Crates | L4 |
 | 13 | Library tab: pick 200 Cargo Crates, **Open** (if it is not open already). Bake tab: press **Bake** (straight into the project) | It bakes, and the Bake tab no longer says it came from the Library: a project needs no Library | L4 |
+
+**B4-3 passed in game on 2026-11-08 on 0.9.0** (game 2.5, REDnode 0.58.0, REDbridge 0.12.1, `redcode.pack.redmod` off, the project EDGEbuilder_Testing): all 13 steps as expected. Steps 11 and 13 were worded wrongly and are corrected above: the button reads **Update in project to v4** when the project has an older version, and a scene opens on the Library tab, not the Bake tab.
+
+| Question | Answer |
+|---|---|
+| L1 | Kabuki Bakes v2, two scenes (200 Cargo Crates and Yard) in one `.bake`, included in the project and packed: both stand in the world, the crates solid and seen from 120 m |
+| L2 | The included bake's two blocks loaded beside the project's own bakes (Market Corner copy 2, VoodDoo Inside), so ArchiveXL merged blocks from a Library bake and the project in one start. Two bakes from different mods in one game were not tried: each mod's blocks go through its own `.xl`, as W15 showed |
+| L3 | Moving an object in Yard tagged Kabuki Bakes STALE; a second bake of Yard (Corner Copy) tagged both COLLIDES, and deleting it cleared the flag |
+| L4 | After step 5 the note listed Kabuki Bakes v2 and its eight files, the project's copies identical to the bake's. After step 11: one item, `kind` bake, `id` 89b9385f65241231, `path` `Alleys/Kabuki/kabuki_bakes.bake`, `version` 4, the four files of 200 Cargo Crates; Yard's files gone from the project, the project's own bakes untouched. After step 13 the record has no `library` mark and the note has no items: the bake is the project's own again |

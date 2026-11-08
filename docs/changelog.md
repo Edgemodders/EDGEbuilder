@@ -10,12 +10,16 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.9.0 (2026-11-08)
+
+B4-3, Library bakes, the last phase before the public preview. Tested on game 2.5 with REDnode 0.58.0 and REDbridge 0.12.1.
+
 **New**
 
 - Bakes in the Library: pick a scene on the Library tab and press Bake into Library. The bake is a folder of its own beside your scenes, named by the Name field, and needs no REDcode project.
 - A Library bake can hold several scenes: pick it and press Add open scene. Each scene stays a sector of its own, so it loads only near its own place. The trash icon by a scene takes it out of the bake; the scene stays.
 - Include in project copies a Library bake into the REDcode project open in VS Code; pack and install it there. The project notes where it came from in `source\library.json`, the file every EDGE tool shares (https://edgemodders.ai/wiki/library.html).
-- Bake again, on a Library bake, bakes its scenes as they are now and raises its version. The Bake tab then shows Update next to that bake in each project that includes it.
+- Bake again, on a Library bake, bakes its scenes as they are now and raises its version. The Bake tab then shows Update next to that bake in each project that includes it, and the Library tab's Include in project becomes Update in project to the new version.
 - Flags on Library bakes, in the tree and the Picked panel: stale (a scene changed since the bake), scene missing, collides (two bakes hold the same scene, so it would stand twice), in game, and in project.
 - The Bake tab says when a project's bake came from the Library.
 
