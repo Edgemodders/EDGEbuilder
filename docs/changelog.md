@@ -16,6 +16,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - EDGEbuilder says which meshes can't be solid, because they have no collision data, on the Scene tab and the Bake tab.
 - Ctrl+A selects the whole scene.
 
+**Fixed**
+
+- The Scale field is hidden when an entity is selected. It took typing before, though an entity keeps its template's size.
+
 ## 0.7.3 (2026-11-05)
 
 **New**

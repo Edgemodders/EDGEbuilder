@@ -259,7 +259,8 @@ function renderSelected(sel: SceneObject[], s: Snapshot): void {
     const c = centreOf(sel.map((o) => o.transform));
     const values: Record<(typeof fields)[number], string> = { px: c[0].toFixed(2), py: c[1].toFixed(2), pz: c[2].toFixed(2), yaw: "0", scale: "1" };
     for (const f of fields) if (focused !== f) field(f).value = values[f];
-    field("scale").toggleAttribute("disabled", sel.some((o) => o.kind !== "mesh"));
+    // Hidden, not disabled: the kit's rn-input does not read `disabled`.
+    field("scale").hidden = sel.some((o) => o.kind !== "mesh");
     const shown = sel.filter((o) => o.entityId).length;
     $("selected").textContent = `${oneGroup ? `${oneGroup.name}: ` : ""}${sel.length} objects\nmiddle at ${c.map((n) => n.toFixed(2)).join(", ")}${shown < sel.length ? `\n${sel.length - shown} not in the world` : ""}`;
     return;
@@ -274,7 +275,7 @@ function renderSelected(sel: SceneObject[], s: Snapshot): void {
       scale: o.transform.scale[0].toFixed(2),
     };
     for (const f of fields) if (focused !== f) field(f).value = values[f];
-    field("scale").toggleAttribute("disabled", o.kind !== "mesh");
+    field("scale").hidden = o.kind !== "mesh";
   }
   if (!o) {
     $("selected").textContent = "Nothing selected";

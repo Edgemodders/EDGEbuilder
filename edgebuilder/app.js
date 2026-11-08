@@ -1365,7 +1365,7 @@ function renderSelected(sel, s) {
     const c = centreOf(sel.map((o2) => o2.transform));
     const values = { px: c[0].toFixed(2), py: c[1].toFixed(2), pz: c[2].toFixed(2), yaw: "0", scale: "1" };
     for (const f of fields) if (focused !== f) field(f).value = values[f];
-    field("scale").toggleAttribute("disabled", sel.some((o2) => o2.kind !== "mesh"));
+    field("scale").hidden = sel.some((o2) => o2.kind !== "mesh");
     const shown = sel.filter((o2) => o2.entityId).length;
     $("selected").textContent = `${oneGroup ? `${oneGroup.name}: ` : ""}${sel.length} objects
 middle at ${c.map((n) => n.toFixed(2)).join(", ")}${shown < sel.length ? `
@@ -1382,7 +1382,7 @@ ${sel.length - shown} not in the world` : ""}`;
       scale: o.transform.scale[0].toFixed(2)
     };
     for (const f of fields) if (focused !== f) field(f).value = values[f];
-    field("scale").toggleAttribute("disabled", o.kind !== "mesh");
+    field("scale").hidden = o.kind !== "mesh";
   }
   if (!o) {
     $("selected").textContent = "Nothing selected";
