@@ -286,3 +286,26 @@ export function boxOf(objects: SceneObject[]): { min: V3; max: V3 } | undefined 
 export function collisionKey(resource: string | undefined): string {
   return (resource ?? "").replace(/\//g, "\\").toLowerCase();
 }
+
+/**
+ * How far off a baked object is seen when the scene gives no distance: REDbridge's own rule (sector.build),
+ * its largest side in the world times 11 metres, kept between 40 and 400. Undefined when the scene has no
+ * bounds for it, as REDbridge then reads them from the file.
+ */
+export function seenFromBySize(o: SceneObject): number | undefined {
+  if (o.kind === "light") return 40;
+  if (!o.bounds) return undefined;
+  const b = boxOf([o])!;
+  const size = Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]);
+  return Math.round(Math.min(400, Math.max(40, size * 11)));
+}
+
+/** The nearest and farthest a modder can set: below 5 m an object would come and go at V's feet. */
+export const SeenFromRange = [5, 2000] as const;
+
+/** A scene object's `streaming` for a "Seen from" in metres, or none for REDbridge's rule by size. The secondary distance keeps REDbridge's own ratio. */
+export function streamingFor(metres: number | null): SceneObject["streaming"] {
+  if (metres === null) return undefined;
+  const m = Math.round(Math.min(SeenFromRange[1], Math.max(SeenFromRange[0], metres)));
+  return { primary: m, secondary: Math.round(m * 0.8) };
+}

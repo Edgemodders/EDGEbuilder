@@ -520,6 +520,15 @@ Round 3 proved the node by rewriting sectors by hand; here `sector.build` writes
 | 16 | Turn `redcode.pack.redmod` off in VS Code. Pack and Install; start. Turn it back on after | The bake goes in `archive\\pc\\mod` and stands; EDGEbuilder says it is baked | W15 |
 | 17 | Hover **New** on the Scene tab | The tooltip says `press "New Scene Here"` (0.7.3's wording, not looked at yet) | |
 
+Found on 0.8.0 (2026-11-08): the Scale field took typing for an entity (the kit's `rn-input` does not read `disabled`; now hidden), step 14's 200 Crates are entities, which have no switch (Claude wrote 200 Cargo Crates, solid meshes on the same spots), and step 6 turned step 4's copy back on. Among 200 solid cargo crates: 75.2 and 75.9 fps, in a sandstorm in the morning, so not comparable with the 67 fps at night; step 15's load without the bake gives the same weather. Every baked crate came in at about 40 m, which the owner saw as pop-in: **0.8.1** adds **Seen from** (the scene's `streaming`, which round 2 proved reaches the game) and keeps the tab bar in place while a tab scrolls (the owner, 2026-11-08). Checked in REDnode's host with real clicks and keys; the smoke test bakes one at 300 m through REDbridge 0.12.0.
+
+| # | On 0.8.1 | Expected |
+|---|---|---|
+| 18 | Select one crate in the Scene tab | **Seen from, m** is empty, its hint "40 by size"; the tooltip says what it does. An entity has no Scale field |
+| 19 | Type 150 in Seen from and press Enter; Ctrl+Z, Ctrl+Y | The message says seen from 150 m; Undo empties it, Redo brings it back. The Bake tab says the scene changed since |
+| 20 | Open **200 Cargo Crates**, Ctrl+A, Seen from 120; Bake; Pack and Install; start; load among them | Crates come in at about 120 m. Claude reads the frame rate against step 14's |
+| 21 | Scroll down a long tab (the Scene tab with something selected) | The tab bar stays where it is |
+
 #### Questions for the Bake panel: the test of B4-1
 
 | # | Question | What depends on it |

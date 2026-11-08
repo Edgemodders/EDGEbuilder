@@ -49,6 +49,10 @@
   .fold { display: inline-block; width: 14px; color: var(--rn-dim, #999); cursor: pointer; }
   .row { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
   [hidden] { display: none !important; }
+  /* The tab bar stays put: the tabs fill what the window has left, and the open tab's content scrolls under the bar. */
+  #mainTabs { flex: 1; min-height: 0; }
+  #mainTabs > rn-tab[active] { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
+  #mainTabs > rn-tab > * { flex-shrink: 0; }
   /* The window is a flex column of fixed height: a long message keeps its lines (up to four) and pushes the tabs down. */
   .message { font-family: var(--rn-body, sans-serif); font-size: 13px; padding: 2px 0 6px; min-height: 1.4em; max-height: 5.6em; overflow: auto; flex-shrink: 0; color: var(--rn-dim, #999); }
   .busy:not([hidden]) { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; } .busy rn-progress { flex: 1; }
@@ -117,9 +121,10 @@
             <rn-input id="py" label="Y"></rn-input>
             <rn-input id="pz" label="Z"></rn-input>
           </div>
-          <div class="grid2">
+          <div class="grid">
             <rn-input id="yaw" label="Heading"></rn-input>
             <rn-input id="scale" label="Scale"></rn-input>
+            <rn-input id="seenFrom" label="Seen from, m" title="How far off it is seen once baked. Empty: by its size, from 40 m for small things to 400 m. Farther costs frame rate in a full scene. Previews are seen from any distance"></rn-input>
           </div>
           <div id="solidRow" hidden>
             <rn-toggle id="solid" label="Solid when baked" title="A baked mesh stops V, bullets and cars. Previews stay walk-through until then. A mesh with no collision data can't be solid"></rn-toggle>

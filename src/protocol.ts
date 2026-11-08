@@ -59,6 +59,7 @@ export interface SceneObject {
   /** A mesh that stops V, bullets and cars once baked (B4-2). A new mesh starts solid; absent means not solid, as in older scenes. */
   solid?: boolean;
   transform: SceneTransform;
+  /** How far off it is seen once baked, in metres (the Seen from field). Absent: REDbridge's rule by size. */
   streaming?: { primary?: number; secondary?: number };
   ref?: string;
   bounds?: { min: number[]; max: number[] };
@@ -219,6 +220,8 @@ export type PageMessage =
   | { type: "transform"; items: { id: string; transform: SceneTransform }[]; merge?: boolean }
   /** Solid or not once baked, for the meshes among `ids`. One undo step. */
   | { type: "solid"; ids: string[]; on: boolean }
+  /** How far off the objects are seen once baked, in metres; null for REDbridge's rule by size. One undo step. */
+  | { type: "seenFrom"; ids: string[]; metres: number | null }
   /** Drop the objects onto whatever is below each. */
   | { type: "floor"; ids: string[] }
   /** Group the selected objects; ungroup them; rename a group. */

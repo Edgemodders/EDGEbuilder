@@ -221,6 +221,14 @@ function boxOf(objects) {
 function collisionKey(resource) {
   return (resource ?? "").replace(/\//g, "\\").toLowerCase();
 }
+function seenFromBySize(o) {
+  if (o.kind === "light") return 40;
+  if (!o.bounds) return void 0;
+  const b = boxOf([o]);
+  const size = Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]);
+  return Math.round(Math.min(400, Math.max(40, size * 11)));
+}
+var SeenFromRange = [5, 2e3];
 
 // src/app/held.ts
 import { game } from "rednode";
@@ -1350,8 +1358,33 @@ function renderSolid(sel, s) {
   if (cannot) lines.push(meshes.length === 1 ? "No collision data, so this mesh can't be solid." : cannot === 1 ? "1 of these has no collision data, so it can't be solid." : `${cannot} of these have no collision data, so they can't be solid.`);
   $("solidNote").textContent = lines.join(" ");
 }
+var seenShown = "";
+function renderSeenFrom(sel) {
+  const f = $("seenFrom");
+  f.hidden = !sel.length;
+  if (!sel.length) return;
+  const own = new Set(sel.map((o) => o.streaming?.primary ?? null));
+  const one = own.size === 1 ? [...own][0] : void 0;
+  seenShown = one == null ? "" : String(one);
+  if (document.activeElement?.id !== "seenFrom") f.value = seenShown;
+  const bySize = sel.length === 1 ? seenFromBySize(sel[0]) : void 0;
+  f.setAttribute("placeholder", own.size > 1 ? "mixed" : bySize ? `${bySize} by size` : "by size");
+}
+function applySeenFrom() {
+  if (!state) return;
+  const text = $("seenFrom").value.trim();
+  if (text === seenShown) return;
+  const n = Number(text);
+  if (text && (!Number.isFinite(n) || n <= 0)) {
+    $("seenFrom").value = seenShown;
+    return status(`Seen from takes metres, ${SeenFromRange[0]} to ${SeenFromRange[1]}, or empty for a distance by size.`);
+  }
+  seenShown = text;
+  post({ type: "seenFrom", ids: state.selected, metres: text ? n : null });
+}
 function renderSelected(sel, s) {
   renderSolid(sel, s);
+  renderSeenFrom(sel);
   const focused = document.activeElement?.id;
   const units = selectionUnits(s.selected, s.scene.objects, s.scene.groups);
   const oneGroup = units.groups.length === 1 && !units.objects.length ? s.scene.groups.find((g) => g.id === units.groups[0]) : void 0;
@@ -1536,7 +1569,14 @@ function applyFields() {
   };
   post({ type: "transform", items: [{ id: o.id, transform: next }] });
 }
-$("apply").addEventListener("click", applyFields);
+$("apply").addEventListener("click", () => {
+  applyFields();
+  applySeenFrom();
+});
+$("seenFrom").addEventListener("submit", () => {
+  applySeenFrom();
+  document.activeElement?.blur();
+});
 for (const f of fields)
   field(f).addEventListener("submit", () => {
     applyFields();

@@ -15,6 +15,11 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - The Solid switch: on the Scene tab, for one mesh, several or a group. A solid mesh stops V, bullets and cars once baked. New meshes start solid; meshes already in your scenes stay as they were until you switch them.
 - EDGEbuilder says which meshes can't be solid, because they have no collision data, on the Scene tab and the Bake tab.
 - Ctrl+A selects the whole scene.
+- Seen from: how far off an object is seen once baked, in metres, on the Scene tab for one object, several or a group. Empty, it goes by the object's size: 40 m for small things, up to 400 m for big ones.
+
+**Changed**
+
+- The tab bar stays in place: a long tab scrolls under it.
 
 **Fixed**
 

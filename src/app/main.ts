@@ -1,6 +1,6 @@
 // The editor page: shows the mod's state and sends requests. No truth lives here.
 import { channel } from "rednode";
-import { applyChange, boxOf, centreOf, collisionKey, membersOf, pickMany, pickSelection, selectionUnits } from "../arrange";
+import { applyChange, boxOf, centreOf, collisionKey, membersOf, seenFromBySize, SeenFromRange, pickMany, pickSelection, selectionUnits } from "../arrange";
 import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
 import type { AssetEntry, AssetFrom, AssetKind, PageMessage, Place, SceneEntry, SceneObject, SceneTransform, Snapshot } from "../protocol";
 import { held } from "./held";
@@ -244,8 +244,39 @@ function renderSolid(sel: SceneObject[], s: Snapshot): void {
   $("solidNote").textContent = lines.join(" ");
 }
 
+/** What the Seen from field showed last, so Apply sends it only when it was changed. */
+let seenShown = "";
+
+/** Seen from: the objects' own distance when they share one; empty, with the distance by size as its hint, when they have none. */
+function renderSeenFrom(sel: SceneObject[]): void {
+  const f = $<Field>("seenFrom");
+  f.hidden = !sel.length;
+  if (!sel.length) return;
+  const own = new Set(sel.map((o) => o.streaming?.primary ?? null));
+  const one = own.size === 1 ? [...own][0] : undefined;
+  seenShown = one == null ? "" : String(one);
+  if (document.activeElement?.id !== "seenFrom") f.value = seenShown;
+  const bySize = sel.length === 1 ? seenFromBySize(sel[0]) : undefined;
+  f.setAttribute("placeholder", own.size > 1 ? "mixed" : bySize ? `${bySize} by size` : "by size");
+}
+
+/** Sends Seen from if it was changed: a number of metres, or empty for the distance by size. */
+function applySeenFrom(): void {
+  if (!state) return;
+  const text = $<Field>("seenFrom").value.trim();
+  if (text === seenShown) return;
+  const n = Number(text);
+  if (text && (!Number.isFinite(n) || n <= 0)) {
+    $<Field>("seenFrom").value = seenShown;
+    return status(`Seen from takes metres, ${SeenFromRange[0]} to ${SeenFromRange[1]}, or empty for a distance by size.`);
+  }
+  seenShown = text;
+  post({ type: "seenFrom", ids: state.selected, metres: text ? n : null });
+}
+
 function renderSelected(sel: SceneObject[], s: Snapshot): void {
   renderSolid(sel, s);
+  renderSeenFrom(sel);
   const focused = document.activeElement?.id;
   const units = selectionUnits(s.selected, s.scene.objects, s.scene.groups);
   const oneGroup = units.groups.length === 1 && !units.objects.length ? s.scene.groups.find((g) => g.id === units.groups[0]) : undefined;
@@ -445,7 +476,14 @@ function applyFields(): void {
   };
   post({ type: "transform", items: [{ id: o.id, transform: next }] });
 }
-$("apply").addEventListener("click", applyFields);
+$("apply").addEventListener("click", () => {
+  applyFields();
+  applySeenFrom();
+});
+$<Field>("seenFrom").addEventListener("submit", () => {
+  applySeenFrom();
+  (document.activeElement as HTMLElement | null)?.blur();
+});
 // Enter applies and leaves the field, so a Ctrl+Z next undoes the change, not the field's text.
 for (const f of fields)
   field(f).addEventListener("submit", () => {

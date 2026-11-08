@@ -11,7 +11,7 @@ import { api, channel, game, kernel, pkg, service, ui, world, type GameRef } fro
 import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge, type SectorBuilt } from "./bridge";
 import { AssetIndex, kindOf } from "./index";
 import { ModSources, modArchives, modFolders, sceneNeeds } from "./sources";
-import { collisionKey } from "./arrange";
+import { collisionKey, streamingFor } from "./arrange";
 import { bakeHash, bakeInput, bakesIn, checkBake, deployedBakes, removeBake as removeBakeFiles, settleXl, solidForBake, writeRecord, type BakeProject } from "./bake";
 import { Scene, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
@@ -1758,6 +1758,9 @@ channel.on<PageMessage>((m) => {
       case "solid":
         await inTurn("Solid", () => setSolid(m.ids, m.on));
         break;
+      case "seenFrom":
+        await inTurn("Seen from", () => setSeenFrom(m.ids, m.metres));
+        break;
       case "log":
         console.log(m.text);
         break;
@@ -1806,6 +1809,23 @@ function setSolid(ids: string[], on: boolean): void {
   scene.save();
   lookAtBakes();
   say(`${change.length === 1 ? change[0].id : `${change.length} meshes`}: ${on ? "solid" : "not solid"} once baked.`, "ok");
+}
+
+/** Seen from: how far off the objects are seen once baked, or null for REDbridge's rule by size. */
+function setSeenFrom(ids: string[], metres: number | null): void {
+  const next = streamingFor(metres);
+  const objects = ids.map((id) => scene.get(id)).filter((o): o is SceneObject => !!o);
+  const change = objects.filter((o) => JSON.stringify(o.streaming ?? null) !== JSON.stringify(next ?? null));
+  if (!change.length) return publish();
+  step();
+  for (const o of change) {
+    if (next) o.streaming = { ...next };
+    else delete o.streaming;
+  }
+  scene.save();
+  lookAtBakes();
+  const what = change.length === 1 ? change[0].id : `${change.length} objects`;
+  say(next ? `${what}: seen from ${next.primary} m once baked.` : `${what}: seen from a distance by size once baked.`, "ok");
 }
 
 /** Which of the scene's meshes have no collision data, asked in the background: REDbridge reads each mesh once. */

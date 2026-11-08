@@ -735,6 +735,12 @@ function boxOf(objects) {
 function collisionKey(resource) {
   return (resource ?? "").replace(/\//g, "\\").toLowerCase();
 }
+var SeenFromRange = [5, 2e3];
+function streamingFor(metres) {
+  if (metres === null) return void 0;
+  const m = Math.round(Math.min(SeenFromRange[1], Math.max(SeenFromRange[0], metres)));
+  return { primary: m, secondary: Math.round(m * 0.8) };
+}
 
 // src/bake.ts
 import { createHash } from "node:crypto";
@@ -2529,6 +2535,9 @@ channel.on((m) => {
       case "solid":
         await inTurn("Solid", () => setSolid(m.ids, m.on));
         break;
+      case "seenFrom":
+        await inTurn("Seen from", () => setSeenFrom(m.ids, m.metres));
+        break;
       case "log":
         console.log(m.text);
         break;
@@ -2565,6 +2574,21 @@ function setSolid(ids, on) {
   scene.save();
   lookAtBakes();
   say(`${change.length === 1 ? change[0].id : `${change.length} meshes`}: ${on ? "solid" : "not solid"} once baked.`, "ok");
+}
+function setSeenFrom(ids, metres) {
+  const next = streamingFor(metres);
+  const objects = ids.map((id) => scene.get(id)).filter((o) => !!o);
+  const change = objects.filter((o) => JSON.stringify(o.streaming ?? null) !== JSON.stringify(next ?? null));
+  if (!change.length) return publish();
+  step();
+  for (const o of change) {
+    if (next) o.streaming = { ...next };
+    else delete o.streaming;
+  }
+  scene.save();
+  lookAtBakes();
+  const what = change.length === 1 ? change[0].id : `${change.length} objects`;
+  say(next ? `${what}: seen from ${next.primary} m once baked.` : `${what}: seen from a distance by size once baked.`, "ok");
 }
 var collisionAsked = "";
 var collisionBusy = false;
@@ -2746,7 +2770,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.8.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.8.1"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs7.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

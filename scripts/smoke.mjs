@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as core from "../dist/core.mjs";
 import { cleanFolderName, fileNameOf, folderIn, freeFileName, readLibraryRoot, readSceneFile, refOf, scanShelf, slugOf, whereIs, writeLibraryRoot } from "../dist/core.mjs";
-import { bakeHash, bakeInput, bakesIn, checkBake, collisionKey, deployedBakes, removeBake, settleXl, solidForBake, writeRecord } from "../dist/core.mjs";
+import { bakeHash, bakeInput, bakesIn, checkBake, collisionKey, deployedBakes, removeBake, seenFromBySize, settleXl, solidForBake, streamingFor, writeRecord } from "../dist/core.mjs";
 import { AssetIndex, BridgeClient, applyChange, centreOf, copyOf, duplicate, makeGroup, pasteOf, standPoint, pickMany, pickSelection, pruneGroups, selectionUnits, ungroup, ModSources, NeedsNewerBridge, Scene, findBridge, isGameFolder, kindOf, modArchives, quaternionToYaw, sceneNeeds, yawToQuaternion } from "../dist/core.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -84,6 +84,17 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   const entity = { ...plainCrate, kind: "entity", resource: "base\\a\\b.ent" };
   assert.equal(bakeHash([{ ...entity, solid: true }]), bakeHash([entity]), "solid means nothing on an entity");
   assert.equal(collisionKey("base/A/Crate.mesh"), "base\\a\\crate.mesh");
+  // Seen from: REDbridge's rule by size, and what a typed distance writes.
+  const box = (s) => ({ id: "b", kind: "mesh", resource: "a.mesh", bounds: { min: [-s / 2, -s / 2, 0], max: [s / 2, s / 2, s] }, transform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } });
+  assert.equal(seenFromBySize(box(1.4)), 40, "a crate is seen from the 40 m floor");
+  assert.equal(seenFromBySize(box(10)), 110, "10 m across: 110 m");
+  assert.equal(seenFromBySize({ ...box(10), transform: { ...box(10).transform, scale: [2, 2, 2] } }), 220, "scale counts");
+  assert.equal(seenFromBySize(box(100)), 400, "kept to 400 m");
+  assert.equal(seenFromBySize({ ...box(1), bounds: undefined }), undefined, "no bounds: REDbridge reads the file");
+  assert.deepEqual(streamingFor(150), { primary: 150, secondary: 120 });
+  assert.deepEqual(streamingFor(1), { primary: 5, secondary: 4 }, "kept to 5 m at least");
+  assert.equal(streamingFor(null), undefined);
+  assert.notEqual(bakeHash([box(1)]), bakeHash([{ ...box(1), streaming: streamingFor(150) }]), "a new distance is a change to bake");
   const none = new Set([collisionKey(plainCrate.resource)]);
   const [stripped] = solidForBake([solidCrate], none);
   assert.ok(!("solid" in stripped), "no data: bakes as a plain mesh");
@@ -546,6 +557,9 @@ if (!exe || !game) {
       assert.ok(!fs.readFileSync(built.sector).includes("worldInstancedDestructibleMeshNode"), "a plain mesh stays a plain node");
       const solid = await bridge.sectorBuild({ project: dir, scene: bakeInput("Smoke Bake", undefined, [], [{ ...object, solid: true }]).scene });
       assert.ok(fs.readFileSync(solid.sector).includes("worldInstancedDestructibleMeshNode"), "a solid mesh writes the node round 3 proved");
+      // Seen from reaches the bake: the sector's streaming box reaches as far as its farthest distance.
+      const far = await bridge.sectorBuild({ project: dir, scene: bakeInput("Smoke Bake", undefined, [], [{ ...object, streaming: streamingFor(300) }]).scene });
+      assert.ok(far.streamingBox.max[0] - far.streamingBox.min[0] >= 600, "seen from 300 m: the box reaches 300 m each way");
       const [looked] = await bridge.meshInfoMany([crates[0].path]);
       assert.equal(typeof looked.hasCollision, "boolean", "mesh.info says whether a mesh has collision data");
       console.log(`solid through REDbridge: ok (hasCollision ${looked.hasCollision})`);
