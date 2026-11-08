@@ -61,14 +61,16 @@ The release workflow sets it from `upload.description` in `nexus.json` ({version
 
 ## Updating the page
 
-The page is kept through Nexus's v3 API (`tools/nexus/nexus.mjs`, on top of `tools/nexus/api.mjs`, both copied unchanged from REDnode: keep the copies the same, and copy them again when REDnode's change) with the owner's key: on the dev PC a file in `%APPDATA%\Edgemodders` that Windows encrypts for the owner's user (see `api.mjs`), in CI the organization's `NEXUS_KEY` secret.
+The page is kept through Nexus's v3 API with the owner's key: on the dev PC a file in `%APPDATA%\Edgemodders` that Windows encrypts for the owner's user (see EDGErepo's `tools/nexus/api.mjs`), in CI the organization's `NEXUS_KEY` secret.
+
+The Nexus tool is shared, in [EDGErepo](https://github.com/Edgemodders/EDGErepo). These commands need it checked out beside this repo (`../EDGErepo`). The release workflow clones it at the tag `v1`. Change it there.
 
 | Command | What it does |
 |---|---|
 | `npm run nexus:status` | The page's version, the main file's versions, and whether the description changed on Nexus since the last pull |
 | `npm run nexus:pull` | Writes the live description into `description.bbcode` and the ids and hash into `nexus.json`. Read only on Nexus. Then `git diff nexus/` and merge |
-| `node tools/nexus/nexus.mjs check --version <v>` | What a release would do, and whether it may |
-| `node tools/nexus/nexus.mjs release --version <v> --zip <zip> --notes <file> [--dry-run]` | What the workflow runs: the upload, the changelog and the description. It skips the upload and changelog when the version is already on Nexus |
+| `node ../EDGErepo/tools/nexus/nexus.mjs check --version <v>` | What a release would do, and whether it may |
+| `node ../EDGErepo/tools/nexus/nexus.mjs release --version <v> --zip <zip> --notes <file> [--dry-run]` | What the workflow runs: the upload, the changelog and the description. It skips the upload and changelog when the version is already on Nexus |
 | `node tools/check-bbcode.mjs nexus/description.bbcode` | Checks the BBCode's tags (REDnode's checker, copied unchanged). The workflow runs it before the Nexus check |
 
 To change the description:
@@ -83,7 +85,7 @@ For a new version, first the release gate: every in-game test of the builds sinc
 2. Run the **Release** workflow with **Make a release** and **Update Nexus Mods** ticked:
    `gh workflow run release.yml --repo Edgemodders/EDGEbuilder --ref main -f release=true -f nexus=true`.
    It checks the page first, builds, makes the GitHub release, then uploads the zip to Nexus (the old version archived, the page's version set), adds that version's changelog from `node tools/release/notes.mjs <version> --nexus`, and pushes the description.
-3. If the Nexus step fails after the GitHub release, download the release's zip and run `node tools/nexus/nexus.mjs release --version <v> --zip <zip> --notes <file>` on the dev PC (the notes from `node tools/release/notes.mjs <v> --nexus --out <file>`).
+3. If the Nexus step fails after the GitHub release, download the release's zip and run `node ../EDGErepo/tools/nexus/nexus.mjs release --version <v> --zip <zip> --notes <file>` on the dev PC (the notes from `node tools/release/notes.mjs <v> --nexus --out <file>`).
 
 Keep these in step with the repo's status (README, docs/index.md):
 

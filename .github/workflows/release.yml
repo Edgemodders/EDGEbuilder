@@ -16,13 +16,14 @@
 #                                               the Nexus page (mod 36627) as the main file's new
 #                                               version (the old one archived; the first one on a
 #                                               new page), adds the version's changelog and pushes
-#                                               nexus/description.bbcode (tools/nexus/nexus.mjs,
-#                                               copied from REDnode; the organization's NEXUS_KEY
+#                                               nexus/description.bbcode (the Nexus tool, from
+#                                               EDGErepo at the tag v1; the organization's NEXUS_KEY
 #                                               secret). It checks the page first and stops before
 #                                               building if the description changed on Nexus since
 #                                               the last pull (npm run nexus:pull, merge, commit,
 #                                               run again). If the upload fails after the GitHub
-#                                               release, run tools/nexus/nexus.mjs release on the
+#                                               release, run
+#                                               node ../EDGErepo/tools/nexus/nexus.mjs release on the
 #                                               dev PC with the release's zip: it skips what is
 #                                               already done (nexus/README.md).
 #
@@ -108,6 +109,12 @@ jobs:
           node tools/release/notes.mjs "${VERSION}" --out "${RUNNER_TEMP}/notes.md"
           node tools/release/notes.mjs "${VERSION}" --nexus --out "${RUNNER_TEMP}/nexus-notes.txt"
 
+      # The Nexus tool, shared by the Edgemodders repos at this tag (REDnode's docs/edgerepo.md). Outside
+      # the workspace, so nothing packs it.
+      - name: The Nexus tool
+        if: inputs.release && inputs.nexus
+        run: git -c advice.detachedHead=false clone --quiet --depth 1 --branch v1 https://github.com/Edgemodders/EDGErepo "$RUNNER_TEMP/EDGErepo"
+
       # Before anything is built or published: Nexus takes this release, and its description has no
       # edit the repo lacks.
       - name: Nexus Mods can take this release
@@ -116,7 +123,7 @@ jobs:
           NEXUS_KEY: ${{ secrets.NEXUS_KEY }}
         run: |
           node tools/check-bbcode.mjs nexus/description.bbcode
-          node tools/nexus/nexus.mjs check --version "${VERSION}"
+          node "$RUNNER_TEMP/EDGErepo/tools/nexus/nexus.mjs" check --version "${VERSION}"
 
       - name: Install dependencies
         run: npm ci
@@ -144,4 +151,4 @@ jobs:
         if: ${{ inputs.release && inputs.nexus && !cancelled() && steps.github.outcome == 'success' }}
         env:
           NEXUS_KEY: ${{ secrets.NEXUS_KEY }}
-        run: node tools/nexus/nexus.mjs release --version "${VERSION}" --zip "${ZIP}" --notes "${RUNNER_TEMP}/nexus-notes.txt"
+        run: node "$RUNNER_TEMP/EDGErepo/tools/nexus/nexus.mjs" release --version "${VERSION}" --zip "${ZIP}" --notes "${RUNNER_TEMP}/nexus-notes.txt"
