@@ -26,7 +26,7 @@ Last updated 2026-10-30.
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
 | [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 passed on 0.6.5; 32 to 34 passed on 0.6.7; released as 0.6.7 |
-| [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. **B4-1, the Bake tab, passed in game on 2026-11-05 on 0.7.1**, all 16 steps; released as 0.7.3. **B4-2, the Solid switch, passed in game on 2026-11-08** on 0.8.0 and 0.8.1, all 21 steps; Seen from waits on REDbridge #16 for small meshes |
+| [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. **B4-1, the Bake tab, passed in game on 2026-11-05 on 0.7.1**, all 16 steps; released as 0.7.3. **B4-2, the Solid switch, passed in game on 2026-11-08** on 0.8.0 and 0.8.1, all 22 steps; Seen from reaches its distance with REDbridge 0.12.1 |
 
 ## Automated
 
@@ -531,6 +531,8 @@ Found on 0.8.0 (2026-11-08): the Scale field took typing for an entity (the kit'
 | 22 | With REDbridge 0.12.1 (#16): Get REDbridge in EDGEdeck; rebake **200 Cargo Crates** (Seen from 120), Pack and Install; start, load among them, walk off and back | The Bake tab gives no Seen from warning; the crates show out to about 120 m, with no hand edit |
 
 Step 22, first try (2026-11-08, REDbridge 0.12.1, the bake 120/96 from 0.8.1's Seen from): from EDGEbuilder's camera straight above the crates, all 200 were gone with the nearest 97.5 m from its middle, and came back 2.7 m lower, with the nearest inside 96 m. The game hides a node beyond its streaming distance **or** its secondary distance, so 120/96 reached 96 m. (Walking in on the ground they first showed at 94 m, over the crest V walked down; the hand-edited "about 120 m" was a reading made hard by terrain and haze.) Seen from now writes both the same.
+
+**Step 22 passed on 2026-11-08** (the bake 120/120, REDbridge 0.12.1, the fixed 0.8.1): flying up from straight above the crates, the last ones vanished with the nearest 120.2 m from the camera, measured from its middle. Seen from reaches its distance with no hand edit. The Bake tab gave no Seen from warning.
 
 **Results (2026-11-08, steps 1 to 15 and 17 on 0.8.0, then 0.8.1 for 16 and 18 to 21): every step passed as written.** Steps 8 to 13: solid crates stop V, bullets, melee and cars, the scaled and leaning ones too; the sofa and the crate set not solid let V through; nothing breaks, nothing moves, and the owner saw nothing strange coming in or with people. Step 15: the save loads without its solid crates and V moves freely. Step 16: with `redcode.pack.redmod` off the bakes went to `archive\pc\mod`, ArchiveXL merged them, and EDGEbuilder said 200 Cargo Crates was baked and in the game.
 

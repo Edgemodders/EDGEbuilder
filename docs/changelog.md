@@ -10,6 +10,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.8.1 (2026-11-08)
+
+B4-2, the Solid switch. Tested on game 2.5 with REDnode 0.58.0 and REDbridge 0.12.1. 0.8.0 was a test build only. Solid meshes need REDbridge 0.12.0 or later, and Seen from on small meshes 0.12.1 or later.
+
 **New**
 
 - The Solid switch: on the Scene tab, for one mesh, several or a group. A solid mesh stops V, bullets and cars once baked. New meshes start solid; meshes already in your scenes stay as they were until you switch them.
