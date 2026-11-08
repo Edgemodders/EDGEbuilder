@@ -26,7 +26,7 @@ Last updated 2026-10-30.
 | [B2c Mod assets](#b2c-mod-assets) | In the game | B2c | 2026-10-30 (0.4.1) | Pass |
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
 | [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 passed on 0.6.5; 32 to 34 passed on 0.6.7; released as 0.6.7 |
-| [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. **B4-1, the Bake tab, passed in game on 2026-11-05 on 0.7.1**, all 16 steps; released as 0.7.3. B4-2, the Solid switch, built as 0.8.0: checked in REDnode's host with real clicks, waiting for its test |
+| [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. **B4-1, the Bake tab, passed in game on 2026-11-05 on 0.7.1**, all 16 steps; released as 0.7.3. **B4-2, the Solid switch, passed in game on 2026-11-08** on 0.8.0 and 0.8.1, all 21 steps; Seen from waits on REDbridge #16 for small meshes |
 
 ## Automated
 
@@ -528,6 +528,30 @@ Found on 0.8.0 (2026-11-08): the Scale field took typing for an entity (the kit'
 | 19 | Type 150 in Seen from and press Enter; Ctrl+Z, Ctrl+Y | The message says seen from 150 m; Undo empties it, Redo brings it back. The Bake tab says the scene changed since |
 | 20 | Open **200 Cargo Crates**, Ctrl+A, Seen from 120; Bake; Pack and Install; start; load among them | Crates come in at about 120 m. Claude reads the frame rate against step 14's |
 | 21 | Scroll down a long tab (the Scene tab with something selected) | The tab bar stays where it is |
+
+**Results (2026-11-08, steps 1 to 15 and 17 on 0.8.0, then 0.8.1 for 16 and 18 to 21): every step passed as written.** Steps 8 to 13: solid crates stop V, bullets, melee and cars, the scaled and leaning ones too; the sofa and the crate set not solid let V through; nothing breaks, nothing moves, and the owner saw nothing strange coming in or with people. Step 15: the save loads without its solid crates and V moves freely. Step 16: with `redcode.pack.redmod` off the bakes went to `archive\pc\mod`, ArchiveXL merged them, and EDGEbuilder said 200 Cargo Crates was baked and in the game.
+
+Found along the way: a scene's previews come back when its bake leaves the game (so the scene stays editable; Close takes them away), and the Bake tab bakes into whichever project REDcode has open (the owner had started from EDGEhack_Test1's window; nothing went there).
+
+**W14, frame rate** (3840 x 2160, in a sandstorm, facing the palms where the crates stand):
+
+| In view | fps |
+|---|---|
+| No crates | 75.9, 76.3 |
+| 200 baked solid `cargo_crate_b` meshes, seen from 120 m | 77.2, 75.7 |
+| 200 previews (EDGEbuilder's spawns, the open scene) | 70.0 |
+
+Solid meshes cost nothing measurable, even at three times the distance; only the editing previews cost anything.
+
+**S7, how far a baked mesh is seen.** Measured from V to each crate's middle:
+
+| Bake | Crates appear or vanish at |
+|---|---|
+| By size (40 m for a crate) | about 40 m: streaming (the owner saw it as pop-in) |
+| Seen from 120 | about 60 m: 0.94 m forward took the crates within 60.5 m from 3 to 8. The game hides a mesh of that size by itself |
+| Seen from 120, `forceAutoHideDistance` 120 set by hand on the 200 nodes | the farthest crates vanished at about 120 m (from where 3 of 200 were beyond 120 m) |
+
+So Seen from needs the node's `forceAutoHideDistance` too: [REDbridge #16](https://github.com/Edgemodders/REDbridge/issues/16), filed 2026-11-08. Until it ships, a small object is seen only as far as the game's own limit for its size.
 
 #### Questions for the Bake panel: the test of B4-1
 
