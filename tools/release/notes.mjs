@@ -51,7 +51,7 @@ if (nexus) {
 } else {
   write(`${section.join("\n").trim()}
 
-**Install:** in EDGEdeck, add \`edgebuilder-${version}.zip\` below as a mod, turn it on and deploy with the game closed. Then allow REDbridge for EDGEbuilder in REDnode's Mod Manager (EDGEbuilder, Permissions). Needs REDnode, Codeware and REDbridge: ${Docs}testing.html#before-any-in-game-test
+**Install:** \`EDGEbuilder-${version}.zip\` below, the same file as on Nexus Mods (https://www.nexusmods.com/cyberpunk2077/mods/36627), is laid out like the game folder: add it in EDGEdeck or Vortex and deploy with the game closed, or extract it into the game folder. Then allow REDbridge for EDGEbuilder in REDnode's Mod Manager (EDGEbuilder, Permissions). Needs REDnode 0.58.0 or later, Codeware and REDbridge 0.12.1 or later: https://edgemodders.ai/wiki/edgebuilder/install.html
 
 Docs: ${Docs} (changelog: ${Docs}changelog.html)`);
 }

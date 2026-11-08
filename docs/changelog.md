@@ -10,6 +10,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.9.2 (2026-11-08)
+
+Tested on game 2.5 with REDnode 0.58.0 and REDbridge 0.12.1.
+
 **Fixed**
 
 - The gizmo and the EDGEbuilder window no longer show over the game's menus (pause, Settings, inventory, map): the window hides while a menu is open and comes back when it closes. A move or a look under way when the menu opened stops there.

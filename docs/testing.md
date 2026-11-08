@@ -692,3 +692,5 @@ Found by the owner on 2026-11-08 with 0.9.1: the gizmo stayed on screen over the
 | 4 | Start dragging the crate's arrow, open the pause menu mid-drag, close it | The crate is back where the drag started; no drag follows the mouse |
 | 5 | Edit off, open the inventory and the map | EDGEbuilder hidden in both, back after |
 | 6 | Edit on again, fly a little, move a crate | All as before: the HUD stays hidden, the window never blinks out in Edit without a menu |
+
+**Passed in game on 2026-11-08 on 0.9.2**: every step as expected.
