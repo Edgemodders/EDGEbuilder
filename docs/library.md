@@ -108,7 +108,7 @@ One file per project, `source/library.json`, written by every tool that copies a
 |---|---|
 | **Save** (in game or in VS Code) | The scene goes to a Library folder the modder picks. Without a Library root set, EDGEbuilder's data folder is used, as now |
 | **Bake** | Picks one or more scenes and bakes them into a new `.bake` in the Library. Object references are already unique across scenes (`edgebuilder/<scene>/<id>`). REDbridge's `sector.build` already takes any target folder |
-| **Include in project** | Copies a bake's files into the REDcode project (`source/archive`, `source/resources`) and its scenes into `source/scenes`, each noted in the project's [came-from note](#the-came-from-note) |
+| **Include in project** | Copies a bake's files into the REDcode project (`source/archive`, `source/resources`, and each scene's record in `source/raw`), noted in the project's [came-from note](#the-came-from-note). The scenes stay in the Library, the one place they are edited (the owner, 2026-11-08: bake files only) |
 | **Refresh from Library** | In a project, shows which included items changed in the Library since, and copies the new versions over on request |
 | **Project only** | A modder without the Library saves scenes in `source/scenes` and bakes straight into the project, as B4 planned |
 | **Rebake after a patch** | A bake records its game version. After a game update, the Library lists bakes made for an older version and rebakes them from their scenes; scenes are the source, bakes are products |

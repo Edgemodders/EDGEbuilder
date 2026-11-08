@@ -635,3 +635,25 @@ W11 is in the smoke test (a kind a bake cannot make is left out, and said so). E
 | L2 | Two bakes deployed together both load: ArchiveXL takes several streaming blocks | Several mods from EDGEbuilder in one game, also from different modders |
 | L3 | Two bakes with the same object show the collide flag; a scene changed after its bake shows stale | The flags in [the Library page](library.md) |
 | L4 | Include in project writes the came-from note; a project with no Library still builds | The shared rules |
+
+#### The test of B4-3, Library bakes, on 0.9.0
+
+Built on 2026-11-08 (agreed the same day: bake files only, the scenes stay in the Library; made and changed on the Library tab). A Library bake is a folder `<name>.bake` in a Library folder, laid out like a small project: each scene in it is baked exactly as into a project, a sector of its own, with `bake.json` on top (`id`, `version`, the scenes with their hashes). Include in project copies its files and writes the came-from note `source/library.json`. Checked in REDnode's host with real clicks: Bake into Library, Add open scene, Include in project, the stale flag, Bake again and Update, a scene taken out (its copy leaves the project), a second bake of the same scene (both collide), Delete with its question. The smoke test bakes into a `.bake` folder through REDbridge 0.12.1.
+
+Before: deploy 0.9.0 with the game closed; `redcode.pack.redmod` is off. The REDcode project is EDGEbuilder_Testing; 200 Cargo Crates is baked straight into it already.
+
+| # | Do | Expected | Answers |
+|---|---|---|---|
+| 1 | Start, load a save. Library tab: pick **200 Cargo Crates**, type **Kabuki Bakes** in Name, press **Bake into Library** | The message says it is baked into the Library as Kabuki Bakes. The tree shows **Kabuki Bakes** with a BAKE tag, `1 scene · v1`, beside the scene | |
+| 2 | Pick Kabuki Bakes | Picked says where it is, version 1, and that it is not in the open project. Include in project, Add open scene, Bake again and Delete; the scene list shows 200 Cargo Crates with a trash icon. Open, Close and Show in world are gone | |
+| 3 | Open another scene with a few objects near the crates (or make one: New scene here, drop two crates), then pick Kabuki Bakes and press **Add open scene** | Version 2, 2 scenes | |
+| 4 | Press **Include in project** | It stops: the project already has a bake of 200_cargo_crates that is not from Kabuki Bakes | |
+| 5 | Bake tab: take out the 200 Cargo Crates bake (trash, Yes). Library tab: Kabuki Bakes, **Include in project** | Included, version 2, 2 scenes. The Bake tab lists both scenes with `from Kabuki Bakes v2`. The tree tags Kabuki Bakes IN PROJECT | L4 |
+| 6 | Quit; **Pack and Install** in REDcode; start, load among the crates | The crates stand and are solid, seen from 120 m; the second scene's objects stand too. The other bakes of the project (Market Corner, Vooddoo Inside) still stand where they are. Kabuki Bakes is tagged IN GAME | L1, L2 |
+| 7 | Open the second scene and move one object | Kabuki Bakes is tagged STALE; Picked names the scene that changed | L3 |
+| 8 | Pick the second scene, Name **Corner Copy**, **Bake into Library** | Both bakes are tagged COLLIDES; Picked says which one it shares a scene with | L3 |
+| 9 | Pick Corner Copy, **Delete**, Yes | It leaves the tree; Kabuki Bakes is no longer COLLIDES | |
+| 10 | Pick Kabuki Bakes, **Bake again** | Version 3. The Bake tab shows **Update to v3** beside both scenes; press it: `from Kabuki Bakes v3` | |
+| 11 | Pick Kabuki Bakes, the trash icon by the second scene, Yes; then Include in project | Version 4, 1 scene; the project's copy of the second scene goes (the Bake tab lists only 200 Cargo Crates) | |
+| 12 | Claude reads `source\library.json` in the project | One EDGEbuilder item: `kind` bake, its `id`, `path` `Alleys/Kabuki/kabuki_bakes.bake`, `version` 4, the four files of 200 Cargo Crates | L4 |
+| 13 | Bake tab: open 200 Cargo Crates and press **Bake** (straight into the project) | It bakes, and the Bake tab no longer says it came from the Library: a project needs no Library | L4 |
