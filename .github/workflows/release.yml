@@ -125,7 +125,7 @@ jobs:
         id: package
         run: npm run package
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: edgebuilder-build
           path: dist/EDGEbuilder-*.zip
