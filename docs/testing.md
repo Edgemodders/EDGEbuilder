@@ -528,6 +528,7 @@ Found on 0.8.0 (2026-11-08): the Scale field took typing for an entity (the kit'
 | 19 | Type 150 in Seen from and press Enter; Ctrl+Z, Ctrl+Y | The message says seen from 150 m; Undo empties it, Redo brings it back. The Bake tab says the scene changed since |
 | 20 | Open **200 Cargo Crates**, Ctrl+A, Seen from 120; Bake; Pack and Install; start; load among them | Crates come in at about 120 m. Claude reads the frame rate against step 14's |
 | 21 | Scroll down a long tab (the Scene tab with something selected) | The tab bar stays where it is |
+| 22 | With REDbridge 0.12.1 (#16): Get REDbridge in EDGEdeck; rebake **200 Cargo Crates** (Seen from 120), Pack and Install; start, load among them, walk off and back | The Bake tab gives no Seen from warning; the crates show out to about 120 m, with no hand edit |
 
 **Results (2026-11-08, steps 1 to 15 and 17 on 0.8.0, then 0.8.1 for 16 and 18 to 21): every step passed as written.** Steps 8 to 13: solid crates stop V, bullets, melee and cars, the scaled and leaning ones too; the sofa and the crate set not solid let V through; nothing breaks, nothing moves, and the owner saw nothing strange coming in or with people. Step 15: the save loads without its solid crates and V moves freely. Step 16: with `redcode.pack.redmod` off the bakes went to `archive\pc\mod`, ArchiveXL merged them, and EDGEbuilder said 200 Cargo Crates was baked and in the game.
 

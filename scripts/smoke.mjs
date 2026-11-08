@@ -109,6 +109,10 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.match(says([solidCrate], { bridgeVersion: "0.11.0" }), /warn: REDbridge 0\.11\.0 writes no solid meshes/);
   assert.doesNotMatch(says([solidCrate], { bridgeVersion: "0.12.0" }), /writes no solid/);
   assert.doesNotMatch(says([plainCrate], { bridgeVersion: "0.11.0" }), /writes no solid/);
+  const farCrate = { ...plainCrate, streaming: { primary: 120, secondary: 96 } };
+  assert.match(says([farCrate], { bridgeVersion: "0.12.0" }), /warn: REDbridge 0.12.0 does not pass Seen from on/);
+  assert.doesNotMatch(says([farCrate], { bridgeVersion: "0.12.1" }), /Seen from on/);
+  assert.doesNotMatch(says([plainCrate], { bridgeVersion: "0.12.0" }), /Seen from on/);
   assert.doesNotMatch(says([entity]), /solid/i, "an entity is no mesh to speak of");
   console.log("bake: ok");
 }
@@ -501,6 +505,7 @@ if (!exe || !game) {
   const info = await bridge.info();
   assert.ok(info.gameLoaded && info.files > 100000, JSON.stringify(info));
   console.log(`bridge: ok (REDbridge ${info.version}, ${info.files} files)`);
+  const bridgeAtLeast0121 = info.version.split(".").map(Number).reduce((a, n, i) => a + n * [10000, 100, 1][i], 0) >= 1201;
   const bridgeAtLeast012 = info.version.split(".").map(Number).reduce((a, n, i) => a + n * [10000, 100, 1][i], 0) >= 1200;
   const index = new AssetIndex(path.join(tmp, "index"));
   const key = `${info.archives}-${info.files}`;
@@ -548,6 +553,7 @@ if (!exe || !game) {
     const object = { id: "crate", kind: "mesh", resource: crates[0].path, transform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } };
     const built = await bridge.sectorBuild({ project: dir, scene: bakeInput("Smoke Bake", undefined, [], [object]).scene });
     assert.equal(built.nodes, 1);
+    const plainBytes = fs.readFileSync(built.sector);
     assert.equal(built.name, "smoke_bake");
     const xl = settleXl(built.xl, built.name, built.blockPath);
     assert.match(fs.readFileSync(xl, "utf8"), /^streaming:/m);
@@ -560,6 +566,8 @@ if (!exe || !game) {
       // Seen from reaches the bake: the sector's streaming box reaches as far as its farthest distance.
       const far = await bridge.sectorBuild({ project: dir, scene: bakeInput("Smoke Bake", undefined, [], [{ ...object, streaming: streamingFor(300) }]).scene });
       assert.ok(far.streamingBox.max[0] - far.streamingBox.min[0] >= 600, "seen from 300 m: the box reaches 300 m each way");
+      if (bridgeAtLeast0121) assert.ok(fs.readFileSync(far.sector).includes("forceAutoHideDistance"), "seen from is also the node's hide distance (REDbridge 0.12.1, #16)");
+      assert.ok(!plainBytes.includes("forceAutoHideDistance"), "by size: the game decides");
       const [looked] = await bridge.meshInfoMany([crates[0].path]);
       assert.equal(typeof looked.hasCollision, "boolean", "mesh.info says whether a mesh has collision data");
       console.log(`solid through REDbridge: ok (hasCollision ${looked.hasCollision})`);
