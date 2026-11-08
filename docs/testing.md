@@ -507,7 +507,7 @@ Round 3 proved the node by rewriting sectors by hand; here `sector.build` writes
 | 3 | Select a `crate_red.ent` entity | No switch | |
 | 4 | Copy a crate and turn off **Solid** on the copy; Ctrl+Z, Ctrl+Y; leave it off | Undo and Redo flip it. Name it, or note where it stands | |
 | 5 | Add a crate at scale 2, one turned and leaning, one with another appearance | They stand as placed, and the switch is on for each | S3, S4, S7 |
-| 6 | Ctrl+A, with the sofa selected too | Everything selected, the note says how many can't be solid. Off and on again leaves the sofa as it was | |
+| 6 | Ctrl+A, with the sofa selected too; off and on again; then turn step 4's copy off again | Everything selected, the note says how many can't be solid. Off and on again leaves the sofa as it was | |
 | 7 | **Bake** tab | It names the sofa as having no collision data, counts the one set not solid and the ones that will stop V; **Bake**. Then flip a switch: "The scene changed since"; flip it back | |
 | 8 | Quit. REDcode **Pack and Install**; start; load near them | Everything stands, with no previews | |
 | 9 | Walk into each | The solid crates stop V, and V can stand on one; the sofa and the crate set not solid let V through; `crate_red.ent` stops V | S1, S5 |
@@ -515,7 +515,7 @@ Round 3 proved the node by rewriting sectors by hand; here `sector.build` writes
 | 11 | Stand against the leaning crate's low side and walk around it, or jump at it. Claude can also send rays at it | The collision leans with what you see | S4 |
 | 12 | Walk or drive far away and come back fast, watching a crate as it comes in | Note how far off it appears, and whether V can run through a crate that has drawn but is not yet solid | S7, S8 |
 | 13 | Lead or wait for a person near a crate on a walkway | Note whether people walk through or around: people follow paths made ahead of time | S10 |
-| 14 | Open **200 Crates**, Ctrl+A, switch Solid on; Bake; Pack and Install; start. Load the save where V stood (-2013.3, -2877.6, 98.0). Claude reads the frame rate | Against 67 fps (not solid) and 65 fps (none) in the same view | W14 |
+| 14 | **200 Crates** is 200 entities (`crate_blue.ent`), with collision of their own, so it has no switch. Claude wrote **200 Cargo Crates** beside it in the Library: 200 solid `cargo_crate_b` meshes on the same spots. Take 200 Crates' bake out on the Bake tab, open 200 Cargo Crates, Bake; Pack and Install; start. Load the save where V stood (-2013.3, -2877.6, 98.0). Claude reads the frame rate | Against 67 fps (200 entity crates) and 65 fps (none) in the same view | W14 |
 | 15 | Save among solid crates, quit, turn the bake off, load the save | The save is fine, and V is not stuck | S9 |
 | 16 | Turn `redcode.pack.redmod` off in VS Code. Pack and Install; start. Turn it back on after | The bake goes in `archive\\pc\\mod` and stands; EDGEbuilder says it is baked | W15 |
 | 17 | Hover **New** on the Scene tab | The tooltip says `press "New Scene Here"` (0.7.3's wording, not looked at yet) | |
