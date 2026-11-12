@@ -38,7 +38,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.equal(tones({ objects: [{ ...crate, transform: { ...crate.transform, position: [NaN, 0, 0] } }] }).length, 1, "a bad number");
   assert.equal(tones({ objects: [crate, { ...crate }] }).length, 1, "the same id twice");
   const all = checkBake({ file: "f", name: "Yard", objects: [crate, person], project: target, bridgeReady: true, needs: ["Mod"], sameNameFrom: "elsewhere" });
-  assert.ok(all.some((c) => /An NPC is not baked.*\bp\b/.test(c.text)) && all.some((c) => /needs: Mod/.test(c.text)) && all.some((c) => /from elsewhere/.test(c.text)));
+  assert.ok(all.some((c) => /An NPC is never baked.*\bp\b/.test(c.text)) && all.some((c) => /needs: Mod/.test(c.text)) && all.some((c) => /from elsewhere/.test(c.text)));
   assert.ok(!all.some((c) => /Left out/.test(c.text)), "a person is named as an NPC, not as left out");
 
   // An old REDbridge's resource patch becomes streaming: blocks; a new one's stays.

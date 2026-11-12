@@ -1022,7 +1022,7 @@ function checkBake(input) {
   }
   const people = skipped.filter((s) => s.kind === "npc");
   const others = skipped.filter((s) => s.kind !== "npc");
-  if (people.length) say2("warn", `${people.length === 1 ? "An NPC is" : `${people.length} NPCs are`} not baked: ${people.length === 1 ? "it shows" : "they show"} only while EDGEbuilder or another package loads the scene. ${people.map((s) => s.id).join(", ")}.`);
+  if (people.length) say2("info", `${people.length === 1 ? "An NPC is" : `${people.length} NPCs are`} never baked: ${people.length === 1 ? "it shows" : "they show"} only while EDGEbuilder or another package loads the scene. ${people.map((s) => s.id).join(", ")}.`);
   if (others.length) say2("warn", `Left out, since a bake cannot make them yet: ${others.map((s) => s.id).join(", ")}.`);
   if (input.sameNameFrom) say2("warn", `This project has a bake with this name, from ${input.sameNameFrom}. Baking replaces it. A different name keeps both.`);
   if (input.needs.length) say2("warn", `Anyone playing this bake needs: ${input.needs.join(", ")}.`);
@@ -3400,7 +3400,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.10.8"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.10.9"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs8.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

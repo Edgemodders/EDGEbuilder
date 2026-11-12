@@ -107,7 +107,8 @@ export function checkBake(input: {
   }
   const people = skipped.filter((s) => s.kind === "npc");
   const others = skipped.filter((s) => s.kind !== "npc");
-  if (people.length) say("warn", `${people.length === 1 ? "An NPC is" : `${people.length} NPCs are`} not baked: ${people.length === 1 ? "it shows" : "they show"} only while EDGEbuilder or another package loads the scene. ${people.map((s) => s.id).join(", ")}.`);
+  // A note, not a warning: it holds after every bake of a scene with people (B3c test, step 11).
+  if (people.length) say("info", `${people.length === 1 ? "An NPC is" : `${people.length} NPCs are`} never baked: ${people.length === 1 ? "it shows" : "they show"} only while EDGEbuilder or another package loads the scene. ${people.map((s) => s.id).join(", ")}.`);
   if (others.length) say("warn", `Left out, since a bake cannot make them yet: ${others.map((s) => s.id).join(", ")}.`);
   if (input.sameNameFrom) say("warn", `This project has a bake with this name, from ${input.sameNameFrom}. Baking replaces it. A different name keeps both.`);
   if (input.needs.length) say("warn", `Anyone playing this bake needs: ${input.needs.join(", ")}.`);

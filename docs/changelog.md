@@ -20,7 +20,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 **Changed**
 
 - The Picked panels on the Assets and Library tabs and the Scene tab's Selected panel have a pin in their top right corner. Pinned, the panel stays at the bottom of its tab while you scroll, so its buttons (Drop; Open, Close, Show in world; the selection's numbers) are always in view. They start pinned; click a pin to let that panel scroll with the tab again, and EDGEbuilder remembers your choice for each.
-- The Bake tab says which NPCs a bake leaves out: they show only while EDGEbuilder or another package loads the scene.
+- The Bake tab notes which NPCs a bake leaves out (people are never baked): they show only while EDGEbuilder or another package loads the scene.
 
 **Fixed**
 
