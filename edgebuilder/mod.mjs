@@ -2422,11 +2422,14 @@ function previewsBackSoon() {
 async function previewsBack() {
   if (state.world !== "ready") return;
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light");
-  if (!away.length) return;
+  if (!away.length) return void (backWhenIn = false);
   if (!(await game.state()).world) {
     backWhenIn = true;
+    console.log(`${scene.name}: ${away.length} object${away.length === 1 ? "" : "s"} wait for V to be in the world`);
+    previewsBackSoon();
     return;
   }
+  backWhenIn = false;
   lookAtBakes();
   if (state.bake.inGame) return say(BakedOff(scene.name, state.bake.inGame), "info");
   const kept = new Set(scene.objects.map((o) => o.entityId));
@@ -3323,6 +3326,7 @@ game.on("PlayerPuppet.OnGameAttached", () => {
     } catch {
     }
   }
+  attachedAt = Date.now();
   gone.clear();
   void setSolo(false);
   scene.forgetPreviews();
@@ -3332,6 +3336,8 @@ game.on("PlayerPuppet.OnGameAttached", () => {
     previewsBackSoon();
   });
 });
+var attachedAt = 0;
+var LoadSettles = 3e4;
 var gone = /* @__PURE__ */ new Map();
 world2.on("Entity/Detach", (e) => {
   const o = scene.objects.find((x) => x.entityId === e.entityId);
@@ -3340,6 +3346,10 @@ world2.on("Entity/Detach", (e) => {
     delete o.entityId;
     state.selected = state.selected.filter((id) => id !== o.id);
     publish();
+    if (Date.now() - attachedAt < LoadSettles) {
+      console.log(`${o.id} left the world while the save was loading: it comes back in a moment`);
+      previewsBackSoon();
+    }
   }
 });
 if (typeof world2.onRespawn === "function") {
@@ -3359,7 +3369,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.10.2"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.10.3"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs8.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

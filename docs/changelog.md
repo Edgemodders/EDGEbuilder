@@ -13,13 +13,18 @@ With each change a player or modder would notice, add a line under **Unreleased*
 **New**
 
 - NPCs: the game's people are on the Assets tab, under the new NPCs tab. Search by their in-game name ("Judy") or their record (`Character.Judy`), pick an appearance or let the game pick one, and drop them like an entity. They stand where you put them and stay friendly to V.
-- People move and turn with the gizmo and the keys, and copy, paste, group and undo like any object. They stay upright when turned.
+- People move and turn with the gizmo and the keys, and copy, paste, group and undo like any object. They stay upright when turned. While you drag, the gizmo moves on its own; the person goes to the new place when you let go.
 - Scenes keep their people, with the appearance each one got, and bring them back after a save loads or the game restarts. A scene with people is saved as scene format 2; scenes without stay format 1.
 - Other packages, and assistants through REDnode's `world_load`, can load a scene's people too, without EDGEbuilder running.
 
 **Changed**
 
 - The Bake tab says which NPCs a bake leaves out: they show only while EDGEbuilder or another package loads the scene.
+
+**Fixed**
+
+- After a game start, the open scene's objects sometimes did not come back, on slower PCs most of all, until the scene was closed and opened again. They now come back once the save has finished loading.
+- The gizmo no longer jumps back to where a drag started for a moment after you let go.
 
 ## 0.9.2 (2026-11-08)
 

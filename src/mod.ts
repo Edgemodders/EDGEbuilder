@@ -1341,13 +1341,19 @@ function previewsBackSoon(): void {
 async function previewsBack(): Promise<void> {
   if (state.world !== "ready") return;
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light");
-  if (!away.length) return;
+  if (!away.length) return void (backWhenIn = false);
   // The first OnGameAttached of a game start comes during the load: REDnode can spawn by then, but what
   // it spawns goes again as the load goes on, and it cannot find the entity (0.6.6, game start).
   if (!(await game.state()).world) {
+    // game.onState starts them when V is in. Its change can come while the state above was on its way,
+    // and is then missed (B3c test, a game start on the laptop: the open scene stayed empty), so look
+    // again in a moment as well, until the world is in or gone.
     backWhenIn = true;
+    console.log(`${scene.name}: ${away.length} object${away.length === 1 ? "" : "s"} wait for V to be in the world`);
+    previewsBackSoon();
     return;
   }
+  backWhenIn = false;
   lookAtBakes();
   if (state.bake.inGame) return say(BakedOff(scene.name, state.bake.inGame), "info");
   // Never two of one object: previews from before a repeated OnGameAttached may still stand.
@@ -2409,6 +2415,7 @@ game.on("PlayerPuppet.OnGameAttached", () => {
     }
   }
   // A save loaded: every preview entity of the old session is gone.
+  attachedAt = Date.now();
   gone.clear();
   void setSolo(false);
   scene.forgetPreviews();
@@ -2420,6 +2427,10 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   });
 });
 
+/** When the last save loaded, and how long after it a preview that leaves the world is put back. */
+let attachedAt = 0;
+const LoadSettles = 30_000;
+
 /** Previews that left the world, by entity: an archive swap spawns them again under a new id. */
 const gone = new Map<string, { id: string; selected: boolean }>();
 
@@ -2430,6 +2441,12 @@ world.on("Entity/Detach", (e) => {
     delete o.entityId;
     state.selected = state.selected.filter((id) => id !== o.id);
     publish();
+    // Spawned while a save was still loading, then taken away as the load went on (0.6.6; B3c test on
+    // the laptop, where the crate stayed away): put it back once the load settles.
+    if (Date.now() - attachedAt < LoadSettles) {
+      console.log(`${o.id} left the world while the save was loading: it comes back in a moment`);
+      previewsBackSoon();
+    }
   }
 });
 
