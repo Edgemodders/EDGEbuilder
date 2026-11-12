@@ -52,7 +52,7 @@
   .fold { display: inline-block; width: 14px; color: var(--rn-dim, #999); cursor: pointer; }
   .row { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
   [hidden] { display: none !important; }
-  /* A panel's pin (top right): pinned, the panel sticks to the bottom of its tab while the tab scrolls (Picked on Assets, Selected on Scene). */
+  /* A panel's pin (top right): pinned, the panel sticks to the bottom of its tab while the tab scrolls (Picked on Assets and Library, Selected on Scene). */
   .pinnable { position: relative; }
   .pinnable.pinned { position: sticky; bottom: 0; z-index: 2; background: linear-gradient(var(--rn-panel), var(--rn-panel)), var(--rn-bg, #08090d); box-shadow: 0 -10px 18px rgba(0, 0, 0, .55); }
   .pin { position: absolute; top: 8px; right: 8px; background: none; border: 1px solid transparent; color: var(--rn-dim, #999); cursor: pointer; padding: 3px; line-height: 0; }
@@ -157,7 +157,8 @@
         <div id="libraryInfo" class="count"></div>
         <div class="row" id="libraryMakeRow" hidden><rn-button id="libraryMake">Make the Library</rn-button></div>
         <rn-list id="shelves"></rn-list>
-        <rn-panel title="Picked">
+        <rn-panel id="libraryPanel" class="pinnable" title="Picked" data-pin-note="so Open, Close, Show in world and the rest stay in view">
+          <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
           <div id="pickedText" class="detail">Pick a scene or a folder</div>
           <div class="row">
             <rn-button id="pickedOpen" disabled>Open</rn-button>

@@ -397,7 +397,7 @@ $("dropClick").addEventListener("click", () => {
   $("message").textContent = `Click where ${labelFor(path)} should go; Esc or right-click cancels.`;
   $("message").className = "message";
 });
-// A panel's pin (Picked on the Assets tab, Selected on the Scene tab): pinned, the panel stays at the
+// A panel's pin (Picked on the Assets and Library tabs, Selected on the Scene tab): pinned, the panel stays at the
 // bottom of its tab while the tab scrolls. Each panel's choice is kept in this page's storage; pinned
 // unless turned off.
 for (const panel of document.querySelectorAll<HTMLElement>(".pinnable")) {
