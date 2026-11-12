@@ -74,6 +74,8 @@ export function checkBake(input: {
   objects: SceneObject[];
   project: BakeProject | null;
   bridgeReady: boolean;
+  /** REDcode's REDnode service could not be reached: REDcode's package is not in the game. */
+  redcodeMissing?: boolean;
   /** The mods and the project whose files the scene uses. */
   needs: string[];
   /** A bake with this scene's file name in the project, that came from another scene. */
@@ -91,7 +93,9 @@ export function checkBake(input: {
   }
   const { skipped, scene } = bakeInput(input.name, undefined, [], input.objects);
   if (!scene.objects.length) say("error", "The scene has nothing to bake yet.");
-  if (!input.project) say("error", "No REDcode project is open. A bake goes into a project: open or make one in REDcode (VS Code), and this tab picks it up.");
+  if (!input.project && input.redcodeMissing)
+    say("error", "No REDcode project can be seen: REDcode's REDnode package is not in the game, and it tells EDGEbuilder which project is open. REDcode puts it in when its Game Path setting is this game's folder (and REDnode: Install Package is on); then press Refresh. REDcode's output says whether it did.");
+  else if (!input.project) say("error", "No REDcode project is open. A bake goes into a project: open or make one in REDcode (VS Code), and this tab picks it up (Refresh asks again).");
   if (!input.bridgeReady) say("error", "REDbridge is not ready, and it writes the bake. The pills at the top say why.");
   const ids = new Set<string>();
   for (const o of scene.objects) {

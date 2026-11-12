@@ -1008,7 +1008,9 @@ function checkBake(input) {
   }
   const { skipped, scene: scene2 } = bakeInput(input.name, void 0, [], input.objects);
   if (!scene2.objects.length) say2("error", "The scene has nothing to bake yet.");
-  if (!input.project) say2("error", "No REDcode project is open. A bake goes into a project: open or make one in REDcode (VS Code), and this tab picks it up.");
+  if (!input.project && input.redcodeMissing)
+    say2("error", "No REDcode project can be seen: REDcode's REDnode package is not in the game, and it tells EDGEbuilder which project is open. REDcode puts it in when its Game Path setting is this game's folder (and REDnode: Install Package is on); then press Refresh. REDcode's output says whether it did.");
+  else if (!input.project) say2("error", "No REDcode project is open. A bake goes into a project: open or make one in REDcode (VS Code), and this tab picks it up (Refresh asks again).");
   if (!input.bridgeReady) say2("error", "REDbridge is not ready, and it writes the bake. The pills at the top say why.");
   const ids = /* @__PURE__ */ new Set();
   for (const o of scene2.objects) {
@@ -1685,15 +1687,34 @@ function setProject(next) {
   scanLibrary();
   scanProject();
 }
+var redcode;
+var redcodeRetry;
+var redcodeFailed = false;
 async function connectRedcode() {
   if (typeof service?.connect !== "function") return;
+  clearTimeout(redcodeRetry);
   try {
-    const redcode = await service.connect("redcode");
-    redcode.$on("project-changed", (p) => setProject(p));
+    const handle = await service.connect("redcode");
+    handle.$on("project-changed", (p) => setProject(p));
+    redcode = handle;
+    redcodeFailed = false;
     setProject(await redcode.project());
   } catch (err) {
-    console.log(`REDcode's service is not there (${err.message}); looking again in a minute. Browse lists the game and mods meanwhile.`);
-    setTimeout(() => void connectRedcode(), 6e4);
+    redcode = void 0;
+    redcodeFailed = true;
+    console.log(`REDcode's service is not there (${err.message}); looking again in a minute, or at Refresh. Browse lists the game and mods meanwhile.`);
+    redcodeRetry = setTimeout(() => void connectRedcode(), 6e4);
+    lookAtBakes();
+    publish();
+  }
+}
+async function askRedcodeAgain() {
+  if (!redcode) return connectRedcode();
+  try {
+    setProject(await redcode.project());
+  } catch {
+    redcode = void 0;
+    await connectRedcode();
   }
 }
 function sourceOf(assetPath) {
@@ -2866,6 +2887,7 @@ channel.on((m) => {
         newFolder(m.folder, m.name);
         break;
       case "library.refresh":
+        await askRedcodeAgain();
         scanLibrary();
         publish();
         break;
@@ -2873,6 +2895,7 @@ channel.on((m) => {
         await inTurn("Bake", () => bakeOpenScene());
         break;
       case "bake.refresh":
+        await askRedcodeAgain();
         lookAtBakes();
         publish();
         break;
@@ -3027,6 +3050,7 @@ function lookAtBakes() {
       objects: scene.objects,
       project: target,
       bridgeReady: !!bridge?.running && state.bridge.status === "ready",
+      redcodeMissing: redcodeFailed,
       needs: needsOf(),
       sameNameFrom: fromElsewhere ? whereText(fromElsewhere.file) : void 0,
       noCollision: new Set(state.noCollision),
@@ -3376,7 +3400,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.10.7"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.10.8"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs8.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

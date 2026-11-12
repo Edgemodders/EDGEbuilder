@@ -400,15 +400,37 @@ function setProject(next: RedcodeProject | null): void {
 }
 
 /** The project open in REDcode, through REDcode's REDnode service (REDcode 0.10.5 and later). Without it, mods only. */
+let redcode: { project(): Promise<RedcodeProject | null> } | undefined;
+let redcodeRetry: ReturnType<typeof setTimeout> | undefined;
+/** The last try to reach REDcode's service failed: its package is not in the game. */
+let redcodeFailed = false;
 async function connectRedcode(): Promise<void> {
   if (typeof service?.connect !== "function") return;
+  clearTimeout(redcodeRetry);
   try {
-    const redcode = await service.connect<{ project(): RedcodeProject | null }>("redcode");
-    redcode.$on("project-changed", (p: RedcodeProject | null) => setProject(p));
+    const handle = await service.connect<{ project(): RedcodeProject | null }>("redcode");
+    handle.$on("project-changed", (p: RedcodeProject | null) => setProject(p));
+    redcode = handle as unknown as { project(): Promise<RedcodeProject | null> };
+    redcodeFailed = false;
     setProject(await redcode.project());
   } catch (err) {
-    console.log(`REDcode's service is not there (${(err as Error).message}); looking again in a minute. Browse lists the game and mods meanwhile.`);
-    setTimeout(() => void connectRedcode(), 60_000);
+    redcode = undefined;
+    redcodeFailed = true;
+    console.log(`REDcode's service is not there (${(err as Error).message}); looking again in a minute, or at Refresh. Browse lists the game and mods meanwhile.`);
+    redcodeRetry = setTimeout(() => void connectRedcode(), 60_000);
+    lookAtBakes();
+    publish();
+  }
+}
+
+/** Refresh on the Bake and Library tabs: ask REDcode for its project again, now (B3c test on the laptop). */
+async function askRedcodeAgain(): Promise<void> {
+  if (!redcode) return connectRedcode();
+  try {
+    setProject(await redcode.project());
+  } catch {
+    redcode = undefined;
+    await connectRedcode();
   }
 }
 
@@ -1885,6 +1907,7 @@ channel.on<PageMessage>((m) => {
         newFolder(m.folder, m.name);
         break;
       case "library.refresh":
+        await askRedcodeAgain();
         scanLibrary();
         publish();
         break;
@@ -1892,6 +1915,7 @@ channel.on<PageMessage>((m) => {
         await inTurn("Bake", () => bakeOpenScene());
         break;
       case "bake.refresh":
+        await askRedcodeAgain();
         lookAtBakes();
         publish();
         break;
@@ -2066,6 +2090,7 @@ function lookAtBakes(): void {
       objects: scene.objects,
       project: target,
       bridgeReady: !!bridge?.running && state.bridge.status === "ready",
+      redcodeMissing: redcodeFailed,
       needs: needsOf(),
       sameNameFrom: fromElsewhere ? whereText(fromElsewhere.file!) : undefined,
       noCollision: new Set(state.noCollision),

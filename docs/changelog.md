@@ -26,6 +26,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 - After a game start, the open scene's objects sometimes did not come back, on slower PCs most of all, until the scene was closed and opened again. They now come back once the save has finished loading.
 - The gizmo no longer jumps back to where a drag started for a moment after you let go.
+- Refresh on the Bake and Library tabs asks REDcode again for the open project, so a project opened or made after the game started shows at once. When REDcode's REDnode package is not in the game, the Bake tab says so and how REDcode puts it in, instead of "No REDcode project is open".
 
 ## 0.9.2 (2026-11-08)
 
