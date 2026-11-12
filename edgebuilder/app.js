@@ -1522,6 +1522,23 @@ $("dropClick").addEventListener("click", () => {
   $("message").textContent = `Click where ${labelFor(path)} should go; Esc or right-click cancels.`;
   $("message").className = "message";
 });
+var PinKey = "edgebuilder.pickedPinned";
+function setPinned(on) {
+  $("pickedPanel").classList.toggle("pinned", on);
+  $("pickedPin").setAttribute("aria-pressed", String(on));
+  $("pickedPin").title = on ? "Pinned to the bottom of the tab: click to let it scroll with the list" : "Pin to the bottom of the tab, so the Drop buttons stay in view";
+  try {
+    localStorage.setItem(PinKey, on ? "1" : "0");
+  } catch {
+  }
+}
+var pinnedAtStart = true;
+try {
+  pinnedAtStart = localStorage.getItem(PinKey) !== "0";
+} catch {
+}
+setPinned(pinnedAtStart);
+$("pickedPin").addEventListener("click", () => setPinned(!$("pickedPanel").classList.contains("pinned")));
 var listCtrl = false;
 $("objects").addEventListener(
   "click",
