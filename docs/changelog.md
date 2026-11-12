@@ -10,6 +10,17 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**New**
+
+- NPCs: the game's people are on the Assets tab, under the new NPCs tab. Search by their in-game name ("Judy") or their record (`Character.Judy`), pick an appearance or let the game pick one, and drop them like an entity. They stand where you put them and stay friendly to V.
+- People move and turn with the gizmo and the keys, and copy, paste, group and undo like any object. They stay upright when turned.
+- Scenes keep their people, with the appearance each one got, and bring them back after a save loads or the game restarts. A scene with people is saved as scene format 2; scenes without stay format 1.
+- Other packages, and assistants through REDnode's `world_load`, can load a scene's people too, without EDGEbuilder running.
+
+**Changed**
+
+- The Bake tab says which NPCs a bake leaves out: they show only while EDGEbuilder or another package loads the scene.
+
 ## 0.9.2 (2026-11-08)
 
 Tested on game 2.5 with REDnode 0.58.0 and REDbridge 0.12.1.

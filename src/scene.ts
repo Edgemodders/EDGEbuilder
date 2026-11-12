@@ -1,4 +1,5 @@
-// The scene: the objects placed so far, in EDGEbuilder's scene format 1, saved after every change.
+// The scene: the objects placed so far, in EDGEbuilder's scene format 1 (format 2 when it holds a
+// person, B3c), saved after every change.
 // The preview entities in the game are not the truth; this file is. See docs/scene.md.
 
 import * as fs from "node:fs";
@@ -7,7 +8,8 @@ import { freshId, pruneGroups } from "./arrange";
 import type { SceneGroup, SceneObject, SceneTransform } from "./protocol";
 
 export interface SceneFile {
-  format: 1;
+  /** 2 only when the scene holds a person (the `npc` kind, B3c); 1 otherwise, as before. */
+  format: 1 | 2;
   name: string;
   game?: string;
   groups: SceneGroup[];
@@ -25,7 +27,7 @@ export interface SceneState {
 /** Reads a scene file, or throws why it is not one EDGEbuilder can open. */
 export function readSceneFile(file: string): SceneFile {
   const data = JSON.parse(fs.readFileSync(file, "utf8")) as SceneFile;
-  if (data.format !== 1 || !Array.isArray(data.objects)) throw new Error(`not a format 1 scene`);
+  if (!knownFormat(data)) throw new Error(`not a format 1 or 2 scene`);
   return data;
 }
 
@@ -51,7 +53,7 @@ export class Scene {
     }
     try {
       const data = JSON.parse(text) as SceneFile;
-      if (data.format !== 1 || !Array.isArray(data.objects)) throw new Error(`not a format 1 scene`);
+      if (!knownFormat(data)) throw new Error(`not a format 1 or 2 scene`);
       this.take(data);
       return true;
     } catch (err) {
@@ -83,7 +85,7 @@ export class Scene {
   /** The scene as its file keeps it. */
   data(): SceneFile {
     return {
-      format: 1,
+      format: this.objects.some((o) => o.kind === "npc") ? 2 : 1,
       name: this.name,
       ...(this.game ? { game: this.game } : {}),
       groups: this.groups,
@@ -102,10 +104,12 @@ export class Scene {
     this.onSave?.();
   }
 
-  add(kind: SceneObject["kind"], resource: string | undefined, transform: SceneTransform, appearance?: string): SceneObject {
-    const base = resource ? path.basename(resource).replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/gi, "_").toLowerCase() : kind;
+  /** A new object; `record` for a person (the `npc` kind), whose id comes from the record's name. */
+  add(kind: SceneObject["kind"], resource: string | undefined, transform: SceneTransform, appearance?: string, record?: string): SceneObject {
+    const from = resource ? path.basename(resource).replace(/\.[^.]+$/, "") : record ? record.replace(/^Character\./i, "") : "";
+    const base = from ? from.replace(/[^a-z0-9_-]+/gi, "_").toLowerCase() : kind;
     const id = freshId(base, new Set(this.objects.map((o) => o.id)));
-    const o: SceneObject = { id, kind, resource, appearance, transform };
+    const o: SceneObject = { id, kind, ...(resource ? { resource } : {}), ...(record ? { record } : {}), appearance, transform };
     this.objects.push(o);
     this.save();
     return o;
@@ -142,7 +146,7 @@ export class Scene {
       if (!was?.entityId) return o;
       o.entityId = was.entityId;
       const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-      if (was.kind !== o.kind || was.resource !== o.resource || was.appearance !== o.appearance || !same(was.transform.scale, o.transform.scale)) out.respawn.push(o);
+      if (was.kind !== o.kind || was.resource !== o.resource || was.record !== o.record || was.appearance !== o.appearance || !same(was.transform.scale, o.transform.scale)) out.respawn.push(o);
       else if (!same(was.transform.position, o.transform.position) || !same(was.transform.rotation, o.transform.rotation)) out.move.push(o);
       return o;
     });
@@ -166,6 +170,11 @@ export class Scene {
     this.groups = [];
     this.save();
   }
+}
+
+/** Format 1, or format 2 (format 1 plus the `npc` kind, docs/scene.md), with an objects list. */
+function knownFormat(data: SceneFile): boolean {
+  return (data.format === 1 || data.format === 2) && Array.isArray(data.objects);
 }
 
 /** A quaternion for a turn around the vertical axis, in degrees. */

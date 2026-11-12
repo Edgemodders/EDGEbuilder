@@ -10,6 +10,7 @@ import * as path from "node:path";
 import { api, channel, game, kernel, pkg, service, ui, world, type GameRef } from "rednode";
 import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge, type SectorBuilt } from "./bridge";
 import { AssetIndex, kindOf } from "./index";
+import { NpcList, PersonBounds, isRecord } from "./npcs";
 import { ModSources, modArchives, modFolders, sceneNeeds } from "./sources";
 import { collisionKey, streamingFor } from "./arrange";
 import {
@@ -40,9 +41,9 @@ import {
 } from "./bake";
 import { Scene, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
-import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, type Clip } from "./arrange";
+import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, upright, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
-import type { AssetEntry, AssetFrom, AssetInfo, AssetKind, BakeRecord, LibraryBake, PageMessage, Place, PlaceRoot, SceneObject, SceneTransform, Snapshot } from "./protocol";
+import { AnyLook, type AssetEntry, type AssetFrom, type AssetInfo, type AssetKind, type BakeRecord, type LibraryBake, type PageMessage, type Place, type PlaceRoot, type SceneObject, type SceneTransform, type Snapshot } from "./protocol";
 
 /** A base-game entity template that is a bare entity: no components, no appearances. The editor camera is this with a camera component attached. */
 const EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
@@ -100,6 +101,8 @@ const HistoryLength = 100;
 /** Counts duplicates, so the page knows a new one's copies are there to move. */
 let duplicates = 0;
 const index = new AssetIndex(path.join(pkg.dataDir, "index"));
+/** The game's people (B3c), read from TweakDB once per game version; searched with the index. */
+const npcs = new NpcList(path.join(pkg.dataDir, "index"));
 /** Mods' archives and the project's loose files; kept out of the index folder, whose newest file is taken as the game's index. */
 const sources = new ModSources(path.join(pkg.dataDir, "sources", "mods.json"));
 index.extra = sources.entries();
@@ -115,6 +118,7 @@ const state: Snapshot = {
   world: "unknown",
   bridge: { status: "off" },
   index: { status: "none", count: 0 },
+  npcs: { status: "none", count: 0 },
   results: [],
   query: { text: "", kind: "all", from: "all" },
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
@@ -244,6 +248,34 @@ async function bridgeReady(info: { version: string; archives: number; files: num
     await buildIndex();
   }
   await refreshMods();
+  await readNpcs();
+}
+
+/** The game's people for Browse (B3c): from the list kept for this game, or read from TweakDB through REDbridge. */
+async function readNpcs(again = false): Promise<void> {
+  if (!again && npcs.load(gameKey)) {
+    index.npcs = npcs.entries;
+    state.npcs = { status: "ready", count: npcs.entries.length };
+    return runSearch();
+  }
+  if (!bridge?.running || !gameKey) return;
+  state.npcs = { status: "reading", count: 0, progress: "Reading the game's people from TweakDB (about 15 s the first time)" };
+  publish();
+  try {
+    await npcs.build(bridge, gameKey, (text) => {
+      state.npcs = { status: "reading", count: 0, progress: text };
+      publish();
+    });
+    index.npcs = npcs.entries;
+    state.npcs = { status: "ready", count: npcs.entries.length };
+    console.log(`NPC list read: ${npcs.entries.length.toLocaleString()} people from the game's Character records`);
+    runSearch();
+  } catch (err) {
+    // REDbridge before 0.8.0 reads no TweakDB: Browse goes on without people.
+    state.npcs = { status: "failed", count: 0, progress: (err as Error).message };
+    say(`NPCs are not listed: ${(err as Error).message}. They need REDbridge 0.8.0 or later.`, "warn");
+    publish();
+  }
 }
 
 async function buildIndex(): Promise<void> {
@@ -400,6 +432,31 @@ async function inGameArchives(assetPath: string): Promise<boolean> {
   }
 }
 
+/**
+ * What Browse shows for a person (B3c): its template's appearances, the record's own first when it names one,
+ * else "the game picks" first; and a person's box.
+ */
+async function lookAtPerson(record: string): Promise<AssetInfo> {
+  const e = npcs.find(record);
+  if (!e?.template) return { appearances: [], bounds: PersonBounds, error: `${record} is not in the NPC list` };
+  const own = e.appearance ? [e.appearance] : [AnyLook];
+  if (!bridge?.running) return { appearances: own, bounds: PersonBounds };
+  const info = await index.lookAt(bridge, e.template);
+  const rest = (info.appearances ?? []).filter((a) => a !== e.appearance);
+  return { appearances: [...own, ...rest], bounds: PersonBounds, ...(info.error ? { error: info.error } : {}) };
+}
+
+/** The appearance a person's entity shows, for one dropped with "the game picks": kept, so it looks the same next time. */
+async function currentLook(entityId: string): Promise<string | undefined> {
+  try {
+    const entity = (await world.entity(entityId)) as (GameRef & { GetCurrentAppearanceName(): Promise<string> }) | null;
+    const name = entity ? await entity.GetCurrentAppearanceName() : "";
+    return name && name !== "None" ? name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** What REDbridge knows about an asset: from the game's archives, or from its mod's archive or the project (B2c-2). */
 function assetInfo(b: Bridge, assetPath: string): Promise<AssetInfo> {
   const entry = sourceOf(assetPath);
@@ -504,6 +561,10 @@ async function spawnPreview(o: SceneObject): Promise<void> {
     ({ id } = await world.spawn({ mesh: o.resource, meshAppearance: o.appearance ?? "default", scale: { x: sx, y: sy, z: sz }, position, orientation, alwaysSpawned: true, tags: ["edgebuilder"] }));
   } else if (o.kind === "entity") {
     ({ id } = await world.spawn({ template: o.resource, position, orientation, appearance: o.appearance, alwaysSpawned: true, tags: ["edgebuilder"] }));
+  } else if (o.kind === "npc") {
+    // A person (B3c): REDnode holds a Character record where it stands and keeps it friendly to V.
+    const from = o.record ? { record: o.record } : { template: o.resource };
+    ({ id } = await world.spawn({ ...from, position, orientation, appearance: o.appearance, npc: true, alwaysSpawned: true, tags: ["edgebuilder"] }));
   } else {
     throw new Error(`Previews of ${o.kind} objects come in a later phase`);
   }
@@ -541,6 +602,7 @@ const toQuat = (q: [number, number, number, number]) => ({ i: q[0], j: q[1], k: 
 /** Gives an object a new transform and puts its preview there. The caller saves and publishes. */
 async function place(o: SceneObject, t: SceneTransform): Promise<void> {
   if (o.kind !== "mesh") t = { ...t, scale: [1, 1, 1] }; // an entity template keeps its own size
+  if (o.kind === "npc") t = { ...t, rotation: upright(t.rotation) }; // a person stands upright
   const scaled = t.scale.some((s, i) => Math.abs(s - o.transform.scale[i]) > 1e-6);
   o.transform = t;
   if (!o.entityId) return;
@@ -1030,19 +1092,28 @@ function runSearch(): void {
 
 async function drop(assetPath: string, appearance?: string, at?: { origin: V3; dir: V3 }): Promise<void> {
   if (!scene.file) return say(NoScene, "warn");
-  const kind = kindOf(assetPath);
+  const person = isRecord(assetPath) ? npcs.find(assetPath) : undefined;
+  if (isRecord(assetPath) && !person) return say(`${assetPath} is not in the NPC list.`, "warn");
+  const kind = person ? "npc" : kindOf(assetPath);
   if (!kind) return say(`${assetPath} is not a mesh or an entity template.`, "warn");
+  // A person's look: the one picked, the record's own, or none (the game picks, and the drop keeps it).
+  const look = person ? (appearance === AnyLook ? undefined : (appearance ?? person.appearance)) : appearance;
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
   let added: SceneObject | undefined;
   const before = scene.state();
   try {
     const place = await dropPlace(at);
-    const o = scene.add(kind, assetPath, { position: place.position, rotation: yawToQuaternion(place.yaw), scale: [1, 1, 1] }, appearance);
+    const t: SceneTransform = { position: place.position, rotation: yawToQuaternion(place.yaw), scale: [1, 1, 1] };
+    const o = person ? scene.add("npc", undefined, t, look, person.path) : scene.add(kind, assetPath, t, look);
     added = o;
     if (kind === "mesh") o.solid = true;
+    if (person) {
+      o.bounds = PersonBounds;
+      o.props = { behaviour: "idle" };
+    }
     let sized = true;
-    if (bridge?.running) {
+    if (bridge?.running && !person) {
       try {
         const info = await assetInfo(bridge, assetPath);
         if (info.bounds) o.bounds = info.bounds;
@@ -1053,6 +1124,7 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
     }
     const started = Date.now();
     await spawnPreview(o);
+    if (person && !o.appearance && o.entityId) o.appearance = await currentLook(o.entityId);
     scene.save();
     step(before);
     await select([o.id]);
@@ -1065,7 +1137,8 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
         : from?.kind === "mod"
           ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}`
           : "";
-    say(`Dropped ${path.basename(assetPath)} in ${Date.now() - started} ms.${note}`, "ok");
+    const what = person ? `${person.name ?? person.path}${o.appearance ? ` (${o.appearance})` : ""}` : path.basename(assetPath);
+    say(`Dropped ${what} in ${Date.now() - started} ms.${note}`, "ok");
   } catch (err) {
     // The object went into the scene before the game was asked to spawn it: take it out again,
     // so a failed drop leaves nothing behind.
@@ -1594,6 +1667,8 @@ export interface ServiceRef {
   ref: string;
   kind: string;
   resource?: string;
+  /** A person's `Character` record (the `npc` kind). */
+  record?: string;
   appearance?: string;
   group?: string;
   position: [number, number, number];
@@ -1621,6 +1696,7 @@ export function sceneRefs(which?: string): { scene: string; file: string; refs: 
       ref: refOf(data.name, o),
       kind: o.kind,
       ...(o.resource ? { resource: o.resource } : {}),
+      ...(o.record ? { record: o.record } : {}),
       ...(o.appearance ? { appearance: o.appearance } : {}),
       ...(o.group ? { group: o.group } : {}),
       position: o.transform.position,
@@ -1657,6 +1733,11 @@ channel.on<PageMessage>((m) => {
         break;
       case "look":
         state.looked = { path: m.path };
+        if (isRecord(m.path)) {
+          state.looked = { path: m.path, info: await lookAtPerson(m.path).catch((err) => ({ appearances: [], bounds: PersonBounds, error: (err as Error).message })) };
+          publish();
+          break;
+        }
         if (!bridge?.running) state.looked.info = (sourceOf(m.path) ? undefined : index.info[m.path]) ?? { appearances: [], error: "Size and appearances need REDbridge; it can still be dropped." };
         publish();
         if (bridge?.running) {
@@ -1784,6 +1865,7 @@ channel.on<PageMessage>((m) => {
         break;
       case "index.build":
         await buildIndex();
+        await readNpcs(true);
         break;
       case "bridge.restart":
         await startBridge();
@@ -1859,7 +1941,8 @@ function setSolid(ids: string[], on: boolean): void {
 /** Seen from: how far off the objects are seen once baked, or null for REDbridge's rule by size. */
 function setSeenFrom(ids: string[], metres: number | null): void {
   const next = streamingFor(metres);
-  const objects = ids.map((id) => scene.get(id)).filter((o): o is SceneObject => !!o);
+  // People are not baked (B3c): how far off a baked object is seen does not apply to them.
+  const objects = ids.map((id) => scene.get(id)).filter((o): o is SceneObject => !!o && o.kind !== "npc");
   const change = objects.filter((o) => JSON.stringify(o.streaming ?? null) !== JSON.stringify(next ?? null));
   if (!change.length) return publish();
   step();

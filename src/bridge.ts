@@ -71,6 +71,22 @@ export interface SectorBuild extends InfoFrom {
   scene: unknown;
 }
 
+/** One page of tweakdb.records (REDbridge 0.8.0 and later): flats come back as plain JSON, LocKeys as { key, text }. */
+export interface TweakRecords {
+  total: number;
+  offset: number;
+  items: { id: string; path: string | null; type: string; flats?: Record<string, unknown> | null }[];
+}
+
+/** What tweakdb.records takes: a record type (short names such as Character work), the flats wanted, a page. */
+export interface TweakQuery {
+  type: string;
+  flats?: string[];
+  offset?: number;
+  limit?: number;
+  resolveLocKeys?: boolean;
+}
+
 export class BridgeError extends Error {}
 
 /** What the mod needs from REDbridge, whether it is REDnode's shared one or a process of its own. */
@@ -81,6 +97,7 @@ export interface Bridge {
   meshInfoMany(paths: string[], from?: InfoFrom): Promise<MeshInfoResult[]>;
   openMod(archivePath: string): Promise<ModArchive>;
   sectorBuild(params: SectorBuild): Promise<SectorBuilt>;
+  tweakRecords(query: TweakQuery): Promise<TweakRecords>;
   stop(): void;
 }
 
@@ -102,6 +119,9 @@ export class KernelBridge implements Bridge {
   }
   sectorBuild(params: SectorBuild): Promise<SectorBuilt> {
     return this.handle.call<SectorBuilt>("sector.build", { ...params });
+  }
+  tweakRecords(query: TweakQuery): Promise<TweakRecords> {
+    return this.handle.call<TweakRecords>("tweakdb.records", { ...query });
   }
   stop(): void {
     // REDnode owns the process and stops it when no package has used it for a while.
@@ -223,6 +243,10 @@ export class BridgeClient implements Bridge {
 
   sectorBuild(params: SectorBuild): Promise<SectorBuilt> {
     return this.call<SectorBuilt>("sector.build", { ...params });
+  }
+
+  tweakRecords(query: TweakQuery): Promise<TweakRecords> {
+    return this.call<TweakRecords>("tweakdb.records", { ...query });
   }
 }
 

@@ -38,7 +38,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.equal(tones({ objects: [{ ...crate, transform: { ...crate.transform, position: [NaN, 0, 0] } }] }).length, 1, "a bad number");
   assert.equal(tones({ objects: [crate, { ...crate }] }).length, 1, "the same id twice");
   const all = checkBake({ file: "f", name: "Yard", objects: [crate, person], project: target, bridgeReady: true, needs: ["Mod"], sameNameFrom: "elsewhere" });
-  assert.ok(all.some((c) => /Left out.*\bp\b/.test(c.text)) && all.some((c) => /needs: Mod/.test(c.text)) && all.some((c) => /from elsewhere/.test(c.text)));
+  assert.ok(all.some((c) => /An NPC is not baked.*\bp\b/.test(c.text)) && all.some((c) => /needs: Mod/.test(c.text)) && all.some((c) => /from elsewhere/.test(c.text)));
+  assert.ok(!all.some((c) => /Left out/.test(c.text)), "a person is named as an NPC, not as left out");
 
   // An old REDbridge's resource patch becomes streaming: blocks; a new one's stays.
   const xlDir = path.join(target.resources, "archive", "pc", "mod");
@@ -181,6 +182,63 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
     assert.equal(core.libraryBakesIn(proj).size, 0);
     console.log("library bakes: ok");
   }
+}
+
+// People (B3c): rows from TweakDB, search by name or record, a scene with one is format 2, upright turns.
+{
+  const row = (path, flats) => ({ id: "0x1", path, type: "gamedataCharacter_Record", flats });
+  const judy = core.npcEntry(row("Character.Judy", { fullDisplayName: { key: "LocKey#34480", text: "Judy Álvarez" }, displayName: { key: "LocKey#34479", text: "Judy" }, entityTemplatePath: "base\\quest\\secondary_characters\\judy.ent", appearanceName: "None" }));
+  assert.deepEqual(judy, { path: "Character.Judy", kind: "npc", size: 0, template: "base\\quest\\secondary_characters\\judy.ent", name: "Judy Álvarez" });
+  assert.equal(core.npcEntry(row("Character.Judy_inline2", { entityTemplatePath: "a.ent" })), undefined, "inline records are parts of others");
+  assert.equal(core.npcEntry(row("Character.Base", { entityTemplatePath: null })), undefined, "no template: nothing to spawn");
+  assert.equal(core.npcEntry(row(null, { entityTemplatePath: "a.ent" })), undefined, "a record with no known name");
+  const rich = core.npcEntry(row("Character.CitizenRichFemale", { displayName: { key: "LocKey#0", text: null }, entityTemplatePath: "base\\rich.ent", appearanceName: "rich_04" }));
+  assert.equal(rich.name, undefined, "no in-game name: the record names it");
+  assert.equal(rich.appearance, "rich_04", "the record's own appearance");
+  assert.ok(core.isRecord("Character.Judy") && !core.isRecord("base\\judy.ent"));
+
+  const people = new AssetIndex(path.join(tmp, "index-npc"));
+  people.entries = [{ path: "base\\environment\\judy_poster.mesh", kind: "mesh", size: 1 }];
+  people.npcs = [judy, rich];
+  assert.deepEqual(people.search("álvarez", "all", 10).map((e) => e.path), ["Character.Judy"], "the in-game name finds a person");
+  assert.deepEqual(people.search("judy", "npc", 10).map((e) => e.path), ["Character.Judy"]);
+  assert.deepEqual(people.search("judy", "all", 10, "game").map((e) => e.kind).sort(), ["mesh", "npc"], "people are among the game's own");
+  assert.equal(people.search("judy", "all", 10, "mods").length, 0, "no person comes from a mod yet");
+  assert.equal(people.search("character", "npc", 10).length, 0, "the record's prefix is not a match");
+
+  const list = new core.NpcList(path.join(tmp, "index-npc"));
+  assert.equal(list.load("g"), false);
+
+  const scene = new Scene(path.join(tmp, "people.scene.json"));
+  const crate = scene.add("mesh", "base\\c.mesh", { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
+  scene.save();
+  assert.equal(JSON.parse(fs.readFileSync(scene.file, "utf8")).format, 1, "no person: format 1 as before");
+  const p = scene.add("npc", undefined, { position: [1, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] }, "rich_04", "Character.CitizenRichFemale");
+  assert.equal(p.id, "citizenrichfemale");
+  assert.equal(p.resource, undefined);
+  const saved = JSON.parse(fs.readFileSync(scene.file, "utf8"));
+  assert.equal(saved.format, 2, "a person makes it format 2");
+  assert.deepEqual(saved.objects[1], { id: "citizenrichfemale", kind: "npc", record: "Character.CitizenRichFemale", appearance: "rich_04", transform: p.transform });
+  const back = new Scene(scene.file);
+  assert.equal(back.load(), true, "format 2 opens");
+  assert.equal(back.objects[1].record, "Character.CitizenRichFemale");
+  assert.deepEqual(readSceneFile(scene.file).objects.map((o) => o.kind), ["mesh", "npc"]);
+  const before = scene.state();
+  scene.objects[1].entityId = "9";
+  scene.objects[1].record = "Character.Judy";
+  assert.deepEqual(scene.restore(before).respawn.map((o) => o.id), ["citizenrichfemale"], "another record is another person");
+  const { scene: baked } = bakeInput("People", undefined, [], scene.objects);
+  assert.equal(baked.format, 1, "REDbridge still reads format 1");
+  assert.deepEqual(baked.objects.map((o) => o.id), [crate.id]);
+  scene.remove(p.id);
+  assert.equal(JSON.parse(fs.readFileSync(scene.file, "utf8")).format, 1, "back to format 1 without people");
+
+  const tilted = core.qMul(core.qAxisAngle([0, 0, 1], 90), core.qAxisAngle([1, 0, 0], 23));
+  const up = core.upright(tilted);
+  assert.ok(Math.abs(up[0]) < 1e-9 && Math.abs(up[1]) < 1e-9, "no tilt left");
+  assert.ok(Math.abs(quaternionToYaw(up) - 90) < 1e-6, "the heading kept: " + quaternionToYaw(up));
+  assert.ok(Math.abs(quaternionToYaw(core.upright(yawToQuaternion(-135))) + 135) < 1e-6);
+  console.log("people: ok");
 }
 
 // Scene store: add, select ids, remove, save and load round trip, previews forgotten.
@@ -648,6 +706,22 @@ if (!exe || !game) {
     removeBake(target, "smoke_bake");
     assert.deepEqual(bakesIn(target), []);
     console.log(`bake through REDbridge: ok (${built.nodes} node)`);
+  }
+  // People from the real TweakDB (REDbridge 0.8.0 and later).
+  {
+    const list = new core.NpcList(index.dir);
+    const t = Date.now();
+    await list.build(bridge, key);
+    assert.ok(list.entries.length > 500, `only ${list.entries.length} people`);
+    const judy = list.find("character.judy");
+    assert.ok(judy?.template?.endsWith(".ent") && judy.name, JSON.stringify(judy));
+    assert.ok(list.entries.every((e) => e.kind === "npc" && e.template && !e.path.includes("_inline")));
+    const again = new core.NpcList(index.dir);
+    assert.equal(again.load(key), true, "kept for this game");
+    assert.equal(again.entries.length, list.entries.length);
+    assert.equal(newest.loadNewest(), true, "the people's list does not confuse the index");
+    const looked = await index.lookAt(bridge, judy.template);
+    console.log(`people from TweakDB: ok (${list.entries.length} in ${((Date.now() - t) / 1000).toFixed(1)} s; ${judy.name}: ${looked.appearances.length} appearances)`);
   }
   const bad = await index.lookAt(bridge, "base\\nope.mesh");
   assert.ok(bad.error);

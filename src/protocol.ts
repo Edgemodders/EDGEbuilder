@@ -1,7 +1,8 @@
 // What the editor page and the Node mod say to each other over REDnode's channel.
 // The page asks; the mod answers with a full state snapshot, so the page never keeps its own truth.
 
-export type AssetKind = "mesh" | "entity";
+/** `npc`: a `Character` record from TweakDB (B3c); its `path` is the record, such as `Character.Judy`. */
+export type AssetKind = "mesh" | "entity" | "npc";
 
 /** Where Browse looks: everything, the game's own files, installed mods, or the open REDcode project. */
 export type AssetFrom = "all" | "game" | "mods" | "project";
@@ -25,6 +26,12 @@ export interface AssetEntry {
   source?: AssetSource;
   /** A mod's file that has the path of a game file: it changes that file rather than adding one. */
   replaces?: boolean;
+  /** An NPC's in-game name, such as `Judy Álvarez` (B3c). */
+  name?: string;
+  /** An NPC's entity template, where its appearances are. */
+  template?: string;
+  /** The appearance an NPC's record names, when it names one. */
+  appearance?: string;
 }
 
 /** What is known about an asset once looked at: from REDbridge's mesh.info. */
@@ -35,6 +42,9 @@ export interface AssetInfo {
   hasCollision?: boolean | null;
   error?: string;
 }
+
+/** The first choice in a person's appearance list when the record names none: the game picks one, and EDGEbuilder keeps what it picked. */
+export const AnyLook = "Any: the game picks";
 
 export interface SceneTransform {
   position: [number, number, number];
@@ -53,8 +63,10 @@ export interface SceneGroup {
 /** One placed object, as the scene file keeps it (format 1) plus its live preview. */
 export interface SceneObject {
   id: string;
-  kind: "mesh" | "entity" | "light";
+  kind: "mesh" | "entity" | "light" | "npc";
   resource?: string;
+  /** A person's `Character` record (the `npc` kind, scene format 2). One of `record` and `resource`. */
+  record?: string;
   appearance?: string;
   /** A mesh that stops V, bullets and cars once baked (B4-2). A new mesh starts solid; absent means not solid, as in older scenes. */
   solid?: boolean;
@@ -169,6 +181,8 @@ export interface Snapshot {
   /** blocked: REDnode has REDbridge but the player has not allowed EDGEbuilder to use it yet. */
   bridge: { status: "off" | "starting" | "ready" | "blocked" | "missing" | "failed"; path?: string; version?: string; detail?: string };
   index: { status: "none" | "building" | "ready" | "failed"; count: number; progress?: string; file?: string };
+  /** The game's people for Browse (B3c), read from TweakDB through REDbridge. */
+  npcs: { status: "none" | "reading" | "ready" | "failed"; count: number; progress?: string };
   results: AssetEntry[];
   query: { text: string; kind: AssetKind | "all"; from: AssetFrom };
   /** Mod archives and the open REDcode project, indexed beside the game (B2c). */

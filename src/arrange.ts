@@ -265,6 +265,18 @@ export function applyChange(t: SceneTransform, c: Change, pivot: V3): SceneTrans
   return { position, rotation, scale };
 }
 
+/**
+ * The same heading with no tilt: a person stands upright whatever the turn (B3c). The heading is where
+ * the object's own forward (+Y) points, seen from above.
+ */
+export function upright(q: Q): Q {
+  const [x, y, z, w] = q;
+  const fx = 2 * (x * y - w * z);
+  const fy = 1 - 2 * (x * x + z * z);
+  const half = Math.atan2(-fx, fy) / 2;
+  return [0, 0, Math.sin(half), Math.cos(half)];
+}
+
 /** The world box around the objects, from their bounds (a 1 m box when unknown). */
 export function boxOf(objects: SceneObject[]): { min: V3; max: V3 } | undefined {
   let min: V3 | undefined;

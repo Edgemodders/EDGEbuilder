@@ -29,6 +29,8 @@ export class AssetIndex {
   file = "";
   /** Mods' and the open project's assets (B2c), searched beside the game's. */
   extra: AssetEntry[] = [];
+  /** The game's people (B3c, npcs.ts), searched with the game's own files. */
+  npcs: AssetEntry[] = [];
   private gamePaths: Set<string> | undefined;
 
   constructor(readonly dir: string) {}
@@ -109,7 +111,7 @@ export class AssetIndex {
   search(text: string, kind: AssetKind | "all", limit = 200, from: AssetFrom = "all"): AssetEntry[] {
     const terms = text.toLowerCase().split(/\s+/).filter(Boolean);
     const out: { e: AssetEntry; score: number }[] = [];
-    const pools = from === "game" ? [this.entries] : from === "all" ? [this.extra, this.entries] : [this.extra];
+    const pools = from === "game" ? [this.entries, this.npcs] : from === "all" ? [this.extra, this.entries, this.npcs] : [this.extra];
     for (const pool of pools) {
       for (const e of pool) {
         if (kind !== "all" && e.kind !== kind) continue;
@@ -125,10 +127,14 @@ export class AssetIndex {
     return out.slice(0, limit).map((x) => x.e);
   }
 
-  /** How well an entry matches every term: 2 for the file name, 1 for the path or the source's name; -1 when a term misses. */
+  /**
+   * How well an entry matches every term: 2 for the file name (a person's record or in-game name), 1 for
+   * the path or the source's name; -1 when a term misses.
+   */
   private score(e: AssetEntry, terms: string[]): number {
-    const lower = e.path.toLowerCase();
-    const name = lower.slice(lower.lastIndexOf("\\") + 1);
+    // A person's record without its `Character.`, which every one has.
+    const lower = e.kind === "npc" ? e.path.toLowerCase().replace(/^character\./, "") : e.path.toLowerCase();
+    const name = e.kind === "npc" ? `${lower} ${(e.name ?? "").toLowerCase()}` : lower.slice(lower.lastIndexOf("\\") + 1);
     const source = e.source?.name.toLowerCase() ?? "";
     let score = 0;
     for (const t of terms) {

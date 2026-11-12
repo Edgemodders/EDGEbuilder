@@ -694,3 +694,37 @@ Found by the owner on 2026-11-08 with 0.9.1: the gizmo stayed on screen over the
 | 6 | Edit on again, fly a little, move a crate | All as before: the HUD stays hidden, the window never blinks out in Edit without a menu |
 
 **Passed in game on 2026-11-08 on 0.9.2**: every step as expected.
+
+### B3c NPCs
+
+Built on 2026-11-11 as 0.10.0, from the plan agreed with the owner the same day ([design, NPCs](design.md#npcs-b3c)). People from the game's `Character` records, dropped and arranged like entities, saved as the `npc` kind (scene format 2), loaded by REDnode's `world.load` without EDGEbuilder, and left out of bakes. Checked before the game: `npm run smoke` against REDbridge 0.12.1 and the game's own TweakDB read 6,591 people in 8.5 s (Judy Álvarez's template has 14 appearances); the rows, search, format 2, the bake's message and the upright turn are in the smoke test. **Not checked:** anything the game does with a person EDGEbuilder places.
+
+**Questions the test answers:**
+
+| # | Question | If no | Answered by |
+|---|---|---|---|
+| N1 | Does a holding NPC follow a gizmo drag and stay at the new spot? | Respawn the person at the end of a drag, as a mesh's scale does | Step 5 |
+| N2 | Does an NPC far from V (the editor camera 300 m out) spawn and stand there? | Say so in the help line: people show only near V | Step 8 |
+| N3 | Does a story character (`Character.Judy`) spawn and stand like a crowd NPC? | Note it in the wiki: some characters act on their own | Step 6 |
+| N4 | Do people come back after a save loads, and after a restart, with the same appearance? | Fix before release | Step 10 |
+| N5 | Does the scene load with EDGEbuilder off, through REDnode's `world_load`? | A REDnode request issue | Step 12 |
+| N6 | Does the bake leave the people out with the warning, and the crate stand in the game? | Fix before release | Step 11 |
+
+**Before:** REDnode 0.58.0 or later, REDbridge 0.12.1 (EDGEdeck: Get REDbridge), Codeware, a REDcode project open for step 11. Install 0.10.0 with EDGEdeck and deploy with the game closed. A quiet spot outdoors for the save.
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Start the game, load the save, open EDGEbuilder | The log says EDGEbuilder 0.10.0. The first time, the line under the pills reads the Character records for a few seconds; then the Assets count says "... assets and 6,591 NPCs" |
+| 2 | Assets tab: the **NPCs** kind tab, type `judy`. Pick **Judy Álvarez** | The row shows Judy Álvarez with `Character.Judy NPC` at its end. The panel shows the name and the record, 0.6 x 0.6 x 1.8 m, and an appearance list starting with "Any: the game picks" |
+| 3 | On the Library tab, **New** scene "People test". Drop a cargo crate as before. Then NPCs: type `citizenrich`, pick **CitizenRichFemale**, leave "Any: the game picks", **Drop** | A woman stands in front of you. The message says "Dropped CitizenRichFemale (her appearance) in ... ms". The Selected panel shows the record and that appearance; no Scale, Solid or Seen from |
+| 4 | Walk V into her, and watch her for 30 s | She stays where she is, is not hostile, and may chat when bumped |
+| 5 | Edit on. Drag her arrow about 3 m, release, watch 30 s. Turn her with the ring about 90°. Then Ctrl+Z twice | She stays at the new spot, then faces the new way, upright. Undo puts her back each time |
+| 6 | Drop Judy with an appearance from the list that is not the first | Judy in that appearance. Does she stand and stay put like the crowd woman? |
+| 7 | Ctrl+D on the woman, place the copy; Ctrl+C, Ctrl+V; set one copy's Z 1 m higher in the Selected panel, then **Drop to floor** | Copies are people too, standing; the raised one comes down to the ground |
+| 8 | Fly the editor camera about 300 m away, **Drop at click** a person there, look at her, fly back | She stands there and stays put |
+| 9 | Ctrl+S, then open the scene file (`People test.scene.json`) in a text editor | `"format": 2`; each person has `"kind": "npc"`, `"record"`, `"appearance"` (the dropped woman's is the one she got) and `"props": { "behaviour": "idle" }` |
+| 10 | Load the last save. Then quit the game, start it again and load the save | Each time the people come back where they were, in the same appearances, with the crate |
+| 11 | Bake tab: read the checks, then **Bake**. In REDcode, Pack and Play (or pack and deploy). Then **Close** the scene in EDGEbuilder | The checks say the NPCs are not baked and show only while EDGEbuilder or another package loads the scene, by name. The bake has only the crate; after Close, the crate stands from the bake and the people are gone |
+| 12 | Turn EDGEbuilder off in REDnode's Mod Manager. Ask Claude to load "People test" with REDnode's `world_load` (it asks first), then to unload it | The people stand again, friendly, without EDGEbuilder; unload removes them |
+| 13 | Turn EDGEbuilder on, open another scene, and on the Library tab turn **People test** on beside it | Its people show beside the open scene |
+| 14 | Ask Claude for People test's objects (EDGEbuilder's `refs` tool) | The people are listed with kind `npc` and their record |

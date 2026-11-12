@@ -69,6 +69,8 @@ declare module "rednode" {
     meshAppearance?: string;
     scale?: WorldPoint;
     appearance?: string;
+    /** For a person: stand where placed and stay friendly to V. On by default for a `Character.*` record. */
+    npc?: boolean | { hold?: boolean; friendly?: boolean };
     position: WorldPoint;
     orientation?: WorldRotation;
     yaw?: number;

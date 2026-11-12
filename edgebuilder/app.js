@@ -1179,6 +1179,11 @@ var $ = (id) => document.getElementById(id);
 var post = (m) => channel.post(m);
 var esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var shortName = (p) => p.slice(p.lastIndexOf("\\") + 1);
+var labelOf = (r) => r.kind === "npc" ? r.name ?? r.path.replace(/^Character\./, "") : shortName(r.path);
+var labelFor = (p) => {
+  const r = state?.results.find((x) => x.path === p);
+  return r ? labelOf(r) : shortName(p);
+};
 var state;
 var kind = "all";
 var from = "all";
@@ -1225,13 +1230,13 @@ function render(s) {
   $("index").textContent = ix.status === "ready" ? `${ix.count.toLocaleString()} assets` : ix.status === "building" ? "Indexing..." : ix.status === "failed" ? "Index failed" : "No index";
   $("index").className = `pill ${ix.status === "ready" ? "ok" : ix.status === "building" ? "" : "warn"}`;
   $("index").title = ix.progress ?? ix.file ?? "";
-  $("progress").textContent = ix.status === "building" ? ix.progress ?? "" : "";
+  $("progress").textContent = ix.status === "building" ? ix.progress ?? "" : s.npcs.status === "reading" ? s.npcs.progress ?? "" : "";
   const list = $("results");
   const keep = lookedAt;
-  list.innerHTML = s.results.map((r) => `<rn-item value="${esc(r.path)}" title="${esc(rowTitle(r))}"${r.path === keep ? " selected" : ""}>${esc(shortName(r.path))}<span slot="end">${esc(rowTag(r))}</span></rn-item>`).join("");
+  list.innerHTML = s.results.map((r) => `<rn-item value="${esc(r.path)}" title="${esc(rowTitle(r))}"${r.path === keep ? " selected" : ""}>${esc(labelOf(r))}<span slot="end">${esc(rowTag(r))}</span></rn-item>`).join("");
   const total = s.index.count + s.sources.mods.assets + (s.sources.project?.assets ?? 0);
   const listsAll = s.query.from === "mods" || s.query.from === "project";
-  $("count").textContent = s.index.status === "ready" || s.results.length ? s.query.text || listsAll ? foundText(s) : `${total.toLocaleString()} assets: type a name to search` : "";
+  $("count").textContent = s.index.status === "ready" || s.results.length ? s.query.text || listsAll ? foundText(s) : `${total.toLocaleString()} assets${s.npcs.count ? ` and ${s.npcs.count.toLocaleString()} NPCs` : ""}: type a name to search` : "";
   const mods = s.sources.mods;
   const project2 = s.sources.project;
   $("sources").textContent = [
@@ -1243,7 +1248,8 @@ function render(s) {
   if (looked && looked.path === lookedAt) {
     const info = looked.info;
     const size = info?.bounds ? `${(info.bounds.max[0] - info.bounds.min[0]).toFixed(1)} x ${(info.bounds.max[1] - info.bounds.min[1]).toFixed(1)} x ${(info.bounds.max[2] - info.bounds.min[2]).toFixed(1)} m` : info ? "no bounds" : "reading...";
-    $("lookedPath").textContent = looked.path;
+    $("lookedPath").textContent = looked.path === labelFor(looked.path) ? looked.path : `${labelFor(looked.path)}
+${looked.path}`;
     $("lookedSize").textContent = info?.error ? info.error : size;
     const apps = info?.appearances ?? [];
     const appList = $("appearances");
@@ -1318,14 +1324,18 @@ function render(s) {
 function foundText(s) {
   const n = s.results.length;
   const q = s.query;
-  const [one, many] = q.kind === "mesh" ? ["mesh", "meshes"] : q.kind === "entity" ? ["entity", "entities"] : ["asset", "assets"];
+  const [one, many] = q.kind === "mesh" ? ["mesh", "meshes"] : q.kind === "entity" ? ["entity", "entities"] : q.kind === "npc" ? ["NPC", "NPCs"] : ["asset", "assets"];
   return `${n}${n >= 120 ? "+" : ""} ${n === 1 ? one : many} found${q.text ? ` for "${q.text}"` : ""}`;
 }
 function rowTag(r) {
+  if (r.kind === "npc") return `${r.path} NPC`;
   const where = r.source ? r.source.kind === "project" ? `project ${r.source.name}` : r.source.name : r.path.toLowerCase().startsWith("ep1\\") ? "PL" : "";
   return [where, r.replaces ? "changes a game file" : "", r.kind].filter(Boolean).join(" ");
 }
 function rowTitle(r) {
+  if (r.kind === "npc") return `${r.name ? `${r.name}
+` : ""}${r.path}
+${r.template ?? ""}`;
   return r.source ? `${r.path}
 ${r.source.file}` : r.path;
 }
@@ -1370,8 +1380,8 @@ function renderSolid(sel, s) {
 var seenShown = "";
 function renderSeenFrom(sel) {
   const f = $("seenFrom");
-  f.hidden = !sel.length;
-  if (!sel.length) return;
+  f.hidden = !sel.length || sel.every((o) => o.kind === "npc");
+  if (f.hidden) return;
   const own = new Set(sel.map((o) => o.streaming?.primary ?? null));
   const one = own.size === 1 ? [...own][0] : void 0;
   seenShown = one == null ? "" : String(one);
@@ -1432,7 +1442,7 @@ ${sel.length - shown} not in the world` : ""}`;
   }
   const [x, y, z] = o.transform.position;
   $("selected").textContent = `${oneGroup ? `${oneGroup.name}: ` : ""}${o.id}
-${o.resource ?? o.kind}
+${o.resource ?? o.record ?? o.kind}
 ${o.appearance ? `appearance ${o.appearance}
 ` : ""}at ${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}${o.entityId ? `
 entity ${o.entityId}` : "\nnot in the world"}`;
@@ -1463,7 +1473,7 @@ window.addEventListener(
   true
 );
 $("kinds").addEventListener("change", (e) => {
-  kind = ["all", "mesh", "entity"][e.detail.index] ?? "all";
+  kind = ["all", "mesh", "entity", "npc"][e.detail.index] ?? "all";
   search();
 });
 $("from").addEventListener("change", (e) => {
@@ -1498,7 +1508,7 @@ $("dropClick").addEventListener("click", () => {
     dropAsked = true;
     post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } });
   });
-  $("message").textContent = `Click where ${shortName(path)} should go; Esc or right-click cancels.`;
+  $("message").textContent = `Click where ${labelFor(path)} should go; Esc or right-click cancels.`;
   $("message").className = "message";
 });
 var listCtrl = false;

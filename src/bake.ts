@@ -17,7 +17,7 @@ export interface BakeProject {
   resources: string;
 }
 
-/** The kinds sector.build can write. Anything else stays out of the bake, and the panel says so. */
+/** The kinds sector.build can write. Anything else (people, B3c) stays out of the bake, and the panel says so. */
 const Bakeable = new Set(["mesh", "entity", "light"]);
 
 /** A scene as sector.build reads it: format 1, no previews, and without what it cannot make. */
@@ -101,7 +101,10 @@ export function checkBake(input: {
     const numbers = [...o.transform.position, ...o.transform.rotation, ...o.transform.scale];
     if (numbers.some((n) => !Number.isFinite(n))) say("error", `${o.id} has a position, turn or scale that is not a number.`);
   }
-  if (skipped.length) say("warn", `Left out, since a bake cannot make them yet: ${skipped.map((s) => s.id).join(", ")}.`);
+  const people = skipped.filter((s) => s.kind === "npc");
+  const others = skipped.filter((s) => s.kind !== "npc");
+  if (people.length) say("warn", `${people.length === 1 ? "An NPC is" : `${people.length} NPCs are`} not baked: ${people.length === 1 ? "it shows" : "they show"} only while EDGEbuilder or another package loads the scene. ${people.map((s) => s.id).join(", ")}.`);
+  if (others.length) say("warn", `Left out, since a bake cannot make them yet: ${others.map((s) => s.id).join(", ")}.`);
   if (input.sameNameFrom) say("warn", `This project has a bake with this name, from ${input.sameNameFrom}. Baking replaces it. A different name keeps both.`);
   if (input.needs.length) say("warn", `Anyone playing this bake needs: ${input.needs.join(", ")}.`);
   const meshes = scene.objects.filter((o) => o.kind === "mesh");

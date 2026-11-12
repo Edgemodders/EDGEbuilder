@@ -12,6 +12,13 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const post = (m: PageMessage) => channel.post(m);
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const shortName = (p: string) => p.slice(p.lastIndexOf("\\") + 1);
+/** What a result is called: a person by its in-game name (B3c), a file by its name. */
+const labelOf = (r: AssetEntry) => (r.kind === "npc" ? (r.name ?? r.path.replace(/^Character\./, "")) : shortName(r.path));
+/** The label of the result with this path, from the list on show. */
+const labelFor = (p: string) => {
+  const r = state?.results.find((x) => x.path === p);
+  return r ? labelOf(r) : shortName(p);
+};
 
 let state: Snapshot | undefined;
 let kind: AssetKind | "all" = "all";
@@ -69,13 +76,13 @@ function render(s: Snapshot): void {
   $("index").textContent = ix.status === "ready" ? `${ix.count.toLocaleString()} assets` : ix.status === "building" ? "Indexing..." : ix.status === "failed" ? "Index failed" : "No index";
   $("index").className = `pill ${ix.status === "ready" ? "ok" : ix.status === "building" ? "" : "warn"}`;
   $("index").title = ix.progress ?? ix.file ?? "";
-  $("progress").textContent = ix.status === "building" ? ix.progress ?? "" : "";
+  $("progress").textContent = ix.status === "building" ? (ix.progress ?? "") : s.npcs.status === "reading" ? (s.npcs.progress ?? "") : "";
 
   // Assets.
   const list = $("results");
   const keep = lookedAt;
   list.innerHTML = s.results
-    .map((r) => `<rn-item value="${esc(r.path)}" title="${esc(rowTitle(r))}"${r.path === keep ? " selected" : ""}>${esc(shortName(r.path))}<span slot="end">${esc(rowTag(r))}</span></rn-item>`)
+    .map((r) => `<rn-item value="${esc(r.path)}" title="${esc(rowTitle(r))}"${r.path === keep ? " selected" : ""}>${esc(labelOf(r))}<span slot="end">${esc(rowTag(r))}</span></rn-item>`)
     .join("");
   const total = s.index.count + s.sources.mods.assets + (s.sources.project?.assets ?? 0);
   const listsAll = s.query.from === "mods" || s.query.from === "project";
@@ -83,7 +90,7 @@ function render(s: Snapshot): void {
     s.index.status === "ready" || s.results.length
       ? s.query.text || listsAll
         ? foundText(s)
-        : `${total.toLocaleString()} assets: type a name to search`
+        : `${total.toLocaleString()} assets${s.npcs.count ? ` and ${s.npcs.count.toLocaleString()} NPCs` : ""}: type a name to search`
       : "";
   const mods = s.sources.mods;
   const project = s.sources.project;
@@ -96,7 +103,7 @@ function render(s: Snapshot): void {
   if (looked && looked.path === lookedAt) {
     const info = looked.info;
     const size = info?.bounds ? `${(info.bounds.max[0] - info.bounds.min[0]).toFixed(1)} x ${(info.bounds.max[1] - info.bounds.min[1]).toFixed(1)} x ${(info.bounds.max[2] - info.bounds.min[2]).toFixed(1)} m` : info ? "no bounds" : "reading...";
-    $("lookedPath").textContent = looked.path;
+    $("lookedPath").textContent = looked.path === labelFor(looked.path) ? looked.path : `${labelFor(looked.path)}\n${looked.path}`;
     $("lookedSize").textContent = info?.error ? info.error : size;
     const apps = info?.appearances ?? [];
     const appList = $("appearances");
@@ -185,17 +192,19 @@ function render(s: Snapshot): void {
 function foundText(s: Snapshot): string {
   const n = s.results.length;
   const q = s.query;
-  const [one, many] = q.kind === "mesh" ? ["mesh", "meshes"] : q.kind === "entity" ? ["entity", "entities"] : ["asset", "assets"];
+  const [one, many] = q.kind === "mesh" ? ["mesh", "meshes"] : q.kind === "entity" ? ["entity", "entities"] : q.kind === "npc" ? ["NPC", "NPCs"] : ["asset", "assets"];
   return `${n}${n >= 120 ? "+" : ""} ${n === 1 ? one : many} found${q.text ? ` for "${q.text}"` : ""}`;
 }
 
-/** The tag at a result's end: the mod or project it comes from, and its kind. */
+/** The tag at a result's end: the mod or project it comes from, and its kind; for a person, its record. */
 function rowTag(r: AssetEntry): string {
+  if (r.kind === "npc") return `${r.path} NPC`;
   const where = r.source ? (r.source.kind === "project" ? `project ${r.source.name}` : r.source.name) : r.path.toLowerCase().startsWith("ep1\\") ? "PL" : "";
   return [where, r.replaces ? "changes a game file" : "", r.kind].filter(Boolean).join(" ");
 }
 
 function rowTitle(r: AssetEntry): string {
+  if (r.kind === "npc") return `${r.name ? `${r.name}\n` : ""}${r.path}\n${r.template ?? ""}`;
   return r.source ? `${r.path}\n${r.source.file}` : r.path;
 }
 
@@ -250,8 +259,9 @@ let seenShown = "";
 /** Seen from: the objects' own distance when they share one; empty, with the distance by size as its hint, when they have none. */
 function renderSeenFrom(sel: SceneObject[]): void {
   const f = $<Field>("seenFrom");
-  f.hidden = !sel.length;
-  if (!sel.length) return;
+  // A person is not baked (B3c), so how far off it is seen once baked does not apply.
+  f.hidden = !sel.length || sel.every((o) => o.kind === "npc");
+  if (f.hidden) return;
   const own = new Set(sel.map((o) => o.streaming?.primary ?? null));
   const one = own.size === 1 ? [...own][0] : undefined;
   seenShown = one == null ? "" : String(one);
@@ -313,7 +323,7 @@ function renderSelected(sel: SceneObject[], s: Snapshot): void {
     return;
   }
   const [x, y, z] = o.transform.position;
-  $("selected").textContent = `${oneGroup ? `${oneGroup.name}: ` : ""}${o.id}\n${o.resource ?? o.kind}\n${o.appearance ? `appearance ${o.appearance}\n` : ""}at ${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}${o.entityId ? `\nentity ${o.entityId}` : "\nnot in the world"}`;
+  $("selected").textContent = `${oneGroup ? `${oneGroup.name}: ` : ""}${o.id}\n${o.resource ?? o.record ?? o.kind}\n${o.appearance ? `appearance ${o.appearance}\n` : ""}at ${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}${o.entityId ? `\nentity ${o.entityId}` : "\nnot in the world"}`;
 }
 
 // ---- wiring -----------------------------------------------------------------------------------
@@ -348,7 +358,7 @@ window.addEventListener(
   true,
 );
 $("kinds").addEventListener("change", (e) => {
-  kind = (["all", "mesh", "entity"] as const)[(e as CustomEvent<{ index: number }>).detail.index] ?? "all";
+  kind = (["all", "mesh", "entity", "npc"] as const)[(e as CustomEvent<{ index: number }>).detail.index] ?? "all";
   search();
 });
 $("from").addEventListener("change", (e) => {
@@ -384,7 +394,7 @@ $("dropClick").addEventListener("click", () => {
     dropAsked = true;
     post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } });
   });
-  $("message").textContent = `Click where ${shortName(path)} should go; Esc or right-click cancels.`;
+  $("message").textContent = `Click where ${labelFor(path)} should go; Esc or right-click cancels.`;
   $("message").className = "message";
 });
 // The Scene list: a group's arrow opens or closes it; a group's row selects the group, an object's
