@@ -1022,10 +1022,13 @@ export class Viewport {
     this.pending = false;
     const secs = (performance.now() - d.started) / 1000;
     if (d.moves > 0) this.hooks.log(`Drag (${d.mode}${d.axis ? ` ${d.axis}` : ""}, ${d.ids.length} object${d.ids.length === 1 ? "" : "s"}): ${d.moves} moves in ${secs.toFixed(1)} s, ${(d.moves / Math.max(secs, 0.001)).toFixed(0)} a second`);
-    this.hooks.commit(
-      d.ids.map((id) => ({ id, transform: this.nowOf(d, id) })),
-      d.copy,
-    );
+    const items = d.ids.map((id) => ({ id, transform: this.nowOf(d, id) }));
+    // Keep the new places until the mod's answer comes, so the gizmo does not jump back meanwhile.
+    for (const i of items) {
+      const o = this.objects.find((x) => x.id === i.id);
+      if (o) o.transform = i.transform;
+    }
+    this.hooks.commit(items, d.copy);
   }
 
   private cancel(): void {

@@ -203,13 +203,6 @@ function applyChange(t, c, pivot) {
   if (c.move) position = add(position, c.move);
   return { position, rotation, scale };
 }
-function upright(q) {
-  const [x, y, z, w] = q;
-  const fx = 2 * (x * y - w * z);
-  const fy = 1 - 2 * (x * x + z * z);
-  const half = Math.atan2(-fx, fy) / 2;
-  return [0, 0, Math.sin(half), Math.cos(half)];
-}
 function boxOf(objects) {
   let min;
   let max;
@@ -274,23 +267,13 @@ function held(e) {
 }
 
 // src/app/viewport.ts
-import { api as api2, game as game3, world as world2 } from "rednode";
+import { api, game as game2, world as world2 } from "rednode";
 
 // src/move.ts
-import { api, game as game2, world } from "rednode";
+import { world } from "rednode";
 async function movePreview(o, position, rotation) {
-  if (!o.entityId) return false;
-  const r = o.kind === "npc" ? upright(rotation) : rotation;
-  const moved = await world.move(o.entityId, { x: position[0], y: position[1], z: position[2] }, { i: r[0], j: r[1], k: r[2], r: r[3] });
-  if (o.kind !== "npc") return moved;
-  const [entity, facility] = await Promise.all([
-    world.entity(o.entityId),
-    api.GameInstance.GetTeleportationFacility(game2.instance)
-  ]);
-  if (!entity || !facility) return false;
-  const yaw = 2 * Math.atan2(r[2], r[3]) * 180 / Math.PI;
-  await facility.Teleport(entity, { X: position[0], Y: position[1], Z: position[2], W: 1 }, { Roll: 0, Pitch: 0, Yaw: yaw });
-  return true;
+  if (!o.entityId || o.kind === "npc") return false;
+  return world.move(o.entityId, { x: position[0], y: position[1], z: position[2] }, { i: rotation[0], j: rotation[1], k: rotation[2], r: rotation[3] });
 }
 
 // src/app/viewport.ts
@@ -337,8 +320,8 @@ var Viewport = class {
     window.addEventListener("beforeunload", () => {
       if (this.builderAsked) this.hooks.builderStop();
     });
-    game3.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
-    game3.onState((s) => {
+    game2.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
+    game2.onState((s) => {
       if (!s.menu) return;
       this.cancel();
       this.disarm();
@@ -475,10 +458,10 @@ var Viewport = class {
   async updateCamera() {
     try {
       if (!this.fpp || !this.camSys) {
-        const player = await api2.GetPlayer(game3.instance);
+        const player = await api.GetPlayer(game2.instance);
         if (!player) throw new Error("no player: load a save");
         this.fpp = await player.GetFPPCameraComponent();
-        this.camSys = await api2.GameInstance.GetCameraSystem(game3.instance);
+        this.camSys = await api.GameInstance.GetCameraSystem(game2.instance);
         if (!this.fpp || !this.camSys) throw new Error("the camera is not available");
       }
       if (this.camEntity && !this.camComp) {
@@ -1132,10 +1115,12 @@ var Viewport = class {
     this.pending = false;
     const secs = (performance.now() - d.started) / 1e3;
     if (d.moves > 0) this.hooks.log(`Drag (${d.mode}${d.axis ? ` ${d.axis}` : ""}, ${d.ids.length} object${d.ids.length === 1 ? "" : "s"}): ${d.moves} moves in ${secs.toFixed(1)} s, ${(d.moves / Math.max(secs, 1e-3)).toFixed(0)} a second`);
-    this.hooks.commit(
-      d.ids.map((id) => ({ id, transform: this.nowOf(d, id) })),
-      d.copy
-    );
+    const items = d.ids.map((id) => ({ id, transform: this.nowOf(d, id) }));
+    for (const i of items) {
+      const o = this.objects.find((x) => x.id === i.id);
+      if (o) o.transform = i.transform;
+    }
+    this.hooks.commit(items, d.copy);
   }
   cancel() {
     const d = this.drag;

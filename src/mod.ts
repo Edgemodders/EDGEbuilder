@@ -40,7 +40,7 @@ import {
   type BakeProject,
 } from "./bake";
 import { Scene, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
-import { movePreview } from "./move";
+import { movePreview, sameTransform } from "./move";
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, upright, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
@@ -605,14 +605,56 @@ async function place(o: SceneObject, t: SceneTransform): Promise<void> {
   if (o.kind !== "mesh") t = { ...t, scale: [1, 1, 1] }; // an entity template keeps its own size
   if (o.kind === "npc") t = { ...t, rotation: upright(t.rotation) }; // a person stands upright
   const scaled = t.scale.some((s, i) => Math.abs(s - o.transform.scale[i]) > 1e-6);
+  const same = sameTransform(o.transform, t);
   o.transform = t;
   if (!o.entityId) return;
-  if (scaled) await respawn(o);
+  // The game keeps a person where they stand: no move or teleport takes (B3c test step 5), so a
+  // person is spawned again at the new place.
+  if (o.kind === "npc") {
+    if (!same) await movePerson(o);
+  } else if (scaled) await respawn(o);
   else await movePreview(o, t.position, t.rotation);
+}
+
+/**
+ * Puts a person at their scene transform. Neither world.move nor the teleportation facility moves an NPC
+ * (B3c test, step 5): the person's AI gets a teleport command, then the hold again; if they are not there
+ * after a moment, they are spawned again there. The log says which way it went.
+ */
+async function movePerson(o: SceneObject): Promise<void> {
+  const [x, y, z] = o.transform.position;
+  const yaw = (2 * Math.atan2(o.transform.rotation[2], o.transform.rotation[3]) * 180) / Math.PI;
+  try {
+    const entity = o.entityId ? await world.entity(o.entityId) : null;
+    const ai = entity ? ((await entity.GetAIControllerComponent()) as GameRef | null) : null;
+    if (entity && ai) {
+      await ai.SendCommand(await api.$new("AITeleportCommand", { position: { X: x, Y: y, Z: z, W: 1 }, rotation: yaw, doNavTest: false }));
+      await new Promise((r) => setTimeout(r, 400));
+      const p = (await entity.GetWorldPosition()) as { X: number; Y: number; Z: number };
+      const off = Math.hypot(p.X - x, p.Y - y);
+      if (off < 0.3) {
+        await ai.SendCommand(await api.$new("AIHoldPositionCommand", { duration: 86400 }));
+        console.log(`${o.id} moved by the AI's teleport command`);
+        return;
+      }
+      console.log(`${o.id} not moved by the AI's teleport command (${off.toFixed(1)} m off): spawned again`);
+    }
+  } catch (err) {
+    console.log(`${o.id}: the AI's teleport command failed (${(err as Error).message}): spawned again`);
+  }
+  await respawn(o);
 }
 
 /** A mesh component's scale is set when it is built, so a new scale (or file) means a new preview. */
 async function respawn(o: SceneObject): Promise<void> {
+  if (o.kind === "npc" && o.entityId) {
+    // The new person first, then the old one goes, so there is no gap where nobody stands.
+    const old = o.entityId;
+    if (await trySpawn(o)) await world.remove(old).catch((err) => console.log(`Remove ${o.id}: ${(err as Error).message}`));
+    else o.entityId = old;
+    if (state.selected.includes(o.id)) await highlight(o, true);
+    return;
+  }
   await removePreview(o);
   await trySpawn(o);
   if (state.selected.includes(o.id)) await highlight(o, true);
@@ -679,7 +721,10 @@ async function travel(from: SceneState[], to: SceneState[], word: "Undo" | "Redo
   const ch = scene.restore(s);
   for (const o of ch.gone) await removePreview(o);
   for (const o of ch.respawn) await respawn(o);
-  for (const o of ch.move) await movePreview(o, o.transform.position, o.transform.rotation).catch(() => undefined);
+  for (const o of ch.move) {
+    if (o.kind === "npc") await movePerson(o);
+    else await movePreview(o, o.transform.position, o.transform.rotation).catch(() => undefined);
+  }
   const spawned = await spawnAll(ch.spawn);
   scene.save();
   const moved = ch.move.length + ch.respawn.length;
