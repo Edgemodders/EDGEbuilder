@@ -2415,10 +2415,12 @@ async function rebuild() {
 var PreviewsBackDelay = 2e3;
 var previewsTimer;
 var backWhenIn = false;
-function previewsBackSoon() {
+function previewsBackSoon(delay = PreviewsBackDelay) {
   clearTimeout(previewsTimer);
-  previewsTimer = setTimeout(() => void inTurn("Put previews back", () => previewsBack()), PreviewsBackDelay);
+  previewsTimer = setTimeout(() => void inTurn("Put previews back", () => previewsBack()), delay);
 }
+var RetryFor = 9e4;
+var RetryEvery = 5e3;
 async function previewsBack() {
   if (state.world !== "ready") return;
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light");
@@ -2436,7 +2438,12 @@ async function previewsBack() {
   kept.add(editorCam?.id);
   for (const s of world2.spawned?.() ?? []) if (!s.scene && s.attached && !kept.has(s.id.hash)) await world2.remove(s.id).catch(() => false);
   const r = await spawnAll(away, "Back");
-  say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${r.failed ? `; ${r.failed} the game did not place (the log says why)` : ""}.`, r.failed ? "warn" : "ok");
+  const again = r.failed > 0 && !stopAsked && Date.now() - attachedAt < RetryFor;
+  if (again) {
+    console.log(`${scene.name}: ${r.failed} not placed yet; trying again in ${RetryEvery / 1e3} s`);
+    previewsBackSoon(RetryEvery);
+  }
+  say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${r.failed ? `; ${r.failed} the game did not place${again ? " yet, trying again" : " (the log says why)"}` : ""}.`, r.failed && !again ? "warn" : "ok");
 }
 async function goTo(id) {
   const o = scene.get(id);
@@ -3337,7 +3344,7 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   });
 });
 var attachedAt = 0;
-var LoadSettles = 3e4;
+var LoadSettles = 9e4;
 var gone = /* @__PURE__ */ new Map();
 world2.on("Entity/Detach", (e) => {
   const o = scene.objects.find((x) => x.entityId === e.entityId);
@@ -3369,7 +3376,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.10.4"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.10.5"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs8.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

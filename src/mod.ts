@@ -1333,10 +1333,13 @@ const PreviewsBackDelay = 2000;
 let previewsTimer: ReturnType<typeof setTimeout> | undefined;
 /** Previews are waiting for V to be in the world: `game.onState` starts them. */
 let backWhenIn = false;
-function previewsBackSoon(): void {
+function previewsBackSoon(delay = PreviewsBackDelay): void {
   clearTimeout(previewsTimer);
-  previewsTimer = setTimeout(() => void inTurn("Put previews back", () => previewsBack()), PreviewsBackDelay);
+  previewsTimer = setTimeout(() => void inTurn("Put previews back", () => previewsBack()), delay);
 }
+/** How long after a save loads previews the game would not place yet are tried again, and how often. */
+const RetryFor = 90_000;
+const RetryEvery = 5_000;
 
 async function previewsBack(): Promise<void> {
   if (state.world !== "ready") return;
@@ -1361,7 +1364,14 @@ async function previewsBack(): Promise<void> {
   kept.add(editorCam?.id);
   for (const s of world.spawned?.() ?? []) if (!s.scene && s.attached && !kept.has(s.id.hash)) await world.remove(s.id).catch(() => false);
   const r = await spawnAll(away, "Back");
-  say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${r.failed ? `; ${r.failed} the game did not place (the log says why)` : ""}.`, r.failed ? "warn" : "ok");
+  // People in particular are not placed while the save still settles (B3c test, a game start on the
+  // laptop: both stayed away until Go to spawned them): try those again for a while.
+  const again = r.failed > 0 && !stopAsked && Date.now() - attachedAt < RetryFor;
+  if (again) {
+    console.log(`${scene.name}: ${r.failed} not placed yet; trying again in ${RetryEvery / 1000} s`);
+    previewsBackSoon(RetryEvery);
+  }
+  say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${r.failed ? `; ${r.failed} the game did not place${again ? " yet, trying again" : " (the log says why)"}` : ""}.`, r.failed && !again ? "warn" : "ok");
 }
 
 /**
@@ -2429,7 +2439,7 @@ game.on("PlayerPuppet.OnGameAttached", () => {
 
 /** When the last save loaded, and how long after it a preview that leaves the world is put back. */
 let attachedAt = 0;
-const LoadSettles = 30_000;
+const LoadSettles = 90_000;
 
 /** Previews that left the world, by entity: an archive swap spawns them again under a new id. */
 const gone = new Map<string, { id: string; selected: boolean }>();
