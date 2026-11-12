@@ -397,27 +397,33 @@ $("dropClick").addEventListener("click", () => {
   $("message").textContent = `Click where ${labelFor(path)} should go; Esc or right-click cancels.`;
   $("message").className = "message";
 });
-// The pin on the Picked panel: pinned, the panel stays at the bottom of the Assets tab while the list
-// scrolls, so the Drop buttons are always in view. Kept in this page's storage; pinned unless turned off.
-const PinKey = "edgebuilder.pickedPinned";
-function setPinned(on: boolean): void {
-  $("pickedPanel").classList.toggle("pinned", on);
-  $("pickedPin").setAttribute("aria-pressed", String(on));
-  $("pickedPin").title = on ? "Pinned to the bottom of the tab: click to let it scroll with the list" : "Pin to the bottom of the tab, so the Drop buttons stay in view";
+// A panel's pin (Picked on the Assets tab, Selected on the Scene tab): pinned, the panel stays at the
+// bottom of its tab while the tab scrolls. Each panel's choice is kept in this page's storage; pinned
+// unless turned off.
+for (const panel of document.querySelectorAll<HTMLElement>(".pinnable")) {
+  const pin = panel.querySelector<HTMLElement>(".pin");
+  if (!pin) continue;
+  const key = `edgebuilder.pinned.${panel.id}`;
+  const note = panel.dataset.pinNote ?? "";
+  const set = (on: boolean) => {
+    panel.classList.toggle("pinned", on);
+    pin.setAttribute("aria-pressed", String(on));
+    pin.title = on ? "Pinned to the bottom of the tab: click to let it scroll with the tab" : `Pin to the bottom of the tab, ${note}`;
+    try {
+      localStorage.setItem(key, on ? "1" : "0");
+    } catch {
+      // No storage: for this session only.
+    }
+  };
+  let on = true;
   try {
-    localStorage.setItem(PinKey, on ? "1" : "0");
+    on = localStorage.getItem(key) !== "0";
   } catch {
-    // No storage: pinned for this session only.
+    // No storage: pinned.
   }
+  set(on);
+  pin.addEventListener("click", () => set(!panel.classList.contains("pinned")));
 }
-let pinnedAtStart = true;
-try {
-  pinnedAtStart = localStorage.getItem(PinKey) !== "0";
-} catch {
-  // No storage: pinned.
-}
-setPinned(pinnedAtStart);
-$("pickedPin").addEventListener("click", () => setPinned(!$("pickedPanel").classList.contains("pinned")));
 // The Scene list: a group's arrow opens or closes it; a group's row selects the group, an object's
 // row that object; Ctrl adds to the selection or takes out.
 let listCtrl = false;

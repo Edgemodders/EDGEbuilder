@@ -19,7 +19,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 **Changed**
 
-- The Assets tab's Picked panel has a pin in its top right corner. Pinned, the panel stays at the bottom of the tab while you scroll the list, so the Drop buttons are always in view. It starts pinned; click the pin to let it scroll with the list again, and EDGEbuilder remembers your choice.
+- The Assets tab's Picked panel and the Scene tab's Selected panel have a pin in their top right corner. Pinned, the panel stays at the bottom of its tab while you scroll, so the Drop buttons, or the selection's numbers and buttons, are always in view. Both start pinned; click a pin to let that panel scroll with the tab again, and EDGEbuilder remembers your choice for each.
 - The Bake tab says which NPCs a bake leaves out: they show only while EDGEbuilder or another package loads the scene.
 
 **Fixed**

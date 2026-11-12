@@ -52,9 +52,9 @@
   .fold { display: inline-block; width: 14px; color: var(--rn-dim, #999); cursor: pointer; }
   .row { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
   [hidden] { display: none !important; }
-  /* The Picked panel's pin (top right): pinned, the panel sticks to the bottom of the Assets tab while the list scrolls. */
-  #pickedPanel { position: relative; }
-  #pickedPanel.pinned { position: sticky; bottom: 0; z-index: 2; background: linear-gradient(var(--rn-panel), var(--rn-panel)), var(--rn-bg, #08090d); box-shadow: 0 -10px 18px rgba(0, 0, 0, .55); }
+  /* A panel's pin (top right): pinned, the panel sticks to the bottom of its tab while the tab scrolls (Picked on Assets, Selected on Scene). */
+  .pinnable { position: relative; }
+  .pinnable.pinned { position: sticky; bottom: 0; z-index: 2; background: linear-gradient(var(--rn-panel), var(--rn-panel)), var(--rn-bg, #08090d); box-shadow: 0 -10px 18px rgba(0, 0, 0, .55); }
   .pin { position: absolute; top: 8px; right: 8px; background: none; border: 1px solid transparent; color: var(--rn-dim, #999); cursor: pointer; padding: 3px; line-height: 0; }
   .pin svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; }
   .pin:hover { border-color: var(--rn-line, #333); color: var(--rn-fg, #eee); }
@@ -94,8 +94,8 @@
         <div id="sources" class="count"></div>
         <div id="count" class="count"></div>
         <rn-list id="results"></rn-list>
-        <rn-panel id="pickedPanel" title="Picked">
-          <button id="pickedPin" class="pin" aria-pressed="true" title="Pinned to the bottom of the tab: click to let it scroll with the list"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
+        <rn-panel id="pickedPanel" class="pinnable" title="Picked" data-pin-note="so the Drop buttons stay in view">
+          <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
           <div id="lookedPath" class="path">Pick an asset</div>
           <div id="lookedSize" class="detail"></div>
           <rn-list id="appearances" hidden></rn-list>
@@ -126,7 +126,8 @@
           <rn-button id="ungroup" variant="ghost" disabled title="Ctrl+Shift+G">Ungroup</rn-button>
         </div>
         <rn-list id="objects"></rn-list>
-        <rn-panel title="Selected">
+        <rn-panel id="selectedPanel" class="pinnable" title="Selected" data-pin-note="so its numbers and buttons stay in view">
+          <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
           <pre id="selected">Nothing selected</pre>
           <rn-input id="groupName" label="Group name" hidden></rn-input>
           <div class="grid">

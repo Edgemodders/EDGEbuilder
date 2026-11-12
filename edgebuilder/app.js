@@ -1522,23 +1522,28 @@ $("dropClick").addEventListener("click", () => {
   $("message").textContent = `Click where ${labelFor(path)} should go; Esc or right-click cancels.`;
   $("message").className = "message";
 });
-var PinKey = "edgebuilder.pickedPinned";
-function setPinned(on) {
-  $("pickedPanel").classList.toggle("pinned", on);
-  $("pickedPin").setAttribute("aria-pressed", String(on));
-  $("pickedPin").title = on ? "Pinned to the bottom of the tab: click to let it scroll with the list" : "Pin to the bottom of the tab, so the Drop buttons stay in view";
+for (const panel of document.querySelectorAll(".pinnable")) {
+  const pin = panel.querySelector(".pin");
+  if (!pin) continue;
+  const key = `edgebuilder.pinned.${panel.id}`;
+  const note = panel.dataset.pinNote ?? "";
+  const set = (on2) => {
+    panel.classList.toggle("pinned", on2);
+    pin.setAttribute("aria-pressed", String(on2));
+    pin.title = on2 ? "Pinned to the bottom of the tab: click to let it scroll with the tab" : `Pin to the bottom of the tab, ${note}`;
+    try {
+      localStorage.setItem(key, on2 ? "1" : "0");
+    } catch {
+    }
+  };
+  let on = true;
   try {
-    localStorage.setItem(PinKey, on ? "1" : "0");
+    on = localStorage.getItem(key) !== "0";
   } catch {
   }
+  set(on);
+  pin.addEventListener("click", () => set(!panel.classList.contains("pinned")));
 }
-var pinnedAtStart = true;
-try {
-  pinnedAtStart = localStorage.getItem(PinKey) !== "0";
-} catch {
-}
-setPinned(pinnedAtStart);
-$("pickedPin").addEventListener("click", () => setPinned(!$("pickedPanel").classList.contains("pinned")));
 var listCtrl = false;
 $("objects").addEventListener(
   "click",
