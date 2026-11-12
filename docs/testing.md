@@ -743,3 +743,16 @@ Step 5 on 0.10.4 passed: the person goes to the new spot on release, and the log
 Step 11 on 0.10.7 (laptop): no REDcode project was open, so one was made and opened in REDcode with the game running; the Bake tab kept saying "No REDcode project is open", Refresh too. Refresh only looked at the bake folders, and a failed connection to REDcode's service (REDcode's `apps\redcode` package, which reads `%LOCALAPPDATA%\REDcode\project.json`) was tried again only once a minute. 0.10.8: Refresh on the Bake and Library tabs asks REDcode again at once, and the Bake tab says when REDcode's package is not in the game (REDcode installs it when `redcode.gamePath` is this game and `redcode.rednode.installPackage` is on).
 
 Step 11 on 0.10.8: Refresh found the new project and the bake completed. The checks kept "4 NPCs are not baked: ..." in warning yellow after the bake, which read as if the bake still had to deal with them. 0.10.9 makes it a grey note, "4 NPCs are never baked: ...", true before and after a bake.
+
+**B3c passed in game on 2026-11-12 on 0.10.9** (the owner's laptop), every step 1 to 17. The answers:
+
+| # | Answer |
+|---|---|
+| N1 | Yes, on release: neither `world.move` nor the teleportation facility moves a person, the AI's `AITeleportCommand` does (0.10.2, `movePerson`); the gizmo moves alone during the drag. A respawn stays as the fallback |
+| N2 | Yes: a person 300 m from V spawns and stands |
+| N3 | Yes: Judy stands and stays put like a crowd NPC |
+| N4 | Yes, from 0.10.5: everything comes back after a save loads and a restart, in the same appearances |
+| N5 | Yes: REDnode's `world_load` stands the people with EDGEbuilder off, `world_unload` takes them away |
+| N6 | Yes: the bake has only the crate, and the NPC line is a note (0.10.9) |
+
+Also found and fixed on the way: the open scene's objects come back after a slow game start (0.10.3, 0.10.5), Refresh asks REDcode for its project (0.10.8), and pins on the Picked and Selected panels (0.10.4, 0.10.6, 0.10.7, asked during the test). Scene format 2 is pinned.

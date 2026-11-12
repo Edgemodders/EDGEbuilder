@@ -10,6 +10,8 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.10.9 (2026-11-12)
+
 **New**
 
 - NPCs: the game's people are on the Assets tab, under the new NPCs tab. Search by their in-game name ("Judy") or their record (`Character.Judy`), pick an appearance or let the game pick one, and drop them like an entity. They stand where you put them and stay friendly to V.
