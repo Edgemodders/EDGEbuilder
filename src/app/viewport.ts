@@ -6,6 +6,7 @@
 import { api, game, world, type GameRef } from "rednode";
 import { applyChange, boxOf, centreOf, type Change } from "../arrange";
 import { held } from "./held";
+import { movePreview } from "../move";
 import {
   AXES,
   add,
@@ -1008,9 +1009,7 @@ export class Viewport {
       if (!o?.entityId) continue;
       const p = this.nowOf(d, id);
       d.moves++;
-      world
-        .move(o.entityId, { x: p.position[0], y: p.position[1], z: p.position[2] }, { i: p.rotation[0], j: p.rotation[1], k: p.rotation[2], r: p.rotation[3] })
-        .catch((err: Error) => this.hooks.log(`Move failed: ${err.message}`));
+      movePreview(o, p.position, p.rotation).catch((err: Error) => this.hooks.log(`Move failed: ${err.message}`));
     }
   }
 
@@ -1038,7 +1037,7 @@ export class Viewport {
     if (d.copy) return this.hooks.undo();
     for (const [id, t] of d.starts) {
       const o = this.objects.find((x) => x.id === id);
-      if (o?.entityId) void world.move(o.entityId, { x: t.position[0], y: t.position[1], z: t.position[2] }, { i: t.rotation[0], j: t.rotation[1], k: t.rotation[2], r: t.rotation[3] });
+      if (o?.entityId) void movePreview(o, t.position, t.rotation).catch(() => undefined);
     }
   }
 

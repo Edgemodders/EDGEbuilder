@@ -203,6 +203,13 @@ function applyChange(t, c, pivot) {
   if (c.move) position = add(position, c.move);
   return { position, rotation, scale };
 }
+function upright(q) {
+  const [x, y, z, w] = q;
+  const fx = 2 * (x * y - w * z);
+  const fy = 1 - 2 * (x * x + z * z);
+  const half = Math.atan2(-fx, fy) / 2;
+  return [0, 0, Math.sin(half), Math.cos(half)];
+}
 function boxOf(objects) {
   let min;
   let max;
@@ -267,7 +274,26 @@ function held(e) {
 }
 
 // src/app/viewport.ts
+import { api as api2, game as game3, world as world2 } from "rednode";
+
+// src/move.ts
 import { api, game as game2, world } from "rednode";
+async function movePreview(o, position, rotation) {
+  if (!o.entityId) return false;
+  const r = o.kind === "npc" ? upright(rotation) : rotation;
+  const moved = await world.move(o.entityId, { x: position[0], y: position[1], z: position[2] }, { i: r[0], j: r[1], k: r[2], r: r[3] });
+  if (o.kind !== "npc") return moved;
+  const [entity, facility] = await Promise.all([
+    world.entity(o.entityId),
+    api.GameInstance.GetTeleportationFacility(game2.instance)
+  ]);
+  if (!entity || !facility) return false;
+  const yaw = 2 * Math.atan2(r[2], r[3]) * 180 / Math.PI;
+  await facility.Teleport(entity, { X: position[0], Y: position[1], Z: position[2], W: 1 }, { Roll: 0, Pitch: 0, Yaw: yaw });
+  return true;
+}
+
+// src/app/viewport.ts
 var COLORS = { x: "#ff4d5e", y: "#5dffa1", z: "#4d9dff", ring: "#fcee0a" };
 var HOT = "#ffffff";
 var UNIT_BOX = { min: [-0.5, -0.5, 0], max: [0.5, 0.5, 1] };
@@ -311,8 +337,8 @@ var Viewport = class {
     window.addEventListener("beforeunload", () => {
       if (this.builderAsked) this.hooks.builderStop();
     });
-    game2.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
-    game2.onState((s) => {
+    game3.on("PlayerPuppet.OnGameAttached", () => this.forgetCamera());
+    game3.onState((s) => {
       if (!s.menu) return;
       this.cancel();
       this.disarm();
@@ -449,14 +475,14 @@ var Viewport = class {
   async updateCamera() {
     try {
       if (!this.fpp || !this.camSys) {
-        const player = await api.GetPlayer(game2.instance);
+        const player = await api2.GetPlayer(game3.instance);
         if (!player) throw new Error("no player: load a save");
         this.fpp = await player.GetFPPCameraComponent();
-        this.camSys = await api.GameInstance.GetCameraSystem(game2.instance);
+        this.camSys = await api2.GameInstance.GetCameraSystem(game3.instance);
         if (!this.fpp || !this.camSys) throw new Error("the camera is not available");
       }
       if (this.camEntity && !this.camComp) {
-        const entity = await world.entity(this.camEntity);
+        const entity = await world2.entity(this.camEntity);
         this.camComp = entity ? await entity.FindComponentByName("edgebuilder_camera") : null;
       }
       const source = this.camEntity && this.camComp ? this.camComp : this.fpp;
@@ -845,7 +871,7 @@ var Viewport = class {
     if (!this.camDirty) return;
     this.camDirty = false;
     const q = qLook(this.look);
-    world.move(this.camEntity, { x: this.camPos[0], y: this.camPos[1], z: this.camPos[2] }, { i: q[0], j: q[1], k: q[2], r: q[3] }).catch((err) => this.hooks.log(`Camera move failed: ${err.message}`));
+    world2.move(this.camEntity, { x: this.camPos[0], y: this.camPos[1], z: this.camPos[2] }, { i: q[0], j: q[1], k: q[2], r: q[3] }).catch((err) => this.hooks.log(`Camera move failed: ${err.message}`));
   }
   /** Puts the selection in front of the camera, at a distance that fits it. */
   frameSelected() {
@@ -1094,7 +1120,7 @@ var Viewport = class {
       if (!o?.entityId) continue;
       const p = this.nowOf(d, id);
       d.moves++;
-      world.move(o.entityId, { x: p.position[0], y: p.position[1], z: p.position[2] }, { i: p.rotation[0], j: p.rotation[1], k: p.rotation[2], r: p.rotation[3] }).catch((err) => this.hooks.log(`Move failed: ${err.message}`));
+      movePreview(o, p.position, p.rotation).catch((err) => this.hooks.log(`Move failed: ${err.message}`));
     }
   }
   confirm() {
@@ -1119,7 +1145,7 @@ var Viewport = class {
     if (d.copy) return this.hooks.undo();
     for (const [id, t] of d.starts) {
       const o = this.objects.find((x) => x.id === id);
-      if (o?.entityId) void world.move(o.entityId, { x: t.position[0], y: t.position[1], z: t.position[2] }, { i: t.rotation[0], j: t.rotation[1], k: t.rotation[2], r: t.rotation[3] });
+      if (o?.entityId) void movePreview(o, t.position, t.rotation).catch(() => void 0);
     }
   }
   onKey(e) {

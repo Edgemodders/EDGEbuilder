@@ -40,6 +40,7 @@ import {
   type BakeProject,
 } from "./bake";
 import { Scene, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
+import { movePreview } from "./move";
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, upright, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
@@ -607,7 +608,7 @@ async function place(o: SceneObject, t: SceneTransform): Promise<void> {
   o.transform = t;
   if (!o.entityId) return;
   if (scaled) await respawn(o);
-  else await world.move(o.entityId, toPoint(t.position), toQuat(t.rotation));
+  else await movePreview(o, t.position, t.rotation);
 }
 
 /** A mesh component's scale is set when it is built, so a new scale (or file) means a new preview. */
@@ -678,7 +679,7 @@ async function travel(from: SceneState[], to: SceneState[], word: "Undo" | "Redo
   const ch = scene.restore(s);
   for (const o of ch.gone) await removePreview(o);
   for (const o of ch.respawn) await respawn(o);
-  for (const o of ch.move) await world.move(o.entityId!, toPoint(o.transform.position), toQuat(o.transform.rotation)).catch(() => undefined);
+  for (const o of ch.move) await movePreview(o, o.transform.position, o.transform.rotation).catch(() => undefined);
   const spawned = await spawnAll(ch.spawn);
   scene.save();
   const moved = ch.move.length + ch.respawn.length;
@@ -2399,8 +2400,7 @@ if (typeof world.onRespawn === "function") {
     console.log(`${o.id} spawned again after an archive swap (${after.hash})`);
     // REDnode spawns it again with the options it was first spawned with, so a preview moved since
     // comes back where it was dropped (B2c test, 2026-10-30): put it where the scene has it.
-    void world
-      .move(after.hash, toPoint(o.transform.position), toQuat(o.transform.rotation))
+    void movePreview(o, o.transform.position, o.transform.rotation)
       .catch((err) => console.log(`${o.id} not moved back after the swap: ${(err as Error).message}`))
       .then(() => (was?.selected ? select([...state.selected, o.id]) : publish()));
   });

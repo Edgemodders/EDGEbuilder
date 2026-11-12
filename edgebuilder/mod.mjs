@@ -3,7 +3,7 @@
 // src/mod.ts
 import * as fs8 from "node:fs";
 import * as path8 from "node:path";
-import { api, channel, game, kernel, pkg, service, ui, world } from "rednode";
+import { api as api2, channel, game as game2, kernel, pkg, service, ui, world as world2 } from "rednode";
 
 // src/bridge.ts
 import { spawn } from "node:child_process";
@@ -200,9 +200,9 @@ var AssetIndex = class {
   npcs = [];
   gamePaths;
   /** Loads the index for this game, if one was built. */
-  load(game2) {
-    this.game = game2;
-    this.file = path2.join(this.dir, `${game2}.json`);
+  load(game3) {
+    this.game = game3;
+    this.file = path2.join(this.dir, `${game3}.json`);
     try {
       const data = JSON.parse(fs2.readFileSync(this.file, "utf8"));
       if (data.format !== 1 || !Array.isArray(data.entries)) return false;
@@ -234,9 +234,9 @@ var AssetIndex = class {
     fs2.writeFileSync(this.file, JSON.stringify(data));
   }
   /** Reads the index from the game through the bridge. Pages of 5,000 files per folder prefix. */
-  async build(bridge2, game2, progress2) {
-    this.game = game2;
-    this.file = path2.join(this.dir, `${game2}.json`);
+  async build(bridge2, game3, progress2) {
+    this.game = game3;
+    this.file = path2.join(this.dir, `${game3}.json`);
     const entries = [];
     for (const prefix of IndexPrefixes) {
       let offset = 0;
@@ -363,22 +363,22 @@ var NpcList = class {
   entries = [];
   game = "";
   byRecord;
-  fileFor(game2) {
-    return path3.join(this.dir, "npcs", `${game2}.json`);
+  fileFor(game3) {
+    return path3.join(this.dir, "npcs", `${game3}.json`);
   }
   /** Loads the list for this game, if one was read. */
-  load(game2) {
+  load(game3) {
     try {
-      const data = JSON.parse(fs3.readFileSync(this.fileFor(game2), "utf8"));
+      const data = JSON.parse(fs3.readFileSync(this.fileFor(game3), "utf8"));
       if (data.format !== 1 || !Array.isArray(data.entries)) return false;
-      this.take(game2, data.entries);
+      this.take(game3, data.entries);
       return true;
     } catch {
       return false;
     }
   }
   /** Reads every `Character` record from the game's TweakDB, in pages. The first TweakDB call takes about 12 s. */
-  async build(bridge2, game2, progress2) {
+  async build(bridge2, game3, progress2) {
     const entries = [];
     let offset = 0;
     let total = 0;
@@ -394,10 +394,10 @@ var NpcList = class {
       if (!page.items.length) break;
     } while (offset < total);
     entries.sort((a, b) => a.path.localeCompare(b.path));
-    this.take(game2, entries);
-    fs3.mkdirSync(path3.dirname(this.fileFor(game2)), { recursive: true });
-    const data = { format: 1, game: game2, built: (/* @__PURE__ */ new Date()).toISOString(), entries };
-    fs3.writeFileSync(this.fileFor(game2), JSON.stringify(data));
+    this.take(game3, entries);
+    fs3.mkdirSync(path3.dirname(this.fileFor(game3)), { recursive: true });
+    const data = { format: 1, game: game3, built: (/* @__PURE__ */ new Date()).toISOString(), entries };
+    fs3.writeFileSync(this.fileFor(game3), JSON.stringify(data));
   }
   /** The row for a record, any case. */
   find(record) {
@@ -405,8 +405,8 @@ var NpcList = class {
     this.byRecord ??= new Map(this.entries.map((e) => [e.path.toLowerCase(), e]));
     return this.byRecord.get(record.toLowerCase());
   }
-  take(game2, entries) {
-    this.game = game2;
+  take(game3, entries) {
+    this.game = game3;
     this.entries = entries;
     this.byRecord = void 0;
   }
@@ -969,13 +969,13 @@ function scanShelf(root) {
 
 // src/bake.ts
 var Bakeable = /* @__PURE__ */ new Set(["mesh", "entity", "light"]);
-function bakeInput(name, game2, groups, objects) {
+function bakeInput(name, game3, groups, objects) {
   const kept = objects.filter((o) => Bakeable.has(o.kind));
   return {
     scene: {
       format: 1,
       name,
-      ...game2 ? { game: game2 } : {},
+      ...game3 ? { game: game3 } : {},
       groups,
       objects: kept.map(({ entityId: _entityId, ...o }) => o)
     },
@@ -1389,6 +1389,23 @@ function yawToQuaternion(yawDegrees) {
   return [0, 0, Math.sin(half), Math.cos(half)];
 }
 
+// src/move.ts
+import { api, game, world } from "rednode";
+async function movePreview(o, position, rotation) {
+  if (!o.entityId) return false;
+  const r = o.kind === "npc" ? upright(rotation) : rotation;
+  const moved = await world.move(o.entityId, { x: position[0], y: position[1], z: position[2] }, { i: r[0], j: r[1], k: r[2], r: r[3] });
+  if (o.kind !== "npc") return moved;
+  const [entity, facility] = await Promise.all([
+    world.entity(o.entityId),
+    api.GameInstance.GetTeleportationFacility(game.instance)
+  ]);
+  if (!entity || !facility) return false;
+  const yaw = 2 * Math.atan2(r[2], r[3]) * 180 / Math.PI;
+  await facility.Teleport(entity, { X: position[0], Y: position[1], Z: position[2], W: 1 }, { Roll: 0, Pitch: 0, Yaw: yaw });
+  return true;
+}
+
 // src/protocol.ts
 var AnyLook = "Any: the game picks";
 
@@ -1710,7 +1727,7 @@ async function lookAtPerson(record) {
 }
 async function currentLook(entityId) {
   try {
-    const entity = await world.entity(entityId);
+    const entity = await world2.entity(entityId);
     const name = entity ? await entity.GetCurrentAppearanceName() : "";
     return name && name !== "None" ? name : void 0;
   } catch {
@@ -1736,9 +1753,9 @@ function worldBlocker() {
 async function checkWorld() {
   const before = state.world;
   try {
-    const s = await game.state();
+    const s = await game2.state();
     if (!s.connected) state.world = "no-game";
-    else if (await world.available()) state.world = "ready";
+    else if (await world2.available()) state.world = "ready";
     else state.world = s.mainMenu ? "no-save" : "no-codeware";
   } catch {
     state.world = "unknown";
@@ -1756,7 +1773,7 @@ async function checkWorld() {
   publish();
 }
 async function inFrontOfPlayer() {
-  const player = await api.GetPlayer(game.instance);
+  const player = await api2.GetPlayer(game2.instance);
   if (!player) throw new Error("No player: load a save first");
   const p = await player.GetWorldPosition();
   const f = await player.GetWorldForward();
@@ -1792,12 +1809,12 @@ async function spawnPreview(o) {
   let id;
   if (o.kind === "mesh") {
     const [sx, sy, sz] = o.transform.scale;
-    ({ id } = await world.spawn({ mesh: o.resource, meshAppearance: o.appearance ?? "default", scale: { x: sx, y: sy, z: sz }, position, orientation, alwaysSpawned: true, tags: ["edgebuilder"] }));
+    ({ id } = await world2.spawn({ mesh: o.resource, meshAppearance: o.appearance ?? "default", scale: { x: sx, y: sy, z: sz }, position, orientation, alwaysSpawned: true, tags: ["edgebuilder"] }));
   } else if (o.kind === "entity") {
-    ({ id } = await world.spawn({ template: o.resource, position, orientation, appearance: o.appearance, alwaysSpawned: true, tags: ["edgebuilder"] }));
+    ({ id } = await world2.spawn({ template: o.resource, position, orientation, appearance: o.appearance, alwaysSpawned: true, tags: ["edgebuilder"] }));
   } else if (o.kind === "npc") {
     const from = o.record ? { record: o.record } : { template: o.resource };
-    ({ id } = await world.spawn({ ...from, position, orientation, appearance: o.appearance, npc: true, alwaysSpawned: true, tags: ["edgebuilder"] }));
+    ({ id } = await world2.spawn({ ...from, position, orientation, appearance: o.appearance, npc: true, alwaysSpawned: true, tags: ["edgebuilder"] }));
   } else {
     throw new Error(`Previews of ${o.kind} objects come in a later phase`);
   }
@@ -1806,7 +1823,7 @@ async function spawnPreview(o) {
 async function removePreview(o) {
   if (!o.entityId) return;
   try {
-    await world.remove(o.entityId);
+    await world2.remove(o.entityId);
   } catch (err) {
     console.log(`Remove ${o.id}: ${err.message}`);
   }
@@ -1815,9 +1832,9 @@ async function removePreview(o) {
 async function highlight(o, on) {
   if (!o?.entityId) return;
   try {
-    const entity = await world.entity(o.entityId);
+    const entity = await world2.entity(o.entityId);
     if (!entity) return;
-    const event = await api.$new("entRenderHighlightEvent", { seeThroughWalls: true, opacity: on ? 1 : 0, outlineIndex: on ? 1 : 0, fillIndex: 0 });
+    const event = await api2.$new("entRenderHighlightEvent", { seeThroughWalls: true, opacity: on ? 1 : 0, outlineIndex: on ? 1 : 0, fillIndex: 0 });
     await entity.QueueEvent(event);
   } catch (err) {
     console.log(`Highlight ${o.id} ${on ? "on" : "off"}: ${err.message}`);
@@ -1832,7 +1849,7 @@ async function place(o, t) {
   o.transform = t;
   if (!o.entityId) return;
   if (scaled) await respawn(o);
-  else await world.move(o.entityId, toPoint(t.position), toQuat(t.rotation));
+  else await movePreview(o, t.position, t.rotation);
 }
 async function respawn(o) {
   await removePreview(o);
@@ -1884,7 +1901,7 @@ async function travel(from, to, word) {
   const ch = scene.restore(s);
   for (const o of ch.gone) await removePreview(o);
   for (const o of ch.respawn) await respawn(o);
-  for (const o of ch.move) await world.move(o.entityId, toPoint(o.transform.position), toQuat(o.transform.rotation)).catch(() => void 0);
+  for (const o of ch.move) await movePreview(o, o.transform.position, o.transform.rotation).catch(() => void 0);
   const spawned = await spawnAll(ch.spawn);
   scene.save();
   const moved = ch.move.length + ch.respawn.length;
@@ -1901,7 +1918,7 @@ async function travel(from, to, word) {
 }
 var FloorGroups = ["Static", "Terrain", "PlayerBlocker"];
 async function raycast(start, end) {
-  const queries = await api.GameInstance.GetSpatialQueriesSystem(game.instance);
+  const queries = await api2.GameInstance.GetSpatialQueriesSystem(game2.instance);
   if (!queries) return { tried: ["no spatial queries"] };
   let hit;
   let best = Infinity;
@@ -1969,11 +1986,11 @@ function writeBuilderRecord(r) {
   fs8.writeFileSync(builderFile, JSON.stringify(r));
 }
 async function sceneTierBoard() {
-  const player = await api.GetPlayer(game.instance);
+  const player = await api2.GetPlayer(game2.instance);
   if (!player) throw new Error("no player");
-  const defs = await api.GetAllBlackboardDefs();
+  const defs = await api2.GetAllBlackboardDefs();
   const psm = await defs.$get("PlayerStateMachine");
-  const system = await api.GameInstance.GetBlackboardSystem(game.instance);
+  const system = await api2.GameInstance.GetBlackboardSystem(game2.instance);
   const board = await system.GetLocalInstanced(await player.GetEntityID(), psm);
   if (!board) throw new Error("V's player-state blackboard is not there");
   return { board, id: await psm.$get("SceneTier") };
@@ -2020,7 +2037,7 @@ function stopTierWatch() {
 }
 async function playerCameraBack() {
   try {
-    const player = await api.GetPlayer(game.instance);
+    const player = await api2.GetPlayer(game2.instance);
     const fpp = player ? await player.GetFPPCameraComponent() : null;
     if (fpp) await fpp.Activate(0, false);
   } catch (err) {
@@ -2086,18 +2103,18 @@ function progress(done, total) {
   if (state.busy) showBusy();
 }
 async function playerPose() {
-  const player = await api.GetPlayer(game.instance);
+  const player = await api2.GetPlayer(game2.instance);
   const fpp = player ? await player.GetFPPCameraComponent() : null;
   if (!fpp) throw new Error("V's camera is not available");
   const b = basisFromMatrix(await fpp.GetLocalToWorld());
-  const camSys = await api.GameInstance.GetCameraSystem(game.instance);
+  const camSys = await api2.GameInstance.GetCameraSystem(game2.instance);
   const fov = camSys ? await camSys.GetActiveCameraFOV() : 0;
   return { position: b.pos, rotation: qLook(lookOf(b.fwd)), fov };
 }
 async function cameraOn(pose) {
   if (editorCam) return;
-  const component = await api.$new("gameCameraComponent", { name: CameraName });
-  const { id, entity } = await world.spawn({ template: EmptyEntity, position: toPoint(pose.position), orientation: toQuat(pose.rotation), components: [component], alwaysSpawned: true, tags: ["edgebuilder", CameraName] });
+  const component = await api2.$new("gameCameraComponent", { name: CameraName });
+  const { id, entity } = await world2.spawn({ template: EmptyEntity, position: toPoint(pose.position), orientation: toQuat(pose.rotation), components: [component], alwaysSpawned: true, tags: ["edgebuilder", CameraName] });
   writeBuilderRecord({ ...readBuilderRecord(), entityId: id.hash });
   const attached = entity ? await entity.FindComponentByName(CameraName) : null;
   const cam = attached ?? component;
@@ -2116,7 +2133,7 @@ async function cameraOff() {
   }
   if (camId) {
     try {
-      await world.remove(camId);
+      await world2.remove(camId);
     } catch {
     }
   }
@@ -2376,7 +2393,7 @@ async function previewsBack() {
   if (state.world !== "ready") return;
   const away = scene.objects.filter((o) => !o.entityId && o.kind !== "light");
   if (!away.length) return;
-  if (!(await game.state()).world) {
+  if (!(await game2.state()).world) {
     backWhenIn = true;
     return;
   }
@@ -2384,7 +2401,7 @@ async function previewsBack() {
   if (state.bake.inGame) return say(BakedOff(scene.name, state.bake.inGame), "info");
   const kept = new Set(scene.objects.map((o) => o.entityId));
   kept.add(editorCam?.id);
-  for (const s of world.spawned?.() ?? []) if (!s.scene && s.attached && !kept.has(s.id.hash)) await world.remove(s.id).catch(() => false);
+  for (const s of world2.spawned?.() ?? []) if (!s.scene && s.attached && !kept.has(s.id.hash)) await world2.remove(s.id).catch(() => false);
   const r = await spawnAll(away, "Back");
   say(`${scene.name}: ${r.shown} of ${away.length} object${away.length === 1 ? "" : "s"} back in the world${r.failed ? `; ${r.failed} the game did not place (the log says why)` : ""}.`, r.failed ? "warn" : "ok");
 }
@@ -2578,8 +2595,8 @@ function saveNow() {
   say(`Saved ${scene.name} in ${whereText(scene.file)}. (EDGEbuilder saves after every change.)`, "ok");
 }
 async function loadOn(file) {
-  if (typeof world.load !== "function") throw new Error("Showing other scenes needs REDnode 0.40.1 or later");
-  const r = await world.load(readSceneFile(file), { name: file, wait: false, alwaysSpawned: true });
+  if (typeof world2.load !== "function") throw new Error("Showing other scenes needs REDnode 0.40.1 or later");
+  const r = await world2.load(readSceneFile(file), { name: file, wait: false, alwaysSpawned: true });
   for (const s of r.skipped) console.log(`${path8.basename(file)}: ${s.object} not shown: ${s.why}`);
   onScenes.set(file, r.spawned.length);
   return r.spawned.length;
@@ -2602,7 +2619,7 @@ async function sceneOff(file) {
   onScenes.delete(known);
   writeSession();
   console.log(`No longer showing ${path8.basename(known)}`);
-  if (typeof world.unload === "function") await world.unload(known).catch((err) => console.log(`Unload ${known}: ${err.message}`));
+  if (typeof world2.unload === "function") await world2.unload(known).catch((err) => console.log(`Unload ${known}: ${err.message}`));
   publish();
 }
 async function reloadOn() {
@@ -3252,7 +3269,7 @@ function deleteLibraryBake(dir) {
   }
 }
 var linked;
-game.onState((s) => {
+game2.onState((s) => {
   if (s.world && backWhenIn) {
     backWhenIn = false;
     previewsBackSoon();
@@ -3265,7 +3282,7 @@ game.onState((s) => {
   }
   void checkWorld();
 });
-game.on("PlayerPuppet.OnGameAttached", () => {
+game2.on("PlayerPuppet.OnGameAttached", () => {
   stopTierWatch();
   builderOn = false;
   if (editorCam || readBuilderRecord()) {
@@ -3286,7 +3303,7 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   });
 });
 var gone = /* @__PURE__ */ new Map();
-world.on("Entity/Detach", (e) => {
+world2.on("Entity/Detach", (e) => {
   const o = scene.objects.find((x) => x.entityId === e.entityId);
   if (o) {
     if (e.entityId) gone.set(e.entityId, { id: o.id, selected: state.selected.includes(o.id) });
@@ -3295,15 +3312,15 @@ world.on("Entity/Detach", (e) => {
     publish();
   }
 });
-if (typeof world.onRespawn === "function") {
-  world.onRespawn((before, after) => {
+if (typeof world2.onRespawn === "function") {
+  world2.onRespawn((before, after) => {
     const was = gone.get(before.hash);
     gone.delete(before.hash);
     const o = scene.get(was?.id) ?? scene.objects.find((x) => x.entityId === before.hash);
     if (!o) return;
     o.entityId = after.hash;
     console.log(`${o.id} spawned again after an archive swap (${after.hash})`);
-    void world.move(after.hash, toPoint(o.transform.position), toQuat(o.transform.rotation)).catch((err) => console.log(`${o.id} not moved back after the swap: ${err.message}`)).then(() => was?.selected ? select([...state.selected, o.id]) : publish());
+    void movePreview(o, o.transform.position, o.transform.rotation).catch((err) => console.log(`${o.id} not moved back after the swap: ${err.message}`)).then(() => was?.selected ? select([...state.selected, o.id]) : publish());
   });
 }
 if (typeof ui?.onSolo === "function") {
@@ -3312,7 +3329,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.10.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.10.1"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs8.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

@@ -728,3 +728,5 @@ Built on 2026-11-11 as 0.10.0, from the plan agreed with the owner the same day 
 | 12 | Turn EDGEbuilder off in REDnode's Mod Manager. Ask Claude to load "People test" with REDnode's `world_load` (it asks first), then to unload it | The people stand again, friendly, without EDGEbuilder; unload removes them |
 | 13 | Turn EDGEbuilder on, open another scene, and on the Library tab turn **People test** on beside it | Its people show beside the open scene |
 | 14 | Ask Claude for People test's objects (EDGEbuilder's `refs` tool) | The people are listed with kind `npc` and their record |
+
+**Results, 2026-11-12 (on the laptop):** step 5 on 0.10.0: dragging a person moved only the gizmo (N1: no). REDnode's `world.move` sets the entity's transform, which the game does not apply to an NPC. 0.10.1 moves people through the game's teleportation facility (`src/move.ts`, `movePreview`, used by drags, undo, Esc and the move back after an archive swap), as REDnode teleports V, and still calls `world.move` so REDnode keeps the new place. Retest from step 5.
