@@ -756,3 +756,21 @@ Step 11 on 0.10.8: Refresh found the new project and the bake completed. The che
 | N6 | Yes: the bake has only the crate, and the NPC line is a note (0.10.9) |
 
 Also found and fixed on the way: the open scene's objects come back after a slow game start (0.10.3, 0.10.5), Refresh asks REDcode for its project (0.10.8), and pins on the Picked and Selected panels (0.10.4, 0.10.6, 0.10.7, asked during the test). Scene format 2 is pinned.
+
+### B2d Import a model
+
+Agreed on 2026-11-12 ([design, Import a model](design.md#import-a-model-b2d)). The questions: I1 how long an Import takes and which step is slowest; I2 whether the swap of a new archive is safe in a loaded save every time; I3 whether a replaced prop's placed copies all refresh; I4 the size `mod.mjs` grows by; I5 whether textures and their normal maps' green look right in the game; I6 whether Watch keeps up with a modder saving often.
+
+**B2d-0, the probe, outside the game, 2026-11-13** (`scripts/import-probe.mjs`; edgefab-core 0.1.0 built from EDGEfab's main, not yet on npm, EDGEfab #5; REDbridge 0.12.1; the owner's desktop). The model: the vending machine on EDGEfab's Desk, Tripo's `original.glb`, 24.4 MB, 70 pieces grouped into 6 parts, no real size (set to 2 m), 4096 px textures on its three big parts.
+
+| Step | Time |
+|---|---|
+| Start REDbridge (in the game, REDnode's is already running) | 3.1 s |
+| Prepare (`makeModel`) | 12.6 s |
+| Set the size | 0.1 s |
+| Add to project: the mesh over the template | 2.2 s |
+| Add to project: the materials, 24 textures to `.xbm` | 106 s (about 10 s for each 4096 px colour or normal map, 5 s for the others; 1 to 2 s for each small part) |
+| Add to project again, nothing changed | 108 s: nothing is reused |
+| Pack (`project.pack`, a 36.8 MB archive of 32 files) | 0.04 s |
+
+**I1, outside the game:** about two minutes for a Tripo model with 4096 px textures, 85 % of it making textures. **I4:** edgefab-core with EDGEmat's core adds 1.5 MB to `mod.mjs` (136 KB today), bundled the way build.mjs bundles the mod. **For Watch (I6):** an unchanged model takes as long again, so Watch needs textures whose source has not changed to be kept, which is EDGEfab's (or EDGEmat's) to offer. **Not done yet:** the in-game half, the swap of `b2d_probe.archive` with REDnode's `archives_reload` and a spawn of `b2dprobe\props\b2d_probe\b2d_probe.ent` (I2), which needs the game and REDnode's tools.
