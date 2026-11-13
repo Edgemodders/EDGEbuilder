@@ -241,6 +241,36 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   console.log("people: ok");
 }
 
+// B2d: the models Import offers, and a path typed in.
+{
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-models-"));
+  fs.mkdirSync(path.join(root, "Props", "Street"), { recursive: true });
+  fs.writeFileSync(path.join(root, "Props", "Street", "Bin Big.glb"), "glTF");
+  fs.writeFileSync(path.join(root, "notes.txt"), "");
+  const prop = path.join(root, "Props", "drum.prop.asset");
+  fs.mkdirSync(path.join(prop, "source", "raw", "drum"), { recursive: true });
+  fs.writeFileSync(path.join(prop, "asset.json"), JSON.stringify({ id: "x", kind: "prop", name: "Rusty drum" }));
+  fs.writeFileSync(path.join(prop, "source", "raw", "drum", "drum.glb"), "glTF");
+  fs.mkdirSync(path.join(root, "Alley.bake"));
+  fs.writeFileSync(path.join(root, "Alley.bake", "inside.glb"), "glTF");
+  const models = core.scanModels("library", root);
+  assert.deepEqual(models.map((m) => [m.kind, m.folder, m.name]), [["prop", "Props", "Rusty drum"], ["glb", "Props/Street", "Bin Big"]], "a prop is one item, never walked into; bakes are skipped");
+  assert.equal(core.scanModels("desk", undefined).length, 0);
+  assert.equal(core.scanModels("desk", path.join(root, "missing")).length, 0);
+  // A prop item is not a scene folder.
+  assert.ok(!scanShelf({ place: "library", dir: root, label: "Library" }).folders.some((f) => f.endsWith(".prop.asset")));
+  assert.equal(core.propSlug("Bin Big.glb"), "bin_big");
+  assert.equal(core.propSlug("drum.prop.asset"), "drum");
+  assert.ok(core.checkModelPath(`"${path.join(root, "Props", "Street", "Bin Big.glb")}"`).ok, "quotes from Copy as path are taken off");
+  assert.ok(core.checkModelPath(prop).ok);
+  assert.match(core.checkModelPath(path.join(root, "notes.txt")).why, /\.glb/);
+  assert.match(core.checkModelPath(path.join(root, "none.glb")).why, /no file/);
+  assert.ok(core.deskDir({ LOCALAPPDATA: "C:\\L" }).endsWith(path.join("EDGEfab", "desk")));
+  assert.ok(core.isTextureLine("    b2d_probe_front_d01.xbm") && !core.isTextureLine("b2d_probe_front:"));
+  fs.rmSync(root, { recursive: true, force: true });
+  console.log("models: ok");
+}
+
 // Scene store: add, select ids, remove, save and load round trip, previews forgotten.
 {
   const scene = new Scene(path.join(tmp, "scenes", "working.scene.json"));

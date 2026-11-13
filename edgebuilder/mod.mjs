@@ -1,9 +1,9 @@
 // Built from src/ by build.mjs; edit the TypeScript, not this file.
 
 // src/mod.ts
-import * as fs8 from "node:fs";
-import * as path8 from "node:path";
-import { api, channel, game, kernel, pkg, service, ui, world as world2 } from "rednode";
+import * as fs9 from "node:fs";
+import * as path10 from "node:path";
+import { api, archives, channel, game, kernel, pkg, service, ui, world as world2 } from "rednode";
 
 // src/bridge.ts
 import { spawn } from "node:child_process";
@@ -33,6 +33,9 @@ var KernelBridge = class {
   }
   tweakRecords(query) {
     return this.handle.call("tweakdb.records", { ...query });
+  }
+  call(method, params) {
+    return this.handle.call(method, params);
   }
   stop() {
   }
@@ -566,13 +569,13 @@ var ModSources = class {
       const known = cache[key];
       if (known && !known.error && known.hasCollision !== void 0) return known;
     } else {
-      let mtime = 0;
+      let mtime2 = 0;
       try {
-        mtime = fs4.statSync(from.file).mtimeMs;
+        mtime2 = fs4.statSync(from.file).mtimeMs;
       } catch {
         return { appearances: [], error: `${entry.path} is no longer in the project` };
       }
-      key = `${from.file}|${mtime}`;
+      key = `${from.file}|${mtime2}`;
       cache = this.projectInfo;
       const known = cache.get(key);
       if (known && !known.error && known.hasCollision !== void 0) return known;
@@ -949,7 +952,7 @@ function scanShelf(root) {
       const full = path5.join(dir, d.name);
       const sub2 = rel ? `${rel}/${d.name}` : d.name;
       if (d.isDirectory()) {
-        if (d.name.startsWith(".") || d.name.toLowerCase().endsWith(".bake") || d.name === "node_modules" || depth >= MaxDepth) continue;
+        if (d.name.startsWith(".") || d.name.toLowerCase().endsWith(".bake") || d.name.toLowerCase().endsWith(".asset") || d.name === "node_modules" || depth >= MaxDepth) continue;
         shelf.folders.push(sub2);
         walk(full, sub2, depth + 1);
       } else if (d.isFile() && d.name.toLowerCase().endsWith(SceneEnding)) {
@@ -1402,6 +1405,92 @@ function sameTransform(a, b) {
   return near(a.position, b.position) && near(a.rotation, b.rotation) && near(a.scale, b.scale);
 }
 
+// src/models.ts
+import * as fs8 from "node:fs";
+import * as path8 from "node:path";
+var MaxModels = 2e3;
+var MaxDepth2 = 8;
+var PropEnding = ".prop.asset";
+function deskDir(env = process.env) {
+  return path8.join(env.LOCALAPPDATA ?? path8.join(env.USERPROFILE ?? "", "AppData", "Local"), "EDGEfab", "desk");
+}
+function propName(folder) {
+  try {
+    const a = JSON.parse(fs8.readFileSync(path8.join(folder, "asset.json"), "utf8"));
+    if (typeof a.name === "string" && a.name) return a.name;
+  } catch {
+  }
+  return path8.basename(folder).slice(0, -PropEnding.length);
+}
+function scanModels(place2, root) {
+  const out = [];
+  if (!root) return out;
+  const walk = (dir, rel, depth) => {
+    let names;
+    try {
+      names = fs8.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    names.sort((a, b) => a.name.localeCompare(b.name, void 0, { sensitivity: "base" }));
+    for (const d of names) {
+      if (out.length >= MaxModels) return;
+      const full = path8.join(dir, d.name);
+      const lower = d.name.toLowerCase();
+      if (d.isDirectory()) {
+        if (lower.endsWith(PropEnding)) {
+          out.push({ place: place2, file: full, folder: rel, name: propName(full), kind: "prop", changed: mtime(full) });
+          continue;
+        }
+        if (d.name.startsWith(".") || lower.endsWith(".bake") || lower.endsWith(".asset") || d.name === "node_modules" || depth >= MaxDepth2) continue;
+        walk(full, rel ? `${rel}/${d.name}` : d.name, depth + 1);
+      } else if (d.isFile() && lower.endsWith(".glb")) {
+        let st;
+        try {
+          st = fs8.statSync(full);
+        } catch {
+          continue;
+        }
+        out.push({ place: place2, file: full, folder: rel, name: d.name.slice(0, -4), kind: "glb", bytes: st.size, changed: st.mtimeMs });
+      }
+    }
+  };
+  walk(root, "", 0);
+  return out;
+}
+function mtime(p) {
+  try {
+    return fs8.statSync(p).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+function checkModelPath(p) {
+  const file = p.trim().replace(/^"(.*)"$/, "$1");
+  if (!file) return { ok: false, why: "Type the full path of a .glb file." };
+  const lower = file.toLowerCase();
+  if (lower.endsWith(PropEnding.toLowerCase()) && fs8.existsSync(path8.join(file, "asset.json"))) return { ok: true, kind: "prop", file };
+  if (!lower.endsWith(".glb")) return { ok: false, why: "Import takes a .glb file (a textured glTF in one file), or a prop from EDGEfab's Desk." };
+  if (!fs8.existsSync(file)) return { ok: false, why: `There is no file at ${file}.` };
+  return { ok: true, kind: "glb", file };
+}
+
+// src/fab.ts
+import { createRequire } from "node:module";
+import * as path9 from "node:path";
+var loaded;
+function loadFab(packageDir) {
+  if (loaded) return loaded;
+  const require2 = createRequire(path9.join(packageDir, "mod.mjs"));
+  const core = require2("./fab.cjs");
+  if (typeof core.makeModel !== "function" || typeof core.addToProject !== "function") throw new Error("fab.cjs is not EDGEfab's core.");
+  loaded = core;
+  return loaded;
+}
+function isTextureLine(line) {
+  return /\.xbm\s*$/i.test(line.trim());
+}
+
 // src/protocol.ts
 var AnyLook = "Any: the game picks";
 
@@ -1409,34 +1498,34 @@ var AnyLook = "Any: the game picks";
 var EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
 var SpawnDistance = 3;
 var ResultLimit = 120;
-var settingsFile = path8.join(pkg.dataDir, "settings.json");
+var settingsFile = path10.join(pkg.dataDir, "settings.json");
 var settings = {};
 try {
-  settings = JSON.parse(fs8.readFileSync(settingsFile, "utf8"));
+  settings = JSON.parse(fs9.readFileSync(settingsFile, "utf8"));
 } catch {
 }
-var dataScenes = path8.join(pkg.dataDir, "scenes");
-var WorkingScene = path8.join(dataScenes, "working.scene.json");
-var sessionFile = path8.join(pkg.dataDir, "session.json");
+var dataScenes = path10.join(pkg.dataDir, "scenes");
+var WorkingScene = path10.join(dataScenes, "working.scene.json");
+var sessionFile = path10.join(pkg.dataDir, "session.json");
 var session = {};
 try {
-  session = JSON.parse(fs8.readFileSync(sessionFile, "utf8"));
+  session = JSON.parse(fs9.readFileSync(sessionFile, "utf8"));
 } catch {
 }
-var lastGone = session.open && !fs8.existsSync(session.open) && path8.resolve(session.open).toLowerCase() !== WorkingScene.toLowerCase() ? session.open : void 0;
+var lastGone = session.open && !fs9.existsSync(session.open) && path10.resolve(session.open).toLowerCase() !== WorkingScene.toLowerCase() ? session.open : void 0;
 var scene = new Scene(session.open === "" ? "" : session.open && !lastGone ? session.open : WorkingScene);
 if (scene.file) scene.load();
 else scene.name = "";
-var onScenes = new Map((session.on ?? []).filter((f) => fs8.existsSync(f) && f !== scene.file).map((f) => [f, 0]));
+var onScenes = new Map((session.on ?? []).filter((f) => fs9.existsSync(f) && f !== scene.file).map((f) => [f, 0]));
 var libraryRoot = readLibraryRoot();
 var suggestedRoot = suggestedLibraryRoot();
 var past = [];
 var future = [];
 var HistoryLength = 100;
 var duplicates = 0;
-var index = new AssetIndex(path8.join(pkg.dataDir, "index"));
-var npcs = new NpcList(path8.join(pkg.dataDir, "index"));
-var sources = new ModSources(path8.join(pkg.dataDir, "sources", "mods.json"));
+var index = new AssetIndex(path10.join(pkg.dataDir, "index"));
+var npcs = new NpcList(path10.join(pkg.dataDir, "index"));
+var sources = new ModSources(path10.join(pkg.dataDir, "sources", "mods.json"));
 index.extra = sources.entries();
 var bridge;
 var blockedRetry;
@@ -1453,7 +1542,7 @@ var state = {
   query: { text: "", kind: "all", from: "all" },
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
   scene: { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: [] },
-  library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [], bakes: [] },
+  library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [], bakes: [], models: [], modelPlaces: [] },
   bake: { project: null, checks: [], stale: false, list: [] },
   selected: [],
   history: { undo: 0, redo: 0 },
@@ -1480,7 +1569,7 @@ function gameDir() {
   if (isGameFolder(settings.gameDir)) return settings.gameDir;
   let dir = pkg.dir;
   for (let i = 0; i < 6; i++) {
-    dir = path8.dirname(dir);
+    dir = path10.dirname(dir);
     if (isGameFolder(dir)) return dir;
   }
   return void 0;
@@ -1655,7 +1744,7 @@ function watchMods() {
   const changed = debounced(() => void refreshMods());
   for (const folder of modFolders(dir)) {
     try {
-      modWatchers.push(fs8.watch(folder, { recursive: true }, changed));
+      modWatchers.push(fs9.watch(folder, { recursive: true }, changed));
     } catch {
     }
   }
@@ -1674,7 +1763,7 @@ function setProject(next) {
     projectWatch = void 0;
     if (next) {
       try {
-        projectWatch = fs8.watch(next.archive, { recursive: true }, projectChanged);
+        projectWatch = fs9.watch(next.archive, { recursive: true }, projectChanged);
       } catch {
       }
       console.log(`REDcode project: ${next.name} (${next.archive})`);
@@ -2020,21 +2109,21 @@ async function floorUnder(o) {
   console.log(`Drop to floor ${o.id} from z ${startZ.toFixed(2)}: ${tried.join("; ")}`);
   return floor === void 0 ? void 0 : { ...o.transform, position: [x, y, floor - lowest] };
 }
-var builderFile = path8.join(pkg.dataDir, "builder-mode.json");
+var builderFile = path10.join(pkg.dataDir, "builder-mode.json");
 var CameraName = "edgebuilder_camera";
 var HudHiddenTier = 4;
 var editorCam;
 var tierWatch;
 function readBuilderRecord() {
   try {
-    return JSON.parse(fs8.readFileSync(builderFile, "utf8"));
+    return JSON.parse(fs9.readFileSync(builderFile, "utf8"));
   } catch {
     return void 0;
   }
 }
 function writeBuilderRecord(r) {
-  fs8.mkdirSync(pkg.dataDir, { recursive: true });
-  fs8.writeFileSync(builderFile, JSON.stringify(r));
+  fs9.mkdirSync(pkg.dataDir, { recursive: true });
+  fs9.writeFileSync(builderFile, JSON.stringify(r));
 }
 async function sceneTierBoard() {
   const player = await api.GetPlayer(game.instance);
@@ -2265,7 +2354,7 @@ async function builderStop() {
   await setSolo(false);
   state.camera = void 0;
   try {
-    fs8.rmSync(builderFile, { force: true });
+    fs9.rmSync(builderFile, { force: true });
   } catch {
   }
   if (wasOn) console.log("Builder mode off");
@@ -2313,7 +2402,7 @@ async function drop(assetPath, appearance, at) {
     await select([o.id]);
     const from = sourceOf(assetPath)?.source;
     const note = from?.kind === "project" ? await inGameArchives(assetPath) ? ` From the REDcode project ${from.name}, at a game file's path: the game shows its own version until the project is packed and loaded (REDcode's Pack and Play).` : ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).` : from?.kind === "mod" ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}` : "";
-    const what = person ? `${person.name ?? person.path}${o.appearance ? ` (${o.appearance})` : ""}` : path8.basename(assetPath);
+    const what = person ? `${person.name ?? person.path}${o.appearance ? ` (${o.appearance})` : ""}` : path10.basename(assetPath);
     say(`Dropped ${what} in ${Date.now() - started} ms.${note}`, "ok");
   } catch (err) {
     if (added) {
@@ -2491,7 +2580,7 @@ function peek(file) {
     state.library.peek = { file, name: d.name, objects: d.objects, groups: d.groups ?? [] };
   } catch (err) {
     delete state.library.peek;
-    say(`${path8.basename(file)} cannot be read: ${err.message}.`, "error");
+    say(`${path10.basename(file)} cannot be read: ${err.message}.`, "error");
   }
   publish();
 }
@@ -2502,10 +2591,10 @@ async function removeFromScene(file, id) {
     other.load();
     if (!other.remove(id)) return peek(file);
   } catch (err) {
-    return say(`${path8.basename(file)}: ${err.message}.`, "error");
+    return say(`${path10.basename(file)}: ${err.message}.`, "error");
   }
   const shown = [...onScenes.keys()].find((f) => sameFile(f, file));
-  if (shown && state.world === "ready") await loadOn(shown).catch((err) => console.log(`${path8.basename(shown)} not shown: ${err.message}`));
+  if (shown && state.world === "ready") await loadOn(shown).catch((err) => console.log(`${path10.basename(shown)} not shown: ${err.message}`));
   scanLibrary();
   peek(file);
   say(`Removed ${id} from ${other.name}. That scene is not open, so Undo cannot bring it back.`, "ok");
@@ -2521,7 +2610,7 @@ async function clear() {
 function placeRoots() {
   const out = [];
   if (libraryRoot) out.push({ place: "library", dir: libraryRoot, label: "Library" });
-  if (project) out.push({ place: "project", dir: path8.join(path8.dirname(project.archive), "scenes"), label: `Project: ${project.name}` });
+  if (project) out.push({ place: "project", dir: path10.join(path10.dirname(project.archive), "scenes"), label: `Project: ${project.name}` });
   out.push({ place: "data", dir: dataScenes, label: "This PC" });
   return out;
 }
@@ -2532,6 +2621,7 @@ function rootOf(place2) {
 }
 function scanLibrary() {
   state.library.shelves = placeRoots().map(scanShelf);
+  scanModelPlaces();
   libraryBakeDirs = scanBakes(libraryRoot).map(({ dir, folder }) => ({ dir, folder }));
   lookAtLibraryBakes();
 }
@@ -2544,13 +2634,13 @@ function whereText(file) {
 }
 function writeSession() {
   try {
-    fs8.mkdirSync(pkg.dataDir, { recursive: true });
-    fs8.writeFileSync(sessionFile, JSON.stringify({ open: scene.file, on: [...onScenes.keys()] }, null, 2));
+    fs9.mkdirSync(pkg.dataDir, { recursive: true });
+    fs9.writeFileSync(sessionFile, JSON.stringify({ open: scene.file, on: [...onScenes.keys()] }, null, 2));
   } catch (err) {
     console.log(`session.json not written: ${err.message}`);
   }
 }
-var sameFile = (a, b) => path8.resolve(a).toLowerCase() === path8.resolve(b).toLowerCase();
+var sameFile = (a, b) => path10.resolve(a).toLowerCase() === path10.resolve(b).toLowerCase();
 async function switchTo(data, file) {
   for (const o of scene.objects) await removePreview(o);
   state.selected = [];
@@ -2576,7 +2666,7 @@ async function openScene(file) {
   try {
     data = readSceneFile(file);
   } catch (err) {
-    return say(`${path8.basename(file)} cannot be opened: ${err.message}.`, "error");
+    return say(`${path10.basename(file)} cannot be opened: ${err.message}.`, "error");
   }
   const wasOn = [...onScenes.keys()].find((f) => sameFile(f, file));
   if (wasOn) await sceneOff(wasOn);
@@ -2595,8 +2685,8 @@ function newFile(name, place2, folder) {
   name = name.trim();
   if (!name) throw new Error("Give the scene a name.");
   const dir = folderIn(rootOf(place2).dir, folder);
-  const file = path8.join(dir, fileNameOf(name));
-  if (fs8.existsSync(file)) throw new Error(`${whereText(file)} already has a scene called ${path8.basename(file)}: open it, or pick another name.`);
+  const file = path10.join(dir, fileNameOf(name));
+  if (fs9.existsSync(file)) throw new Error(`${whereText(file)} already has a scene called ${path10.basename(file)}: open it, or pick another name.`);
   return { name, file };
 }
 function attempt(make) {
@@ -2633,22 +2723,22 @@ function renameScene(name) {
   name = name.trim();
   if (!name || name === scene.name) return publish();
   const was = scene.file;
-  const file = path8.join(path8.dirname(was), fileNameOf(name));
+  const file = path10.join(path10.dirname(was), fileNameOf(name));
   const sameName = sameFile(file, was);
-  if (!sameName && fs8.existsSync(file)) return say(`${whereText(file)} already has a scene called ${path8.basename(file)}. Pick another name.`, "warn");
+  if (!sameName && fs9.existsSync(file)) return say(`${whereText(file)} already has a scene called ${path10.basename(file)}. Pick another name.`, "warn");
   scene.name = name;
   scene.file = file;
   scene.save();
   if (!sameName) {
     try {
-      fs8.rmSync(was, { force: true });
+      fs9.rmSync(was, { force: true });
     } catch (err) {
       console.log(`The old file ${was} was not removed: ${err.message}`);
     }
   }
   writeSession();
   scanLibrary();
-  say(`Renamed the scene ${name}${sameName ? "" : ` (${path8.basename(file)})`}.`, "ok");
+  say(`Renamed the scene ${name}${sameName ? "" : ` (${path10.basename(file)})`}.`, "ok");
 }
 function saveNow() {
   scene.save();
@@ -2658,7 +2748,7 @@ function saveNow() {
 async function loadOn(file) {
   if (typeof world2.load !== "function") throw new Error("Showing other scenes needs REDnode 0.40.1 or later");
   const r = await world2.load(readSceneFile(file), { name: file, wait: false, alwaysSpawned: true });
-  for (const s of r.skipped) console.log(`${path8.basename(file)}: ${s.object} not shown: ${s.why}`);
+  for (const s of r.skipped) console.log(`${path10.basename(file)}: ${s.object} not shown: ${s.why}`);
   onScenes.set(file, r.spawned.length);
   return r.spawned.length;
 }
@@ -2667,19 +2757,19 @@ async function sceneOn(file) {
   try {
     readSceneFile(file);
   } catch (err) {
-    return say(`${path8.basename(file)} cannot be shown: ${err.message}.`, "error");
+    return say(`${path10.basename(file)} cannot be shown: ${err.message}.`, "error");
   }
   onScenes.set(file, 0);
   writeSession();
-  if (state.world !== "ready") return say(`${path8.basename(file)} is on; it shows once a save is loaded.`, "info");
+  if (state.world !== "ready") return say(`${path10.basename(file)} is on; it shows once a save is loaded.`, "info");
   const n = await loadOn(file);
-  say(`Showing ${path8.basename(file)}: ${n} object${n === 1 ? "" : "s"}. They cannot be selected: open the scene to change it.`, "ok");
+  say(`Showing ${path10.basename(file)}: ${n} object${n === 1 ? "" : "s"}. They cannot be selected: open the scene to change it.`, "ok");
 }
 async function sceneOff(file) {
   const known = [...onScenes.keys()].find((f) => sameFile(f, file)) ?? file;
   onScenes.delete(known);
   writeSession();
-  console.log(`No longer showing ${path8.basename(known)}`);
+  console.log(`No longer showing ${path10.basename(known)}`);
   if (typeof world2.unload === "function") await world2.unload(known).catch((err) => console.log(`Unload ${known}: ${err.message}`));
   publish();
 }
@@ -2687,7 +2777,7 @@ async function reloadOn() {
   if (!onScenes.size || state.world !== "ready") return;
   let n = 0;
   for (const file of [...onScenes.keys()]) {
-    if (!fs8.existsSync(file)) {
+    if (!fs9.existsSync(file)) {
       onScenes.delete(file);
       continue;
     }
@@ -2695,7 +2785,7 @@ async function reloadOn() {
       if (inGameNow.has(slugOf(readSceneFile(file).name))) continue;
       n += await loadOn(file);
     } catch (err) {
-      console.log(`${path8.basename(file)} not shown: ${err.message}`);
+      console.log(`${path10.basename(file)} not shown: ${err.message}`);
     }
   }
   writeSession();
@@ -2704,11 +2794,11 @@ async function reloadOn() {
 }
 function setLibraryRoot(root) {
   root = root.trim().replace(/^"(.*)"$/, "$1");
-  if (!root || !path8.isAbsolute(root)) return say(`Give the Library a full folder path, such as ${suggestedRoot}.`, "warn");
+  if (!root || !path10.isAbsolute(root)) return say(`Give the Library a full folder path, such as ${suggestedRoot}.`, "warn");
   const inside = (dir) => {
     if (!dir) return false;
-    const rel = path8.relative(path8.resolve(dir), path8.resolve(root));
-    return !rel.startsWith("..") && !path8.isAbsolute(rel);
+    const rel = path10.relative(path10.resolve(dir), path10.resolve(root));
+    return !rel.startsWith("..") && !path10.isAbsolute(rel);
   };
   if (inside(gameDir()) || inside(pkg.dir) || inside(pkg.dataDir)) return say("The Library cannot be inside the game's folder or EDGEbuilder's own folders: deploys and reloads would touch it. Pick another folder.", "warn");
   try {
@@ -2716,18 +2806,18 @@ function setLibraryRoot(root) {
   } catch (err) {
     return say(`The Library folder could not be made: ${err.message}`, "error");
   }
-  libraryRoot = path8.resolve(root);
+  libraryRoot = path10.resolve(root);
   scanLibrary();
   say(`The Library is ${libraryRoot}. Every EDGE tool uses this folder.`, "ok");
 }
 function newFolder(folder, name) {
   if (!libraryRoot) return say("Set the Library folder in Settings first.", "warn");
   const root = libraryRoot;
-  const dir = attempt(() => path8.join(folderIn(root, folder), cleanFolderName(name)));
+  const dir = attempt(() => path10.join(folderIn(root, folder), cleanFolderName(name)));
   if (!dir) return;
-  fs8.mkdirSync(dir, { recursive: true });
+  fs9.mkdirSync(dir, { recursive: true });
   scanLibrary();
-  say(`Made the folder ${whereText(path8.join(dir, "x"))}.`, "ok");
+  say(`Made the folder ${whereText(path10.join(dir, "x"))}.`, "ok");
 }
 function listScenes() {
   scanLibrary();
@@ -2752,7 +2842,7 @@ function sceneRefs(which) {
   if (!which || sameFile(which, scene.file) || which.toLowerCase() === scene.name.toLowerCase()) data = scene.data();
   else {
     const all = listScenes();
-    const found = all.find((s) => path8.isAbsolute(which) && sameFile(s.file, which)) ?? all.find((s) => s.name.toLowerCase() === which.toLowerCase());
+    const found = all.find((s) => path10.isAbsolute(which) && sameFile(s.file, which)) ?? all.find((s) => s.name.toLowerCase() === which.toLowerCase());
     if (!found) throw new Error(`No scene "${which}": scenes() lists them`);
     file = found.file;
     data = readSceneFile(file);
@@ -2783,8 +2873,8 @@ scene.onSave = () => {
 function saveSettings(next) {
   settings = { ...settings, ...next };
   for (const k of Object.keys(settings)) if (settings[k] === void 0 || settings[k] === "") delete settings[k];
-  fs8.mkdirSync(pkg.dataDir, { recursive: true });
-  fs8.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
+  fs9.mkdirSync(pkg.dataDir, { recursive: true });
+  fs9.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
 }
 channel.on((m) => {
   void (async () => {
@@ -2893,6 +2983,9 @@ channel.on((m) => {
         break;
       case "bake":
         await inTurn("Bake", () => bakeOpenScene());
+        break;
+      case "import":
+        await inTurn("Import", () => importModel(m));
         break;
       case "bake.refresh":
         await askRedcodeAgain();
@@ -3134,7 +3227,7 @@ async function bakeOpenScene() {
     return say(`The bake did not go through: ${err.message}`, "error");
   }
   forgetInNote(target.dir, done.built.name);
-  state.bake.last = { slug: done.built.name, files: [done.built.sector, done.built.block, done.xl].map((f) => path8.relative(target.dir, f)), warnings: done.built.warnings };
+  state.bake.last = { slug: done.built.name, files: [done.built.sector, done.built.block, done.xl].map((f) => path10.relative(target.dir, f)), warnings: done.built.warnings };
   lookAtBakes();
   const n = done.built.nodes;
   say(`Baked ${scene.name}: ${n} object${n === 1 ? "" : "s"} into ${target.name}. Pack and install the project, and start the game again.`, "ok");
@@ -3159,7 +3252,7 @@ function sceneNow(file) {
   if (scene.file && sameFile(file, scene.file)) return { name: scene.name, hash: bakeHash(scene.objects) };
   let st;
   try {
-    st = fs8.statSync(file);
+    st = fs9.statSync(file);
   } catch {
     return void 0;
   }
@@ -3184,7 +3277,7 @@ function lookAtLibraryBakes() {
     try {
       meta = readBakeMeta(dir);
     } catch (err) {
-      out.push({ dir, folder, name: path8.basename(dir), id: "", version: 0, scenes: [], inGame: false, collides: [], error: err.message });
+      out.push({ dir, folder, name: path10.basename(dir), id: "", version: 0, scenes: [], inGame: false, collides: [], error: err.message });
       continue;
     }
     const scenes = meta.scenes.map((s) => {
@@ -3211,9 +3304,9 @@ function lookAtLibraryBakes() {
 }
 function libraryBakeDir(dir) {
   if (!libraryRoot) throw new Error("Set the Library folder first (Library tab or Settings).");
-  const rel = path8.relative(path8.resolve(libraryRoot), path8.resolve(dir));
-  if (rel.startsWith("..") || path8.isAbsolute(rel) || !dir.toLowerCase().endsWith(BakeFolderEnding)) throw new Error("That is not a bake in the Library.");
-  return path8.resolve(dir);
+  const rel = path10.relative(path10.resolve(libraryRoot), path10.resolve(dir));
+  if (rel.startsWith("..") || path10.isAbsolute(rel) || !dir.toLowerCase().endsWith(BakeFolderEnding)) throw new Error("That is not a bake in the Library.");
+  return path10.resolve(dir);
 }
 async function changeLibraryBake(dir, meta, files, drop2 = []) {
   const root = libraryRoot;
@@ -3228,14 +3321,14 @@ async function changeLibraryBake(dir, meta, files, drop2 = []) {
     if (stop) throw new Error(`${src.name}: ${stop.text}`);
   }
   const warnings = [];
-  const isNew = !fs8.existsSync(dir);
-  fs8.mkdirSync(dir, { recursive: true });
+  const isNew = !fs9.existsSync(dir);
+  fs9.mkdirSync(dir, { recursive: true });
   for (const { file } of plan) {
     let done;
     try {
       done = await bakeSceneInto(target, file, project?.archive);
     } catch (err) {
-      if (isNew) fs8.rmSync(dir, { recursive: true, force: true });
+      if (isNew) fs9.rmSync(dir, { recursive: true, force: true });
       throw err;
     }
     const { record, built } = done;
@@ -3284,8 +3377,8 @@ async function editLibraryBake(dir, what, arg) {
       await changeLibraryBake(dir, meta, [], [arg]);
       return say(`${gone2.name} is out of ${meta.name} (version ${meta.version}); the scene itself stays.${meta.scenes.length ? "" : " The bake is empty now: add a scene or delete it."}`, "ok");
     }
-    const here = meta.scenes.map((s) => fromLibraryPath(root, s.path)).filter((f) => fs8.existsSync(f));
-    const missing = meta.scenes.filter((s) => !fs8.existsSync(fromLibraryPath(root, s.path))).map((s) => s.name);
+    const here = meta.scenes.map((s) => fromLibraryPath(root, s.path)).filter((f) => fs9.existsSync(f));
+    const missing = meta.scenes.filter((s) => !fs9.existsSync(fromLibraryPath(root, s.path))).map((s) => s.name);
     if (!here.length) return say(`None of ${meta.name}'s scenes is where it was: ${missing.join(", ")}.`, "warn");
     const w = await changeLibraryBake(dir, meta, here);
     say(`Baked ${meta.name} again (version ${meta.version}).${missing.length ? ` Not found, so kept as baked before: ${missing.join(", ")}.` : ""}${warned(w)}`, missing.length ? "warn" : "ok");
@@ -3321,15 +3414,110 @@ function deleteLibraryBake(dir) {
       try {
         return readBakeMeta(dir).name;
       } catch {
-        return path8.basename(dir);
+        return path10.basename(dir);
       }
     })();
-    fs8.rmSync(dir, { recursive: true, force: true });
+    fs9.rmSync(dir, { recursive: true, force: true });
     scanLibrary();
     lookAtBakes();
     say(`Deleted the bake ${name} from the Library. Its scenes stay, and projects that included it keep their copies.`, "ok");
   } catch (err) {
     say(`The bake could not be deleted: ${err.message}`, "error");
+  }
+}
+function scanModelPlaces() {
+  const raw = project?.raw && fs9.existsSync(project.raw) ? project.raw : void 0;
+  const desk = deskDir();
+  state.library.models = [...scanModels("library", libraryRoot), ...scanModels("raw", raw), ...scanModels("desk", desk)];
+  state.library.modelPlaces = [
+    ...libraryRoot ? [{ place: "library", label: "Library", dir: libraryRoot }] : [],
+    ...raw && project ? [{ place: "raw", label: `${project.name}: source\\raw`, dir: raw }] : [],
+    { place: "desk", label: "EDGEfab's Desk", dir: desk }
+  ];
+}
+async function importModel(m) {
+  const checked = checkModelPath(m.file);
+  if (!checked.ok) return say(checked.why, "warn");
+  if (!project) return say("Import puts the model into the open REDcode project, and none is open. Open or make one in REDcode (VS Code); Refresh on the Bake tab asks again.", "warn");
+  const b = bridge;
+  if (!b?.running || state.bridge.status !== "ready") return say("REDbridge is not ready, and Import needs it. The pills at the top say why.", "warn");
+  let fab;
+  try {
+    fab = loadFab(pkg.dir);
+  } catch (err) {
+    return say(`Import is not available: ${err.message}`, "error");
+  }
+  const target = project;
+  const version = `EDGEbuilder ${"0.11.0"}`;
+  const call = (method, params) => b.call(method, params);
+  const began = Date.now();
+  const step2 = (text) => {
+    console.log(`Import: ${text}`);
+    if (!running) return;
+    running.what = `Import: ${text}`;
+    delete running.done;
+    delete running.total;
+    showBusy();
+  };
+  const stopped = (after) => say(`Import stopped after ${after}.`, "info");
+  try {
+    let item = checked.file;
+    let prepared;
+    if (checked.kind === "glb") {
+      step2(`preparing ${path10.basename(checked.file)} (size, facing, levels of detail, textures)`);
+      const made = await fab.makeModel({ from: "file", file: checked.file, ...m.name ? { name: m.name } : {} }, { version });
+      item = made.folder;
+      prepared = made.prepared;
+    } else prepared = fab.readItem(item).prepared;
+    if (stopAsked) return stopped("preparing: the model waits on EDGEfab's Desk");
+    if (m.height && m.height > 0) {
+      step2(`setting its height to ${m.height} m`);
+      prepared = await fab.setSize(item, m.height, { version });
+    }
+    const folders = fab.projectFolders(target.dir);
+    if (!folders) throw new Error(`${target.dir} is not a project EDGEfab's core can read.`);
+    let textures = 0;
+    step2("adding the mesh to the project");
+    const added = await fab.addToProject({
+      item,
+      project: folders,
+      call,
+      collision: m.collision,
+      ...m.name ? { name: m.name } : {},
+      log: (line) => {
+        if (isTextureLine(line)) step2(`making textures: ${++textures} done (a large one takes about 10 s)`);
+        else if (/making the materials/i.test(line)) step2("making the materials and their textures (the long part)");
+      }
+    });
+    if (stopAsked) return stopped("adding it to the project: pack and swap it from REDcode, or Import again");
+    step2("packing the project");
+    const packed = await b.call("project.pack", { dir: folders.archive, outDir: path10.join(target.dir, "packed", "archive", "pc", "mod"), modName: target.modName || target.name });
+    scanProject();
+    let swap = "";
+    let tone = "ok";
+    if (state.world === "ready" && (await game.state()).world) {
+      step2("swapping it into the game");
+      try {
+        const r = await archives.reload([packed.archive]);
+        if (r.failed.length) {
+          tone = "warn";
+          swap = ` The game did not take the archive: ${r.failed.map((f) => f.why).join("; ")}.`;
+        } else swap = " It is in the game now.";
+      } catch (err) {
+        tone = "warn";
+        swap = ` It is not in the game yet: ${err.message}. Allow Archives for EDGEbuilder in REDnode's Mod Manager (EDGEbuilder, Permissions), then Import again.`;
+      }
+    } else {
+      tone = "warn";
+      swap = " The world is not loaded, so it was not swapped in: load a save and Import again, or install the project from REDcode for the next start.";
+    }
+    state.imported = { path: added.entity, at: Date.now() };
+    scanModelPlaces();
+    const guess = prepared.sizeUnknown && !m.height ? ` Its file has no real size, so its height of ${prepared.size.height.toFixed(2)} m is a guess: type Height and Import again.` : "";
+    const secs = Math.round((Date.now() - began) / 1e3);
+    say(`Imported ${path10.basename(added.entity, ".ent")} into ${target.name} in ${secs} s${added.replaced ? ", replacing the earlier one" : ""}${textures ? ` (${textures} textures)` : ""}.${swap}${guess} It is picked on the Assets tab.`, guess ? "warn" : tone);
+  } catch (err) {
+    say(`Import failed: ${err.message}`, "error");
   }
 }
 var linked;
@@ -3353,7 +3541,7 @@ game.on("PlayerPuppet.OnGameAttached", () => {
     editorCam = void 0;
     state.camera = void 0;
     try {
-      fs8.rmSync(builderFile, { force: true });
+      fs9.rmSync(builderFile, { force: true });
     } catch {
     }
   }
@@ -3400,8 +3588,8 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.10.9"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
-if (!fs8.existsSync(scene.file) && !scene.loadError) scene.save();
+console.log(`EDGEbuilder ${"0.11.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+if (!fs9.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {
   state.message = { text: `The scene open last time (${lastGone}) is no longer there; opened ${scene.name} instead.`, tone: "warn" };
@@ -3409,7 +3597,7 @@ if (lastGone) {
 }
 writeSession();
 if (scene.loadError) {
-  state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path8.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
+  state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path10.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);
 }
 if (index.loadNewest()) {

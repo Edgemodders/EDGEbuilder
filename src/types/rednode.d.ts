@@ -168,4 +168,15 @@ declare module "rednode" {
     set(name: string, value: string): Promise<void>;
     delete(name: string): Promise<void>;
   };
+
+  /** REDnode 0.41.0 and later, behind the `archives` permission: swapping archives into the running game (B2d). */
+  export const archives: {
+    reload(files: string[], options?: { refresh?: boolean }): Promise<{
+      reloaded: string[];
+      failed: { file: string; why: string }[];
+      via: string;
+      ms: number;
+      world?: { entity: string; how: "respawn" | "appearance"; package?: string }[];
+    }>;
+  };
 }

@@ -98,6 +98,8 @@ export interface Bridge {
   openMod(archivePath: string): Promise<ModArchive>;
   sectorBuild(params: SectorBuild): Promise<SectorBuilt>;
   tweakRecords(query: TweakQuery): Promise<TweakRecords>;
+  /** Any REDbridge method by name: what EDGEfab's core takes (B2d), and `project.pack`. */
+  call<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
   stop(): void;
 }
 
@@ -122,6 +124,9 @@ export class KernelBridge implements Bridge {
   }
   tweakRecords(query: TweakQuery): Promise<TweakRecords> {
     return this.handle.call<TweakRecords>("tweakdb.records", { ...query });
+  }
+  call<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
+    return this.handle.call<T>(method, params);
   }
   stop(): void {
     // REDnode owns the process and stops it when no package has used it for a while.

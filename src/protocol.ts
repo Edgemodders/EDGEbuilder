@@ -107,6 +107,25 @@ export interface SceneEntry {
   error?: string;
 }
 
+/** B2d: where a model for Import is: a Library folder, the open project's source\raw, or EDGEfab's Desk. */
+export type ModelPlace = "library" | "raw" | "desk";
+
+/** B2d: a model Import offers on the Library tab. */
+export interface ModelEntry {
+  place: ModelPlace;
+  /** A `.glb` file, or a `.prop.asset` folder (prepared by EDGEfab). */
+  file: string;
+  /** The folder under the place's root, with forward slashes; "" at the root. */
+  folder: string;
+  name: string;
+  kind: "glb" | "prop";
+  bytes?: number;
+  changed: number;
+}
+
+/** The import options the Picked panel sends. */
+export type ImportCollision = "physical" | "box" | "none";
+
 /** A place with its folders and scenes. */
 export interface Shelf extends PlaceRoot {
   folders: string[];
@@ -199,7 +218,19 @@ export interface Snapshot {
    * B3-2: the Library root (absent until the player sets one) and the folder offered for it; the
    * three places with their folders and scenes; the scenes switched on (shown, not edited), by file.
    */
-  library: { root?: string; suggested: string; shelves: Shelf[]; on: string[]; peek?: ScenePeek; bakes: LibraryBake[] };
+  library: {
+    root?: string;
+    suggested: string;
+    shelves: Shelf[];
+    on: string[];
+    peek?: ScenePeek;
+    bakes: LibraryBake[];
+    /** B2d: models for Import, and the labels of the two places beside the Library (the project's source\raw, EDGEfab's Desk). */
+    models: ModelEntry[];
+    modelPlaces: { place: ModelPlace; label: string; dir: string }[];
+  };
+  /** B2d: the last Import's result: the new prop's entity, picked on the Assets tab when it changes. */
+  imported?: { path: string; at: number };
   /**
    * B4: the Bake tab. The project a bake goes into, what the checks say, the open scene's bake in that
    * project and whether the scene changed since, the `.xl` that has its bake in the game, every bake in
@@ -295,6 +326,8 @@ export type PageMessage =
   | { type: "bake" }
   /** Look at the project's bakes and the game's again. */
   | { type: "bake.refresh" }
+  /** B2d: import a `.glb` or a Desk prop into the open project, pack it and swap it into the game. */
+  | { type: "import"; file: string; name?: string; height?: number; collision: ImportCollision }
   /** Take a bake out of the project, by its slug. */
   | { type: "bake.remove"; slug: string }
   /** B4-3: a new bake in the Library folder `folder`, of the scene `file`. */

@@ -144,8 +144,8 @@ export function scanShelf(root: PlaceRoot): Shelf {
       const full = path.join(dir, d.name);
       const sub = rel ? `${rel}/${d.name}` : d.name;
       if (d.isDirectory()) {
-        // Bakes (B4) and hidden folders are not scene folders.
-        if (d.name.startsWith(".") || d.name.toLowerCase().endsWith(".bake") || d.name === "node_modules" || depth >= MaxDepth) continue;
+        // Bakes (B4), asset items (B2d: a `.prop.asset` is one model) and hidden folders are not scene folders.
+        if (d.name.startsWith(".") || d.name.toLowerCase().endsWith(".bake") || d.name.toLowerCase().endsWith(".asset") || d.name === "node_modules" || depth >= MaxDepth) continue;
         shelf.folders.push(sub);
         walk(full, sub, depth + 1);
       } else if (d.isFile() && d.name.toLowerCase().endsWith(SceneEnding)) {

@@ -1227,8 +1227,31 @@ function renderBusy(b) {
   label();
   busyTick ??= setInterval(label, 1e3);
 }
+var importedAt;
+function pickImported(s) {
+  const at = s.imported?.at;
+  if (importedAt === void 0) {
+    importedAt = at ?? 0;
+    return;
+  }
+  if (!s.imported || at === importedAt) return;
+  importedAt = at;
+  const path = s.imported.path;
+  lookedAt = path;
+  appearance = void 0;
+  mainTabs().select?.(0);
+  document.getElementById("kinds").select?.(0);
+  document.getElementById("from").select?.(0);
+  kind = "all";
+  from = "all";
+  const box = $("search");
+  box.value = path.slice(path.lastIndexOf("\\") + 1).replace(/\.ent$/i, "");
+  post({ type: "search", text: box.value, kind, from });
+  post({ type: "look", path });
+}
 function render(s) {
   state = s;
+  pickImported(s);
   const worldText = { ready: "World ready", "no-game": "No game", "no-save": "Load a save", "no-codeware": "Needs Codeware 1.14+", unknown: "World: checking" }[s.world];
   $("world").textContent = worldText;
   $("world").className = `pill ${s.world === "ready" ? "ok" : s.world === "unknown" || s.world === "no-game" ? "" : "warn"}`;
@@ -1706,6 +1729,7 @@ ${sc.error}` : sc.file)}"${isPicked({ kind: "scene", file: sc.file }) ? " select
         );
       }
       if (sh.place !== "library") return;
+      for (const m of s.library.models.filter((x) => x.place === "library" && x.folder === folder)) rows.push(modelRow(m, depth));
       for (const b of s.library.bakes.filter((x) => x.folder === folder)) {
         const end = b.error ? "" : `${b.scenes.length} scene${b.scenes.length === 1 ? "" : "s"} \xB7 v${b.version}`;
         rows.push(
@@ -1720,7 +1744,43 @@ ${b.error}` : b.dir)}"${isPicked({ kind: "bake", dir: b.dir }) ? " selected" : "
     );
     if (!closedFolders.has(key)) walk("", 1);
   }
+  for (const mp of s.library.modelPlaces.filter((x) => x.place !== "library")) {
+    const models = s.library.models.filter((x) => x.place === mp.place);
+    const key = `model:${mp.place}|`;
+    rows.push(
+      `<rn-item value="x:${esc(key)}" title="${esc(mp.dir)}"${pad(0)}><span class="fold" data-folder="${esc(key)}">${closedFolders.has(key) ? "\u25B8" : "\u25BE"}</span><span class="section">${esc(mp.label)}</span><span slot="end">${models.length} model${models.length === 1 ? "" : "s"}</span></rn-item>`
+    );
+    if (!closedFolders.has(key)) for (const m of models) rows.push(modelRow(m, 1, true));
+  }
   return rows.join("");
+  function modelRow(m, depth, withFolder = false) {
+    const end = m.kind === "prop" ? "prepared" : m.bytes ? `${(m.bytes / 1e6).toFixed(1)} MB` : "";
+    const label = withFolder && m.folder ? `${m.folder.replace(/\//g, " > ")} > ${m.name}` : m.name;
+    return `<rn-item value="m:${esc(m.file)}" title="${esc(m.file)}"${isPicked({ kind: "model", file: m.file }) ? " selected" : ""}${pad(depth)}><span class="fold"></span>${esc(label)}<span class="tag dim">${m.kind === "prop" ? "prop" : "glb"}</span><span slot="end">${esc(end)}</span></rn-item>`;
+  }
+}
+function findModel(s, file) {
+  return s.library.models.find((m) => sameFile(m.file, file));
+}
+function renderModel(s, file) {
+  $("importBox").hidden = !file;
+  if (!file) return;
+  const m = findModel(s, file);
+  const where = m ? m.place === "library" ? whereLabel(s, "library", m.folder) : s.library.modelPlaces.find((x) => x.place === m.place)?.label ?? "" : "typed in";
+  const what = (m?.kind ?? (file.toLowerCase().endsWith(".glb") ? "glb" : "prop")) === "prop" ? "A prop on EDGEfab's Desk or in the Library, already prepared" : "A GLB: Import prepares it (size, facing, levels of detail, textures) with EDGEfab's core";
+  const into = s.bake.project ? `Import puts it into ${s.bake.project.name}, packs the project and swaps it into the game.` : "Open a REDcode project to import into (Refresh on the Bake tab asks again).";
+  $("pickedText").textContent = `${m?.name ?? file.slice(file.search(/[^\\/]*$/))}
+${where}${m?.bytes ? `, ${(m.bytes / 1e6).toFixed(1)} MB` : ""}
+${what}.
+${into}
+${file}`;
+  const name = $("importName");
+  name.setAttribute("placeholder", propSlugOf(m?.name ?? file));
+  $("importGo").toggleAttribute("disabled", !s.bake.project || !!s.busy);
+}
+function propSlugOf(name) {
+  const base = name.replace(/^.*[\\/]/, "").toLowerCase().replace(/\.(glb|prop\.asset)$/, "");
+  return base.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) || "prop";
 }
 var bakeHtml = "";
 var bakeConfirm;
@@ -1832,6 +1892,7 @@ function renderLibrary(s) {
   $("libraryMake").title = s.library.suggested;
   if (picked?.kind === "scene" && !findScene(s, picked.file)) picked = void 0;
   if (picked?.kind === "bake" && !findBake(s, picked.dir)) picked = void 0;
+  if (picked?.kind === "model" && !findModel(s, picked.file) && !typedModel) picked = void 0;
   $("shelves").innerHTML = libraryRows(s);
   const sc = picked?.kind === "scene" ? findScene(s, picked.file) : void 0;
   const lb = picked?.kind === "bake" ? findBake(s, picked.dir) : void 0;
@@ -1844,12 +1905,14 @@ ${sc.error ? `Cannot be read: ${sc.error}` : `${open ? s.scene.objects.length : 
 ${sc.file}`;
   else if (picked?.kind === "folder") $("pickedText").textContent = `Folder: ${whereLabel(s, picked.place, picked.folder)}`;
   else if (lb) $("pickedText").textContent = bakeText(s, lb);
+  else if (picked?.kind === "model") ;
   else $("pickedText").textContent = "Pick a scene to open or show it, or a folder for a new scene. A double-click opens a scene.";
   $("pickedOpen").toggleAttribute("disabled", !sc || open || !!sc.error);
   $("pickedClose").toggleAttribute("disabled", !open);
   $("pickedOn").toggleAttribute("disabled", !sc || open || !!sc.error);
   $("pickedOn").textContent = on ? "Hide from world" : "Show in world";
-  for (const id of ["pickedOpen", "pickedClose", "pickedOn"]) $(id).hidden = !!lb;
+  for (const id of ["pickedOpen", "pickedClose", "pickedOn"]) $(id).hidden = !!lb || picked?.kind === "model";
+  renderModel(s, picked?.kind === "model" ? picked.file : void 0);
   $("pickedBake").hidden = !sc || !root;
   $("pickedBake").toggleAttribute("disabled", !sc || !!sc.error || !sc.objects && !open);
   renderLibraryBake(s, lb);
@@ -1904,6 +1967,10 @@ $("shelves").addEventListener("select", (e) => {
   lbakeAsking = false;
   if (value.startsWith("f:")) picked = { kind: "scene", file: value.slice(2) };
   else if (value.startsWith("b:")) picked = { kind: "bake", dir: value.slice(2) };
+  else if (value.startsWith("m:")) {
+    typedModel = false;
+    picked = { kind: "model", file: value.slice(2) };
+  } else if (value.startsWith("x:")) return;
   else {
     const key = value.slice(2);
     const bar = key.indexOf("|");
@@ -1939,6 +2006,26 @@ $("pickedBake").addEventListener("click", () => {
   if (!sc) return;
   post({ type: "lbake.new", file: sc.file, name: newName().value?.trim() || sc.name, folder: sc.folder });
   newName().value = "";
+});
+var typedModel = false;
+var Collisions = ["physical", "box", "none"];
+var collision = "physical";
+$("importCollision").addEventListener("change", (e) => {
+  collision = Collisions[e.detail.index] ?? "physical";
+});
+function pickTyped() {
+  const file = ($("importPath").value ?? "").trim().replace(/^"(.*)"$/, "$1");
+  if (!file) return;
+  typedModel = true;
+  picked = { kind: "model", file };
+  if (state) render(state);
+}
+$("importPathGo").addEventListener("click", pickTyped);
+$("importPath").addEventListener("submit", pickTyped);
+$("importGo").addEventListener("click", () => {
+  if (picked?.kind !== "model") return;
+  const height = Number(($("importHeight").value ?? "").replace(",", "."));
+  post({ type: "import", file: picked.file, name: ($("importName").value ?? "").trim() || void 0, height: height > 0 ? height : void 0, collision });
 });
 $("lbakeInclude").addEventListener("click", () => picked?.kind === "bake" && post({ type: "lbake.include", dir: picked.dir }));
 $("lbakeAdd").addEventListener("click", () => picked?.kind === "bake" && state?.scene.file && post({ type: "lbake.add", dir: picked.dir, file: state.scene.file }));

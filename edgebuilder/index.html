@@ -156,10 +156,19 @@
       <rn-tab label="Library">
         <div id="libraryInfo" class="count"></div>
         <div class="row" id="libraryMakeRow" hidden><rn-button id="libraryMake">Make the Library</rn-button></div>
+        <div class="row"><rn-input id="importPath" placeholder="Import a GLB from anywhere: its full path, then Pick" title="A .glb file (a textured glTF in one file), or a prop's .prop.asset folder"></rn-input><rn-button id="importPathGo" variant="ghost">Pick</rn-button></div>
         <rn-list id="shelves"></rn-list>
         <rn-panel id="libraryPanel" class="pinnable" title="Picked" data-pin-note="so Open, Close, Show in world and the rest stay in view">
           <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
           <div id="pickedText" class="detail">Pick a scene or a folder</div>
+          <div id="importBox" hidden>
+            <div class="grid2">
+              <rn-input id="importName" label="Name" title="The prop's file name in the project: lowercase, no spaces. Empty: from the file's name. The same name again replaces the prop"></rn-input>
+              <rn-input id="importHeight" label="Height, m" title="For a model whose file has no real size (Tripo's models in parts). Empty: the size in the file"></rn-input>
+            </div>
+            <rn-tabs id="importCollision" title="How it stops V, bullets and cars"><rn-tab label="Solid" active></rn-tab><rn-tab label="Solid, a box"></rn-tab><rn-tab label="Not solid"></rn-tab></rn-tabs>
+            <div class="row"><rn-button id="importGo" disabled title="Prepare it, put it into the open REDcode project, pack the project and swap it into the game; then it is picked on the Assets tab">Import</rn-button></div>
+          </div>
           <div class="row">
             <rn-button id="pickedOpen" disabled>Open</rn-button>
             <rn-button id="pickedClose" variant="ghost" disabled title="Its objects leave the world and no scene is open. It stays saved">Close</rn-button>

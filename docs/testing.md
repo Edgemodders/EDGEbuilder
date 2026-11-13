@@ -774,3 +774,20 @@ Agreed on 2026-11-12 ([design, Import a model](design.md#import-a-model-b2d)). T
 | Pack (`project.pack`, a 36.8 MB archive of 32 files) | 0.04 s |
 
 **I1, outside the game:** about two minutes for a Tripo model with 4096 px textures, 85 % of it making textures. **I4:** edgefab-core with EDGEmat's core adds 1.5 MB to `mod.mjs` (136 KB today), bundled the way build.mjs bundles the mod. **For Watch (I6):** an unchanged model takes as long again, so Watch needs textures whose source has not changed to be kept, which is EDGEfab's (or EDGEmat's) to offer. **The in-game half, the same day** (the owner's desktop, game 2.5, REDnode 0.63.1, a loaded save; REDnode's `archives_reload` and `world_spawn` called over its MCP server, as REDcode's Pack and Play calls them): the 36.8 MB archive swapped in through REDswap in 69 ms (0.9 s for the call, the player's prompt included), and `world_spawn` of `b2dprobe\props\b2d_probe\b2d_probe.ent` stood the vending machine 3 m in front of V in 0.36 s, textured, its screen glowing, facing V. **I2: the swap of a new archive into a loaded save worked** (once; B2d-1's test repeats it). The swapped archive stays in `archive\pc\mod` (REDnode adds an archive the game had not mounted there), so the probe's `b2d_probe.archive` is removed by hand with the game closed. **B2d-0 passed**: Import is possible as planned, and slow only where textures are made. Filed for Watch: [EDGEfab #6](https://github.com/Edgemodders/EDGEfab/issues/6), keep unchanged textures on a second Add to Project.
+
+**B2d-1 Import, built on 2026-11-13 as 0.11.0** (edgefab-core from EDGEfab's checkout, built into `fab.cjs`; not for release until the package is on npm). Checked before the game: `npm run smoke` (the model listing, a typed path, a prop item never taken for a scene folder), `fab.cjs` loads alone with its 82 exports, `mod.mjs` grew 8 KB. **Not checked:** the page and the whole Import in the game.
+
+**Before:** the game closed; delete `archive\pc\mod\b2d_probe.archive` from the game folder (left by B2d-0); deploy 0.11.0 with EDGEdeck. A REDcode project open in VS Code.
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Start the game, load a save. In REDnode's Mod Manager, EDGEbuilder, Permissions: allow **Archives** | The log says EDGEbuilder 0.11.0 |
+| 2 | Library tab | Below the places, **EDGEfab's Desk** lists `vending_e2e` (prop, prepared), and **<project>: source\raw** the GLBs in the project. GLBs in Library folders show in their folders, tagged glb |
+| 3 | Pick `vending_e2e` | The Picked panel says it is a prepared prop and that Import puts it into the project; the Import box shows Name (placeholder `vending_e2e`), Height, and Solid / Solid, a box / Not solid. No Open, Close or Show in world |
+| 4 | Name `vending_test`, **Import** | The busy bar: adding the mesh, then making textures with a count, then packing, then swapping. About two minutes. Then the Assets tab opens with `vending_test` picked, and the message says it is in the game now (I1: note the seconds) |
+| 5 | **Drop where I look**, walk V into it | The vending machine stands and stops V |
+| 6 | Library tab: type the path of a GLB (for example the Desk's `vending_e2e.prop.asset\source\raw\vending_e2e\original.glb`) into the path field, **Pick**; Height `1.5`, Name `vending_small`, **Import** | The panel shows it typed in; Import prepares it first (the busy bar says preparing), then as step 4; it is 1.5 m tall when dropped |
+| 7 | Pick `vending_e2e` again, Name `vending_test`, **Not solid**, **Import** | The message says it replaced the earlier one; the copy dropped in step 5 changes in place and V walks through it (I3) |
+| 8 | Start an Import and press **Stop** on the busy bar while textures are made | It stops after the step it was in, and says so |
+| 9 | Close the REDcode project, then pick a model | Import is greyed out, and the panel says to open a project |
+| 10 | Quit the game, start it again, load the save | The dropped props come back with the scene (their archive stays installed) |

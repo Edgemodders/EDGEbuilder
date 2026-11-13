@@ -7,7 +7,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { api, channel, game, kernel, pkg, service, ui, world, type GameRef } from "rednode";
+import { api, archives, channel, game, kernel, pkg, service, ui, world, type GameRef } from "rednode";
 import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge, type SectorBuilt } from "./bridge";
 import { AssetIndex, kindOf } from "./index";
 import { NpcList, PersonBounds, isRecord } from "./npcs";
@@ -41,6 +41,8 @@ import {
 } from "./bake";
 import { Scene, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
 import { movePreview, sameTransform } from "./move";
+import { checkModelPath, deskDir, scanModels } from "./models";
+import { isTextureLine, loadFab, type BridgeCall, type FabCore, type FabPrepared } from "./fab";
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, upright, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
@@ -124,7 +126,7 @@ const state: Snapshot = {
   query: { text: "", kind: "all", from: "all" },
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
   scene: { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: [] },
-  library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [], bakes: [] },
+  library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [], bakes: [], models: [], modelPlaces: [] },
   bake: { project: null, checks: [], stale: false, list: [] },
   selected: [],
   history: { undo: 0, redo: 0 },
@@ -1482,6 +1484,7 @@ function rootOf(place: Place): PlaceRoot {
 /** Reads the three places again, for the Library tab. */
 function scanLibrary(): void {
   state.library.shelves = placeRoots().map(scanShelf);
+  scanModelPlaces();
   libraryBakeDirs = scanBakes(libraryRoot).map(({ dir, folder }) => ({ dir, folder }));
   lookAtLibraryBakes();
 }
@@ -1913,6 +1916,9 @@ channel.on<PageMessage>((m) => {
         break;
       case "bake":
         await inTurn("Bake", () => bakeOpenScene());
+        break;
+      case "import":
+        await inTurn("Import", () => importModel(m));
         break;
       case "bake.refresh":
         await askRedcodeAgain();
@@ -2416,6 +2422,111 @@ function deleteLibraryBake(dir: string): void {
     say(`Deleted the bake ${name} from the Library. Its scenes stay, and projects that included it keep their copies.`, "ok");
   } catch (err) {
     say(`The bake could not be deleted: ${(err as Error).message}`, "error");
+  }
+}
+
+// ---- import a model (B2d) --------------------------------------------------------------------
+//
+// A GLB, or a prop on EDGEfab's Desk, into the open REDcode project through EDGEfab's core (fab.cjs,
+// loaded at the first Import), then REDbridge packs the project and REDnode swaps the archive into the
+// game, and the page picks the new prop on the Assets tab. The steps and their times are in the B2d-0
+// probe (docs/testing.md, "B2d Import a model"); most of the wait is making textures.
+
+/** The models Import offers: in the Library, the open project's source\raw and EDGEfab's Desk. */
+function scanModelPlaces(): void {
+  const raw = project?.raw && fs.existsSync(project.raw) ? project.raw : undefined;
+  const desk = deskDir();
+  state.library.models = [...scanModels("library", libraryRoot), ...scanModels("raw", raw), ...scanModels("desk", desk)];
+  state.library.modelPlaces = [
+    ...(libraryRoot ? [{ place: "library" as const, label: "Library", dir: libraryRoot }] : []),
+    ...(raw && project ? [{ place: "raw" as const, label: `${project.name}: source\\raw`, dir: raw }] : []),
+    { place: "desk" as const, label: "EDGEfab's Desk", dir: desk },
+  ];
+}
+
+async function importModel(m: { file: string; name?: string; height?: number; collision: "physical" | "box" | "none" }): Promise<void> {
+  const checked = checkModelPath(m.file);
+  if (!checked.ok) return say(checked.why, "warn");
+  if (!project) return say("Import puts the model into the open REDcode project, and none is open. Open or make one in REDcode (VS Code); Refresh on the Bake tab asks again.", "warn");
+  const b = bridge;
+  if (!b?.running || state.bridge.status !== "ready") return say("REDbridge is not ready, and Import needs it. The pills at the top say why.", "warn");
+  let fab: FabCore;
+  try {
+    fab = loadFab(pkg.dir);
+  } catch (err) {
+    return say(`Import is not available: ${(err as Error).message}`, "error");
+  }
+  const target = project;
+  const version = `EDGEbuilder ${__VERSION__}`;
+  const call: BridgeCall = (method, params) => b.call(method, params);
+  const began = Date.now();
+  const step = (text: string) => {
+    console.log(`Import: ${text}`);
+    if (!running) return;
+    running.what = `Import: ${text}`;
+    delete running.done;
+    delete running.total;
+    showBusy();
+  };
+  const stopped = (after: string) => say(`Import stopped after ${after}.`, "info");
+  try {
+    let item = checked.file;
+    let prepared: FabPrepared;
+    if (checked.kind === "glb") {
+      step(`preparing ${path.basename(checked.file)} (size, facing, levels of detail, textures)`);
+      const made = await fab.makeModel({ from: "file", file: checked.file, ...(m.name ? { name: m.name } : {}) }, { version });
+      item = made.folder;
+      prepared = made.prepared;
+    } else prepared = fab.readItem(item).prepared;
+    if (stopAsked) return stopped("preparing: the model waits on EDGEfab's Desk");
+    if (m.height && m.height > 0) {
+      step(`setting its height to ${m.height} m`);
+      prepared = await fab.setSize(item, m.height, { version });
+    }
+    const folders = fab.projectFolders(target.dir);
+    if (!folders) throw new Error(`${target.dir} is not a project EDGEfab's core can read.`);
+    let textures = 0;
+    step("adding the mesh to the project");
+    const added = await fab.addToProject({
+      item,
+      project: folders,
+      call,
+      collision: m.collision,
+      ...(m.name ? { name: m.name } : {}),
+      log: (line) => {
+        if (isTextureLine(line)) step(`making textures: ${++textures} done (a large one takes about 10 s)`);
+        else if (/making the materials/i.test(line)) step("making the materials and their textures (the long part)");
+      },
+    });
+    if (stopAsked) return stopped("adding it to the project: pack and swap it from REDcode, or Import again");
+    step("packing the project");
+    const packed = await b.call<{ archive: string; bytes: number; files: number }>("project.pack", { dir: folders.archive, outDir: path.join(target.dir, "packed", "archive", "pc", "mod"), modName: target.modName || target.name });
+    scanProject();
+    let swap = "";
+    let tone: "ok" | "warn" = "ok";
+    if (state.world === "ready" && (await game.state()).world) {
+      step("swapping it into the game");
+      try {
+        const r = await archives.reload([packed.archive]);
+        if (r.failed.length) {
+          tone = "warn";
+          swap = ` The game did not take the archive: ${r.failed.map((f) => f.why).join("; ")}.`;
+        } else swap = " It is in the game now.";
+      } catch (err) {
+        tone = "warn";
+        swap = ` It is not in the game yet: ${(err as Error).message}. Allow Archives for EDGEbuilder in REDnode's Mod Manager (EDGEbuilder, Permissions), then Import again.`;
+      }
+    } else {
+      tone = "warn";
+      swap = " The world is not loaded, so it was not swapped in: load a save and Import again, or install the project from REDcode for the next start.";
+    }
+    state.imported = { path: added.entity, at: Date.now() };
+    scanModelPlaces();
+    const guess = prepared.sizeUnknown && !m.height ? ` Its file has no real size, so its height of ${prepared.size.height.toFixed(2)} m is a guess: type Height and Import again.` : "";
+    const secs = Math.round((Date.now() - began) / 1000);
+    say(`Imported ${path.basename(added.entity, ".ent")} into ${target.name} in ${secs} s${added.replaced ? ", replacing the earlier one" : ""}${textures ? ` (${textures} textures)` : ""}.${swap}${guess} It is picked on the Assets tab.`, guess ? "warn" : tone);
+  } catch (err) {
+    say(`Import failed: ${(err as Error).message}`, "error");
   }
 }
 

@@ -20,3 +20,7 @@ index/
 
 # packages for players
 dist/
+
+# B2d: EDGEfab's core, built into the package by build.mjs (1.5 MB), and its bundled libraries' licenses
+edgebuilder/fab.cjs
+edgebuilder/fab-notices.txt

@@ -31,5 +31,7 @@ export { AssetIndex, IndexPrefixes, kindOf } from "./index";
 export { Scene, quaternionToYaw, readSceneFile, yawToQuaternion } from "./scene";
 export { cleanFolderName, fileNameOf, folderIn, freeFileName, libraryConfigFile, readLibraryRoot, refOf, scanShelf, slugOf, whereIs, writeLibraryRoot } from "./scenes";
 export { ModSources, NeedsNewerBridge, modArchives, sceneNeeds } from "./sources";
+export { PropEnding, checkModelPath, deskDir, propName, propSlug, scanModels } from "./models";
+export { isTextureLine } from "./fab";
 export * from "./math";
 export type * from "./protocol";
