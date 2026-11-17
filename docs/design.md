@@ -225,6 +225,7 @@ Agreed with the owner on 2026-11-11, with the five recommendations below. People
 | **Position and arrange** | Gizmo, G and R, select, groups, duplicates, copies, undo. A person-sized box, 0.6 × 0.6 × 1.8 m, shows the selection | `world.move` while dragging. Heading only: a turn keeps the person upright. No scale, Solid or Seen from |
 | **Save** | Scenes keep their people | The `npc` kind with `record`, `appearance`, `transform`, `props.behaviour: "idle"`. A file says `format: 2` only when it holds an NPC; others stay format 1. Format 2 is pinned in docs/scene.md once B3c passes in game |
 | **Bake** | The Bake tab names the NPCs a bake leaves out: they show only while EDGEbuilder or another package loads the scene | `bakeInput` keeps only the kinds `sector.build` writes, so REDbridge reads format 1 as before, in project and Library bakes alike |
+| **People in a baked mod** | A modder bakes the props and has a script (EDGEquest, any REDnode package) load only the scene's people, or keeps people in scenes of their own; the wiki's baking page says how (2026-11-17) | `world.load` spawns every kind, so a script passes the scene with its `npc` objects only; [REDnode #49](https://github.com/Edgemodders/REDnode/issues/49) asks for a `kinds` option |
 | **Through REDnode** | Another package, or an assistant through REDnode's `world_load`, loads the scene with EDGEbuilder off | REDnode's own reader; `service.mjs`'s `refs()` lists people too |
 
 | Decision (2026-11-11) | Chosen |
