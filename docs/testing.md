@@ -798,7 +798,19 @@ Agreed on 2026-11-12 ([design, Import a model](design.md#import-a-model-b2d)). T
 |---|---|---|
 | 4, 5 | The first Import ran before Archives was allowed: it was added and packed in 224 s, the swap refused ("Allow \"EDGEbuilder\" to swap archives in the REDnode launcher first"), yet the Assets tab picked the prop, and Drop failed with REDnode's catch-all `no entity was created (needs Codeware 1.14 ...)`. With Archives allowed, Import again: 226 s, "replacing the earlier one", "It is in the game now", and step 5 passed | Drop of an imported prop that is not in the game tries the swap again from the packed archive, and says why when it still can't; the refusal is said once |
 | 8 | Stop while textures are made waited for all 29: they are made inside one call to EDGEfab's core, which takes no cancel | After Stop, the REDbridge call EDGEbuilder hands to the core refuses the next request, so the Import ends within one texture and says the prop is half added |
-| 5 | The game's green outline on a dropped (selected) object stays after Edit goes off. Since B1 the outline follows the selection, which stays when Edit goes off; it is drawn through walls | The outline shows only while Edit is on; the selection is kept and outlined again when Edit comes back |
+| 5 | The game's green outline on a dropped (selected) object stays after Edit goes off. Since B1 the outline follows the selection, which stays when Edit goes off; it is drawn through walls | Edit off takes the outline off; the selection stays, and Edit, or selecting again, brings the outline back |
 | 9 | After the project closed, the prop picked on the Assets tab stayed picked and could be dropped | Kept as it is (the owner's view): its archive is in the game and stays in `archivepcmod`, so it is a mod asset like any other |
+
+**0.11.1, built on 2026-11-18 for these** (`swapIn` and `unswapped` in the mod: an imported prop whose swap was refused is swapped in by Drop; the REDbridge call handed to EDGEfab's core refuses requests after Stop; `outlinesOff` from Edit off until Edit or a selection). `npm run smoke` passed. Its check in the game, about ten minutes with one Import:
+
+| # | Do | Expected |
+|---|---|---|
+| R1 | Mod Manager, EDGEbuilder, Permissions: switch **Archives** off. Import `neon_vending_box` as `vending_retest` | The message says it is not in the game yet and to allow Archives, once |
+| R2 | Press **Drop where I look** | It says again that `vending_retest` is not in the game yet, and nothing is added |
+| R3 | Allow **Archives**, press **Drop where I look** | The prop appears at once, with no Import (the log: "Swapped ... in") |
+| R4 | Import it again and press **Stop** while textures are made | It stops within a few seconds and says the project holds part of the model |
+| R5 | Import it once more, to the end | It finishes, "replacing the earlier one" |
+| R6 | Select it with Edit on, then turn Edit off | The green outline goes; the Scene tab still has it selected |
+| R7 | Turn Edit on | The outline is back |
 
 **I1:** 224 s and 226 s for `neon_vending_box` (29 textures, 4096 px), of which textures about 215 s; pack and swap under a second. **I2:** the swap of a new archive into a loaded save worked every time it was allowed (steps 4, 6, 7). **I3:** the copy dropped in step 5 changed in place when step 7 replaced it. **I5** was not judged on its own: detail up close stays EDGEfab's research, as after B2d-0.

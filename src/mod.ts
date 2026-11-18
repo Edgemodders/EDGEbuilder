@@ -606,9 +606,12 @@ async function removePreview(o: SceneObject): Promise<void> {
   delete o.entityId;
 }
 
+/** Edit went off: the selection stays, but its outline (drawn through walls) waits until Edit or a new selection. */
+let outlinesOff = false;
+
 /** The game's own outline on the preview, or off. Best effort: the preview is selected either way. */
 async function highlight(o: SceneObject | undefined, on: boolean): Promise<void> {
-  if (!o?.entityId) return;
+  if (!o?.entityId || (on && outlinesOff)) return;
   try {
     const entity = await world.entity(o.entityId);
     if (!entity) return;
@@ -1111,6 +1114,8 @@ async function builderStart(pose: Pose): Promise<void> {
   console.log(`Builder mode on: ${editorCam ? `editor camera ${editorCam.id}` : "V's camera"}${hidden ? ", HUD hidden" : ""}`);
   const note = switchesNote();
   if (note) say(note, "info");
+  outlinesOff = false;
+  for (const id of state.selected) await highlight(scene.get(id), true);
   publishCamera();
 }
 
@@ -1150,6 +1155,8 @@ async function builderStop(): Promise<void> {
     // Nothing to remove.
   }
   if (wasOn) console.log("Builder mode off");
+  for (const id of state.selected) await highlight(scene.get(id), false);
+  outlinesOff = true;
   publish();
 }
 
@@ -1170,6 +1177,13 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
   const look = person ? (appearance === AnyLook ? undefined : (appearance ?? person.appearance)) : appearance;
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const waiting = unswapped.get(assetKey(assetPath));
+  if (waiting) {
+    const why = await swapIn(waiting);
+    if (why) return say(`${path.basename(assetPath, ".ent")} was imported, but it is not in the game yet: ${why}. Then press Drop again.`, "warn");
+    unswapped.delete(assetKey(assetPath));
+    console.log(`Swapped ${path.basename(waiting)} in for ${assetPath}`);
+  }
   let added: SceneObject | undefined;
   const before = scene.state();
   try {
@@ -1224,8 +1238,10 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
 async function select(ids: string[]): Promise<void> {
   ids = ids.filter((id, i) => scene.get(id) && ids.indexOf(id) === i);
   const off = state.selected.filter((id) => !ids.includes(id));
-  const on = ids.filter((id) => !state.selected.includes(id));
+  // After Edit went off the kept ones lost their outline too, so all of them get it back.
+  const on = outlinesOff ? ids : ids.filter((id) => !state.selected.includes(id));
   state.selected = ids;
+  outlinesOff = false;
   for (const id of off) await highlight(scene.get(id), false);
   for (const id of on) await highlight(scene.get(id), true);
   publish();
@@ -2458,7 +2474,9 @@ async function importModel(m: { file: string; name?: string; height?: number; co
   }
   const target = project;
   const version = `EDGEbuilder ${__VERSION__}`;
-  const call: BridgeCall = (method, params) => b.call(method, params);
+  // Stop: the core makes every texture inside one call, so the REDbridge call it is handed refuses
+  // the next request once Stop is pressed, and the Import ends within one texture.
+  const call: BridgeCall = (method, params) => (stopAsked ? Promise.reject(new Error(ImportStopped)) : b.call(method, params));
   const began = Date.now();
   const step = (text: string) => {
     console.log(`Import: ${text}`);
@@ -2502,31 +2520,43 @@ async function importModel(m: { file: string; name?: string; height?: number; co
     step("packing the project");
     const packed = await b.call<{ archive: string; bytes: number; files: number }>("project.pack", { dir: folders.archive, outDir: path.join(target.dir, "packed", "archive", "pc", "mod"), modName: target.modName || target.name });
     scanProject();
-    let swap = "";
-    let tone: "ok" | "warn" = "ok";
-    if (state.world === "ready" && (await game.state()).world) {
-      step("swapping it into the game");
-      try {
-        const r = await archives.reload([packed.archive]);
-        if (r.failed.length) {
-          tone = "warn";
-          swap = ` The game did not take the archive: ${r.failed.map((f) => f.why).join("; ")}.`;
-        } else swap = " It is in the game now.";
-      } catch (err) {
-        tone = "warn";
-        swap = ` It is not in the game yet: ${(err as Error).message}. Allow Archives for EDGEbuilder in REDnode's Mod Manager (EDGEbuilder, Permissions), then Import again.`;
-      }
-    } else {
-      tone = "warn";
-      swap = " The world is not loaded, so it was not swapped in: load a save and Import again, or install the project from REDcode for the next start.";
-    }
+    step("swapping it into the game");
+    const why = await swapIn(packed.archive);
+    const key = assetKey(added.entity);
+    if (why) unswapped.set(key, packed.archive);
+    else unswapped.delete(key);
+    const tone: "ok" | "warn" = why ? "warn" : "ok";
+    const swap = why ? ` It is not in the game yet: ${why}. Then press Drop: it tries the swap again.` : " It is in the game now.";
     state.imported = { path: added.entity, at: Date.now() };
     scanModelPlaces();
     const guess = prepared.sizeUnknown && !m.height ? ` Its file has no real size, so its height of ${prepared.size.height.toFixed(2)} m is a guess: type Height and Import again.` : "";
     const secs = Math.round((Date.now() - began) / 1000);
     say(`Imported ${path.basename(added.entity, ".ent")} into ${target.name} in ${secs} s${added.replaced ? ", replacing the earlier one" : ""}${textures ? ` (${textures} textures)` : ""}.${swap}${guess} It is picked on the Assets tab.`, guess ? "warn" : tone);
   } catch (err) {
+    if (stopAsked) {
+      return say("Import stopped while it added the model to the project, so the project holds part of it. Import it again to finish it, or delete its folder under the project's source\\archive.", "info");
+    }
     say(`Import failed: ${(err as Error).message}`, "error");
+  }
+}
+
+const ImportStopped = "Stopped.";
+
+/** Imported props whose archive is packed but not in the game yet, by entity path: Drop tries the swap again. */
+const unswapped = new Map<string, string>();
+const assetKey = (p: string) => p.replace(/\//g, "\\").toLowerCase();
+
+/** Swaps a packed archive into the running game. Answers why not, or undefined when it is in. */
+async function swapIn(archive: string): Promise<string | undefined> {
+  if (state.world !== "ready" || !(await game.state()).world) return "the world is not loaded; load a save";
+  try {
+    const r = await archives.reload([archive]);
+    return r.failed.length ? `the game did not take the archive (${r.failed.map((f) => f.why).join("; ")})` : undefined;
+  } catch (err) {
+    const message = (err as Error).message;
+    // REDnode's refusal names its launcher; one instruction, in EDGEbuilder's words, is enough.
+    if (/allow|permission/i.test(message)) return "EDGEbuilder may not swap archives yet. Allow Archives in REDnode's Mod Manager (EDGEbuilder, Permissions)";
+    return message;
   }
 }
 
