@@ -518,7 +518,7 @@ Round 3 proved the node by rewriting sectors by hand; here `sector.build` writes
 | 14 | **200 Crates** is 200 entities (`crate_blue.ent`), with collision of their own, so it has no switch. Claude wrote **200 Cargo Crates** beside it in the Library: 200 solid `cargo_crate_b` meshes on the same spots. Take 200 Crates' bake out on the Bake tab, open 200 Cargo Crates, Bake; Pack and Install; start. Load the save where V stood (-2013.3, -2877.6, 98.0). Claude reads the frame rate | Against 67 fps (200 entity crates) and 65 fps (none) in the same view | W14 |
 | 15 | Save among solid crates, quit, turn the bake off, load the save | The save is fine, and V is not stuck | S9 |
 | 16 | Turn `redcode.pack.redmod` off in VS Code. Pack and Install; start. Turn it back on after | The bake goes in `archive\\pc\\mod` and stands; EDGEbuilder says it is baked | W15 |
-| 17 | Hover **New** on the Scene tab | The tooltip says `press "New Scene Here"` (0.7.3's wording, not looked at yet) | |
+| 17 | Hover **New** on the Scene tab | The tooltip says `press "New Scene Here"` (0.7.3's wording; looked at in B2d-1's session on 2026-11-18: passed) | |
 
 Found on 0.8.0 (2026-11-08): the Scale field took typing for an entity (the kit's `rn-input` does not read `disabled`; now hidden), step 14's 200 Crates are entities, which have no switch (Claude wrote 200 Cargo Crates, solid meshes on the same spots), and step 6 turned step 4's copy back on. Among 200 solid cargo crates: 75.2 and 75.9 fps, in a sandstorm in the morning, so not comparable with the 67 fps at night; step 15's load without the bake gives the same weather. Every baked crate came in at about 40 m, which the owner saw as pop-in: **0.8.1** adds **Seen from** (the scene's `streaming`, which round 2 proved reaches the game) and keeps the tab bar in place while a tab scrolls (the owner, 2026-11-08). Checked in REDnode's host with real clicks and keys; the smoke test bakes one at 300 m through REDbridge 0.12.0.
 
@@ -625,7 +625,7 @@ W11 is in the smoke test (a kind a bake cannot make is left out, and said so). E
 | Finding | What it was | Answer |
 |---|---|---|
 | A bake packed as a REDmod | With `redcode.pack.redmod` on, the `.xl` is in `mods\<project>\archives`, where 0.7.0 did not look, so previews would have stood on the bake. ArchiveXL reads it there, and the game needs `-modded` | 0.7.1 reads both places; this whole test ran as a REDmod. **The plain archive form was tested only by the probes** |
-| The Scene tab's name field and New | The field reads as the name for New, and Enter there renames the open scene with no question. New only opens the Library tab | 0.7.2: labelled Open scene's name, Enter asks first, New's tooltip says what comes next. Passed in game on 2026-11-05: the label, the question, Keep the name, Rename and the tooltip. 0.7.3 puts "New Scene Here" in the tooltip in quotes, at the owner's request, so it does not read as pressing New. Released without its own test, by the owner's choice (only the wording changed): **look at that tooltip in the next round** |
+| The Scene tab's name field and New | The field reads as the name for New, and Enter there renames the open scene with no question. New only opens the Library tab | 0.7.2: labelled Open scene's name, Enter asks first, New's tooltip says what comes next. Passed in game on 2026-11-05: the label, the question, Keep the name, Rename and the tooltip. 0.7.3 puts "New Scene Here" in the tooltip in quotes, at the owner's request, so it does not read as pressing New. Released without its own test, by the owner's choice (only the wording changed): looked at in B2d-1's session on 2026-11-18: passed |
 
 #### Questions for Library bakes: the test of B4-3
 
@@ -791,3 +791,14 @@ Agreed on 2026-11-12 ([design, Import a model](design.md#import-a-model-b2d)). T
 | 8 | Start an Import and press **Stop** on the busy bar while textures are made | It stops after the step it was in, and says so |
 | 9 | Close the REDcode project, then pick a model | Import is greyed out, and the panel says to open a project |
 | 10 | Quit the game, start it again, load the save | The dropped props come back with the scene (their archive stays installed) |
+
+**B2d-1 passed in game on 2026-11-18 on 0.11.0** (the owner's desktop, game 2.5, REDnode 0.67.3; the REDcode project `EDGEmat_PropParts`; the Desk's prop was `neon_vending_box`, since `vending_e2e` had gone from the Desk, so steps 2, 3, 6 and 7 used it). All ten steps passed, and the spot check of 0.7.3's New tooltip (B4-1 step 17) with them. What the test found, all for 0.11.1:
+
+| Step | Found | 0.11.1 |
+|---|---|---|
+| 4, 5 | The first Import ran before Archives was allowed: it was added and packed in 224 s, the swap refused ("Allow \"EDGEbuilder\" to swap archives in the REDnode launcher first"), yet the Assets tab picked the prop, and Drop failed with REDnode's catch-all `no entity was created (needs Codeware 1.14 ...)`. With Archives allowed, Import again: 226 s, "replacing the earlier one", "It is in the game now", and step 5 passed | Drop of an imported prop that is not in the game tries the swap again from the packed archive, and says why when it still can't; the refusal is said once |
+| 8 | Stop while textures are made waited for all 29: they are made inside one call to EDGEfab's core, which takes no cancel | After Stop, the REDbridge call EDGEbuilder hands to the core refuses the next request, so the Import ends within one texture and says the prop is half added |
+| 5 | The game's green outline on a dropped (selected) object stays after Edit goes off. Since B1 the outline follows the selection, which stays when Edit goes off; it is drawn through walls | The outline shows only while Edit is on; the selection is kept and outlined again when Edit comes back |
+| 9 | After the project closed, the prop picked on the Assets tab stayed picked and could be dropped | Kept as it is (the owner's view): its archive is in the game and stays in `archivepcmod`, so it is a mod asset like any other |
+
+**I1:** 224 s and 226 s for `neon_vending_box` (29 textures, 4096 px), of which textures about 215 s; pack and swap under a second. **I2:** the swap of a new archive into a loaded save worked every time it was allowed (steps 4, 6, 7). **I3:** the copy dropped in step 5 changed in place when step 7 replaced it. **I5** was not judged on its own: detail up close stays EDGEfab's research, as after B2d-0.
