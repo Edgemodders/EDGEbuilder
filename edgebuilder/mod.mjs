@@ -1933,8 +1933,9 @@ async function removePreview(o) {
   }
   delete o.entityId;
 }
+var outlinesOff = false;
 async function highlight(o, on) {
-  if (!o?.entityId) return;
+  if (!o?.entityId || on && outlinesOff) return;
   try {
     const entity = await world2.entity(o.entityId);
     if (!entity) return;
@@ -2324,6 +2325,8 @@ async function builderStart(pose) {
   console.log(`Builder mode on: ${editorCam ? `editor camera ${editorCam.id}` : "V's camera"}${hidden ? ", HUD hidden" : ""}`);
   const note = switchesNote();
   if (note) say(note, "info");
+  outlinesOff = false;
+  for (const id of state.selected) await highlight(scene.get(id), true);
   publishCamera();
 }
 async function builderSwitches() {
@@ -2358,6 +2361,8 @@ async function builderStop() {
   } catch {
   }
   if (wasOn) console.log("Builder mode off");
+  for (const id of state.selected) await highlight(scene.get(id), false);
+  outlinesOff = true;
   publish();
 }
 function runSearch() {
@@ -2373,6 +2378,13 @@ async function drop(assetPath, appearance, at) {
   const look = person ? appearance === AnyLook ? void 0 : appearance ?? person.appearance : appearance;
   if (state.world !== "ready") await checkWorld();
   if (state.world !== "ready") return say(worldBlocker(), "warn");
+  const waiting2 = unswapped.get(assetKey(assetPath));
+  if (waiting2) {
+    const why = await swapIn(waiting2);
+    if (why) return say(`${path10.basename(assetPath, ".ent")} was imported, but it is not in the game yet: ${why}. Then press Drop again.`, "warn");
+    unswapped.delete(assetKey(assetPath));
+    console.log(`Swapped ${path10.basename(waiting2)} in for ${assetPath}`);
+  }
   let added;
   const before = scene.state();
   try {
@@ -2415,8 +2427,9 @@ async function drop(assetPath, appearance, at) {
 async function select(ids) {
   ids = ids.filter((id, i) => scene.get(id) && ids.indexOf(id) === i);
   const off = state.selected.filter((id) => !ids.includes(id));
-  const on = ids.filter((id) => !state.selected.includes(id));
+  const on = outlinesOff ? ids : ids.filter((id) => !state.selected.includes(id));
   state.selected = ids;
+  outlinesOff = false;
   for (const id of off) await highlight(scene.get(id), false);
   for (const id of on) await highlight(scene.get(id), true);
   publish();
@@ -3448,8 +3461,8 @@ async function importModel(m) {
     return say(`Import is not available: ${err.message}`, "error");
   }
   const target = project;
-  const version = `EDGEbuilder ${"0.11.0"}`;
-  const call = (method, params) => b.call(method, params);
+  const version = `EDGEbuilder ${"0.11.1"}`;
+  const call = (method, params) => stopAsked ? Promise.reject(new Error(ImportStopped)) : b.call(method, params);
   const began = Date.now();
   const step2 = (text) => {
     console.log(`Import: ${text}`);
@@ -3493,31 +3506,37 @@ async function importModel(m) {
     step2("packing the project");
     const packed = await b.call("project.pack", { dir: folders.archive, outDir: path10.join(target.dir, "packed", "archive", "pc", "mod"), modName: target.modName || target.name });
     scanProject();
-    let swap = "";
-    let tone = "ok";
-    if (state.world === "ready" && (await game.state()).world) {
-      step2("swapping it into the game");
-      try {
-        const r = await archives.reload([packed.archive]);
-        if (r.failed.length) {
-          tone = "warn";
-          swap = ` The game did not take the archive: ${r.failed.map((f) => f.why).join("; ")}.`;
-        } else swap = " It is in the game now.";
-      } catch (err) {
-        tone = "warn";
-        swap = ` It is not in the game yet: ${err.message}. Allow Archives for EDGEbuilder in REDnode's Mod Manager (EDGEbuilder, Permissions), then Import again.`;
-      }
-    } else {
-      tone = "warn";
-      swap = " The world is not loaded, so it was not swapped in: load a save and Import again, or install the project from REDcode for the next start.";
-    }
+    step2("swapping it into the game");
+    const why = await swapIn(packed.archive);
+    const key = assetKey(added.entity);
+    if (why) unswapped.set(key, packed.archive);
+    else unswapped.delete(key);
+    const tone = why ? "warn" : "ok";
+    const swap = why ? ` It is not in the game yet: ${why}. Then press Drop: it tries the swap again.` : " It is in the game now.";
     state.imported = { path: added.entity, at: Date.now() };
     scanModelPlaces();
     const guess = prepared.sizeUnknown && !m.height ? ` Its file has no real size, so its height of ${prepared.size.height.toFixed(2)} m is a guess: type Height and Import again.` : "";
     const secs = Math.round((Date.now() - began) / 1e3);
     say(`Imported ${path10.basename(added.entity, ".ent")} into ${target.name} in ${secs} s${added.replaced ? ", replacing the earlier one" : ""}${textures ? ` (${textures} textures)` : ""}.${swap}${guess} It is picked on the Assets tab.`, guess ? "warn" : tone);
   } catch (err) {
+    if (stopAsked) {
+      return say("Import stopped while it added the model to the project, so the project holds part of it. Import it again to finish it, or delete its folder under the project's source\\archive.", "info");
+    }
     say(`Import failed: ${err.message}`, "error");
+  }
+}
+var ImportStopped = "Stopped.";
+var unswapped = /* @__PURE__ */ new Map();
+var assetKey = (p) => p.replace(/\//g, "\\").toLowerCase();
+async function swapIn(archive) {
+  if (state.world !== "ready" || !(await game.state()).world) return "the world is not loaded; load a save";
+  try {
+    const r = await archives.reload([archive]);
+    return r.failed.length ? `the game did not take the archive (${r.failed.map((f) => f.why).join("; ")})` : void 0;
+  } catch (err) {
+    const message = err.message;
+    if (/allow|permission/i.test(message)) return "EDGEbuilder may not swap archives yet. Allow Archives in REDnode's Mod Manager (EDGEbuilder, Permissions)";
+    return message;
   }
 }
 var linked;
@@ -3588,7 +3607,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.11.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.11.1"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs9.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {
