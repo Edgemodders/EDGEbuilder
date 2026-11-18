@@ -6,7 +6,7 @@ title: World objects
 
 > **Agreed addition, 2026-10-29:** the [World inspector](world-inspector.md) grows B3b into a full inspector and takes static nodes from a world node registry in REDnode ([REDnode #24](https://github.com/Edgemodders/REDnode/issues/24), ported from RED Hot Tools), not from a REDbridge index matched by position. REDbridge's `sector.near` below became `sector.nodes` ([REDbridge #11](https://github.com/Edgemodders/REDbridge/issues/11)). The rest of this page stands.
 
-Draft 2, 2026-10-29 (draft 1 2026-10-18). Status: **agreed with the owner on 2026-10-29**, for phases B3b and B4b of the [roadmap](design.md#roadmap). B3b's first step is the probes at the end. Draft 2: probe 1 is answered by REDnode's `world.near`, and the sector index is for game 2.5, whose sectors REDbridge 0.11.0 reads with node paths stored only as hashes.
+Draft 3, 2026-11-18 (draft 2 2026-10-29, draft 1 2026-10-18). Status: **agreed with the owner on 2026-10-29**, for phases B3b and B4b of the [roadmap](design.md#roadmap); draft 3, [Doors first](#doors-first-d0-to-d2), agreed on 2026-11-18, comes before the rest of both. B3b's first step is the probes at the end. Draft 2: probe 1 is answered by REDnode's `world.near`, and the sector index is for game 2.5, whose sectors REDbridge 0.11.0 reads with node paths stored only as hashes.
 
 Until now EDGEbuilder picks only what it placed itself: a click is tested against the boxes of its own previews. A modder also wants to point at something the game put there, a vending machine, a bench, a building's sign, and ask what it is, take a copy into the scene, or change the original. This page is how.
 
@@ -72,6 +72,37 @@ B3b starts with these, in the game and in REDbridge, and records the answers on 
 | 4 | Whether a node's sector path and index are stable between two game versions, on a sample | How much the fingerprint matters |
 | 5 | Which node edits ArchiveXL supports (remove; change transform, scale, appearance), and from which version | What "change the original" can offer in B4b |
 | 6 | Whether an entity's appearance can be switched live through the game API, for devices as well as props | Whether Try a look is in B3b |
+
+## Doors first (D0 to D2)
+
+Agreed with the owner on 2026-11-18 (draft 3), for a modder who wants to remove doors as part of a scene. One thin path through B3b and B4b for one kind, before the rest of either.
+
+**What a door is in game 2.5.** An interactive door is an entity of the class `Door` (or `BunkerDoor`, `MovableWallScreen`, `Window`, which derive from it), placed by a sector's `worldDeviceNode` (a kind of `worldEntityNode`). Its state is in its device's persistent state, `DoorControllerPS`: `isOpened`, `isLocked`, `isSealed`, kept in the player's save, and a starting state in `doorProperties.initialDoorState` (a `DoorSetup`). Its own actions open, close and lock it (`ActionSetOpened`, `ActionSetClosed`, `ActionToggleLock`, queued with the persistency system's `QueuePSDeviceEvent`), as its terminals and quickhacks do. Many apartment doors are not entities: they are meshes on a wall, which REDnode's world node registry already picks ([REDnode #24](https://github.com/Edgemodders/REDnode/issues/24), S24, experimental in REDnode 0.67.3).
+
+**Doors as a kind the picker knows.** Not a mode of their own: the first entry in the picker's list of kinds (the owner's idea of 2026-11-15, a list with checkboxes). Knowing the class is what lets doors come before REDnode's N2, which picks entities in general: the doors around V come from `world.near` by their class, outlined as EDGEbuilder outlines its own objects, and the panel shows a door's state and its actions. A door whose sector node has a reference path is one quests and scripts can address; the panel warns about those, and about doors in the game's `quest` sectors.
+
+| Step | Delivers |
+|---|---|
+| **D0 Probe** | Questions D1 to D6 below, in game, with a probe package (`probes/door-probe`, in the EDGEdeck library as `edgebuilder-door-probe`) |
+| **D1 Remove** | With Edit on, a click picks a door (EDGEbuilder's own objects still win), and a **World** tab lists the doors near the camera (hover outlines, click selects and frames). The Selected panel shows the door's file, state, sector and node, and the warnings. **Remove from world** hides it live and keeps it in the scene as a world edit, with undo; the Scene tab lists the world edits, each with **Restore**. **Bake** writes them as ArchiveXL sector node deletions in the mod's `.xl`, so the door stays gone with EDGEbuilder off; Library bakes too. A fake door, or any mesh REDnode picks, is removed the same way |
+| **D2 Open, close, lock** | The door's actions in the panel, kept in the scene as world edits. Baked if D5 says a bake can set a door's starting state; otherwise they need REDnode in the game, as people in a scene do (the owner, 2026-11-18: acceptable) |
+
+The scene file gets `worldEdits`, a format change (format 3), pinned in [the scene format](scene.md) when D1 is built: each edit names its object by sector path, node index, the node's global id and a fingerprint (kind, resource, place), as [above](#keeping-a-reference-to-the-original). REDnode's scene reader learns them later; the bake does not need it.
+
+**D0's questions:**
+
+| # | Question | Decides |
+|---|---|---|
+| D1 | Is a door entity's id its sector node's global id? If not, does it match by place in REDnode's registry? | How a removal is stored and baked |
+| D2 | Can a door be hidden live, its collision too, and does it stay hidden when it streams back in? REDnode's `world.setVisible` on its node, or its components switched off through the game API | Whether D1 waits on REDnode's N2 |
+| D3 | Does ArchiveXL's node deletion remove a door cleanly in a mod, and a fake door's mesh? From which ArchiveXL version? Do people still walk through the gap? | The bake |
+| D4 | Do the door's own actions open, close and lock it, and does the state stay in the save? | D2 |
+| D5 | Can a bake set a door's starting state (its node's instance data, or an ArchiveXL node edit)? | Whether D2 bakes |
+| D6 | Which classes and how many doors does `world.near` find around a street, and how far? (It looks around V only; a camera far from V needs N2's `world.near({ at })`) | How the World tab finds doors |
+
+**What it needs:** REDbridge's `sector.build` to write node deletions into the bake's `.xl` (a `request` issue, [REDbridge #18](https://github.com/Edgemodders/REDbridge/issues/18)); from REDnode, if D2 says so, entities in `setVisible` and `highlight` and `world.near({ at })` moved to the front of N2; the scene format's `worldEdits`.
+
+**Risks:** removing a door a mission locks or opens can break that mission or let V into unfinished space (the warnings above). Opening a door changes the player's save, unlike a hide: D2 says so, and Restore puts the door back as it was. Other mods' sectors stay out, as below.
 
 ## Not in this plan
 
