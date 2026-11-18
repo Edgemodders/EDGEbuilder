@@ -27,6 +27,9 @@ Last updated 2026-10-30.
 | [B3-1 Arrange](#b3-1-arrange) | In the game | B3 | 2026-11-02 (0.5.8) | Pass (0.5.0 to 0.5.7 found and fixed: modifier keys, Esc, far-away previews, a busy bar, the Scene tab after a drop, copy, cut and paste) |
 | [B3-2 Save](#b3-2-save) | In the game | B3 | 2026-11-04 (0.6.2) | Pass, but for step 19, which waits for REDnode #41; Close, steps 24 to 27, passed on 0.6.4; steps 19 and 28 to 31 passed on 0.6.5; 32 to 34 passed on 0.6.7; released as 0.6.7 |
 | [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. **B4-1, the Bake tab, passed in game on 2026-11-05 on 0.7.1**, all 16 steps; released as 0.7.3. **B4-2, the Solid switch, passed in game on 2026-11-08** on 0.8.0 and 0.8.1, all 22 steps; Seen from reaches its distance with REDbridge 0.12.1 |
+| [B3c NPCs](#b3c-npcs) | In the game | B3c | 2026-11-12 (0.10.9) | Pass; released as 0.10.9 |
+| [B2d Import a model](#b2d-import-a-model) | In the game | B2d | 2026-11-18 (0.11.0, 0.11.1) | Pass: B2d-1 on 0.11.0, its retest on 0.11.1 |
+| [D0 Doors probe](#d0-doors-probe) | In the game, no EDGEbuilder | Doors | | Not run |
 
 ## Automated
 
@@ -816,3 +819,25 @@ Agreed on 2026-11-12 ([design, Import a model](design.md#import-a-model-b2d)). T
 **The 0.11.1 retest passed in game on 2026-11-18** (the owner's desktop, deployed with EDGEdeck): R1 to R7 all as expected. 0.11.1 is the B2d-1 release candidate; its release waits on edgefab-core reaching npm ([EDGEfab #5](https://github.com/Edgemodders/EDGEfab/issues/5)).
 
 **I1:** 224 s and 226 s for `neon_vending_box` (29 textures, 4096 px), of which textures about 215 s; pack and swap under a second. **I2:** the swap of a new archive into a loaded save worked every time it was allowed (steps 4, 6, 7). **I3:** the copy dropped in step 5 changed in place when step 7 replaced it. **I5** was not judged on its own: detail up close stays EDGEfab's research, as after B2d-0.
+
+### D0 Doors probe
+
+The probe for the Doors slice ([World objects, "Doors first"](world-objects.md#doors-first-d0-to-d2), agreed with the owner on 2026-11-18). No EDGEbuilder code: a REDnode package, `probes/door-probe` (EDGEbuilder door probe 0.1.0, in the EDGEdeck library as `edgebuilder-door-probe`), each button one call, logged with what came back. It answers questions D1 to D6 on that page. Needs REDnode 0.67.3 or later (the world node registry, experimental) and REDbridge (the **Bridge** permission, for sector names and the sector file's record).
+
+Before: the game closed, the probe deployed with EDGEdeck. Use a save you don't mind changing: opening or locking a door is kept in the save, and the removal mod (step 11) changes the world. A street with shop doors, or Megabuilding H10's corridors (interactive and painted-on doors side by side), suits it.
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Mod Manager: switch on **EDGEbuilder door probe**, allow **Bridge**. Open the overlay, press **Start** before loading a save | "hooks ..." with four names |
+| 2 | Load the save. **State** | Thousands of nodes, 0 bad sectors |
+| 3 | Stand within 10 m of a door that opens. **Doors** | A line of every class near V, then the doors, each with its file, open, locked, sealed and starting state (D6) |
+| 4 | **Choose 1** (or the number of the door in front of you) | The door is outlined. Candidate lines, a "Q1:" line, and the sector file's entry with its `ref` or NONE (D1) |
+| 5 | **Hide its node (REDnode)**. Say whether the door goes, and whether V can walk through. **Show hidden nodes** | Either works or says why (D2) |
+| 6 | **Hide its components**. Say whether the door goes, and walk into the doorway | The door gone; say whether V is blocked (D2) |
+| 7 | With it hidden, go about 200 m away (drive), then come back | The log says it left and came back and was hidden again; say whether it is hidden when you get there (D2). Then **Show its components** |
+| 8 | **Read state**, then **Open**, **Close**, **Lock / unlock** (and **Lock / unlock** again to unlock) | The door moves each time; each line says the state before and after (D4) |
+| 9 | **Open**, save to a new slot, load that slot | Say whether the door is still open (D4) |
+| 10 | **Add the chosen door**; choose a second door and add it too if there is one. Aim at a painted-on door (or a bench), **Pick at the crosshair**, **Add the pick** | The removal list names each, with its node and sector |
+| 11 | **Write the removal mod**, quit the game | The log shows the `.xl`; Claude adds `door-probe-removal` from the probe's data folder with EDGEdeck and deploys it (the game closed) |
+| 12 | Start the game, load the save from step 9 (or the first) | The listed doors and the mesh are gone; V walks through; say whether people walk through the gap (D3) |
+| 13 | Quit the game. Claude reads the probe's log, REDnode's log and ArchiveXL's log, and the door's node in the sector file through REDbridge (D5) | |
