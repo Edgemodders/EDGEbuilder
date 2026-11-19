@@ -841,3 +841,22 @@ Before: the game closed, the probe deployed with EDGEdeck. Use a save you don't 
 | 11 | **Write the removal mod**, quit the game | The log shows the `.xl`; Claude adds `door-probe-removal` from the probe's data folder with EDGEdeck and deploys it (the game closed) |
 | 12 | Start the game, load the save from step 9 (or the first) | The listed doors and the mesh are gone; V walks through; say whether people walk through the gap (D3) |
 | 13 | Quit the game. Claude reads the probe's log, REDnode's log and ArchiveXL's log, and the door's node in the sector file through REDbridge (D5) | |
+
+**Results (2026-11-19, the desktop, game 2.5, REDnode 0.68.1, ArchiveXL 1.28.8, probe 0.1.0 then 0.1.1): passed; every question answered.** At V's flat in Megabuilding H10 and the elevator beside it.
+
+| # | Result |
+|---|---|
+| 1, 2 | Four hooks; 1268 sectors, 0 bad. **Start must come before the save loads**: started after one, the registry is empty and Choose and Pick find nothing (a second run) |
+| 3 | 7 doors within 25 m by V's flat, 10 by the elevator: `Door` (apartment, elevator and V's secret room doors, shutter windows) and `FakeDoor` (painted-on, no device state) among 150 to 195 entities, in about 0.5 to 1.5 s (D6) |
+| 4 | V's door: the entity id is the node's id in the registry and in the sector file (`worldEntityNode` 271, entry 288, ref `…/{q001_door_v_flat}_prefab…/#q001_door_v_flat`); the elevator door the same (entry 175) (D1) |
+| 5 | **Hide its node (REDnode)**: the door and its collision go, V walks through; Show brings it back. Hidden, then a fast travel to another district and back: still hidden (D2) |
+| 6 | **Hide its components** (57 components): the door and its collision go; Show brings it back. 0.1.0 lost its list on a second press (fixed in 0.1.1) |
+| 7 | On foot (first run): no stream-out logged and the door was back; the fast travel in step 5 answered it instead |
+| 8 | Open, Close, Lock each move the door within 1.5 s; Open works on a locked door (D4) |
+| 9 | Open and locked, saved, loaded: still open and locked, then the door's own auto-close shut it (`automaticallyClosesItself` in its setup) (D4) |
+| 10 | Listed V's door, the elevator door and a painted-on door's mesh (`worldCookedStaticMeshNode` node 73, entry 344) |
+| 11 | 0.1.0 wrote node indexes and node counts; **ArchiveXL refused it**: "The target sector has 853 node(s), but the mod expects 438". ArchiveXL counts a sector's node data entries and a deletion names an entry. Rewritten with entries (853 and 775; 288, 175, 344); probe 0.1.1 writes entries itself |
+| 12 | With entries: the elevator door and the painted-on door gone, **V's door still there**, solid, not a `Door`, not pickable. It was the door's **proxy mesh**: a `worldEntityProxyMeshNode` in another sector (`exterior_-11_9_0_1`, entry 254, `ownerGlobalId` V's door, `entityAttachDistance` 64, the door's mesh under `sectors\_external\proxy\`), which the game shows when the entity is not there. The elevator's proxy too (`interior_-11_10_0_2`, entry 35). With both proxies deleted: **all three gone, V walks through V's doorway and the elevator's**; ArchiveXL applied all four sectors. No people passed to watch (D3) |
+| 13 | V's door's node holds its setup in `instanceData` → `persistentState` (`DoorControllerPS`) → `doorProperties`: `initialDoorState` CLOSED, `automaticallyClosesItself` true, lock and seal switches, and a fact `q001_vroom_door_opened` in its operations. ArchiveXL's node mutations change position, orientation, scale, resource, appearance, record and proxy counts, not instance data (its `WorldStreaming/Config.hpp`). So a bake cannot set a door's starting state in place; only a new door node of the bake's own can, which loses the original's id (quest links, saved state). And a save keeps a door's state over its start (step 9) (D5) |
+
+**What D1 and D2 take from it:** Remove from world hides through REDnode (D1 waits on nothing in REDnode's N2). A removal names a sector entry and the sector's entry count, and **removing an entity also removes its proxy**, found by `ownerGlobalId` (for REDbridge #18). Open, close and lock (D2) live in the game through REDnode, as agreed for this case on 2026-11-18; a new door with its own starting state is a node the bake writes, for later (new interiors). After the test: switch off `door-probe-removal` in EDGEdeck and deploy, or V's flat keeps no door.

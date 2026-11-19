@@ -100,6 +100,17 @@ The scene file gets `worldEdits`, a format change (format 3), pinned in [the sce
 | D5 | Can a bake set a door's starting state (its node's instance data, or an ArchiveXL node edit)? | Whether D2 bakes |
 | D6 | Which classes and how many doors does `world.near` find around a street, and how far? (It looks around V only; a camera far from V needs N2's `world.near({ at })`) | How the World tab finds doors |
 
+**D0's answers** (passed in game on 2026-11-19; [results](testing.md#d0-doors-probe)):
+
+| # | Answer |
+|---|---|
+| D1 | Yes: a door entity's id is its node's global id, in REDnode's registry and in the sector file |
+| D2 | Yes, through REDnode's `setVisible` on its node (and through its components): the door and its collision go, and it stays hidden after its area streams out and back in (a fast travel away and back). D1 needs nothing from N2 for doors |
+| D3 | Yes, from ArchiveXL 1.28.8 at least, once the deletion names a **node data entry** and `expectedNodes` is the sector's **entry count** (ArchiveXL refuses a count of nodes). **An entity also has a proxy mesh** in another sector (`worldEntityProxyMeshNode`, `ownerGlobalId` the entity, shown when the entity is not there): deleting the entity alone leaves its proxy, solid. Both deleted, the doorway is open. A painted-on door's mesh (`worldCookedStaticMeshNode`) goes the same way. People passing through: not seen |
+| D4 | Yes: Open, Close and Lock move the door within 1.5 s, and the state stays in the save. A door may close itself again (`automaticallyClosesItself`) |
+| D5 | No, not in place: the starting state is in the node's instance data (`persistentState` → `doorProperties.initialDoorState`), and ArchiveXL's node mutations reach position, orientation, scale, resource, appearance, record and proxy counts only. A bake can write a new door node with its own setup, losing the original's id (quest links, saved state); and a save's state wins over a starting state anyway. **D2 runs in the game through REDnode** |
+| D6 | `world.near` finds 7 to 10 doors within 25 m of V in about a second: `Door` (shutter windows among them) and `FakeDoor`, which has no device state |
+
 **What it needs:** REDbridge's `sector.build` to write node deletions into the bake's `.xl` (a `request` issue, [REDbridge #18](https://github.com/Edgemodders/REDbridge/issues/18)); from REDnode, if D2 says so, entities in `setVisible` and `highlight` and `world.near({ at })` moved to the front of N2; the scene format's `worldEdits`.
 
 **Risks:** removing a door a mission locks or opens can break that mission or let V into unfinished space (the warnings above). Opening a door changes the player's save, unlike a hide: D2 says so, and Restore puts the door back as it was. Other mods' sectors stay out, as below.
