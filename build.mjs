@@ -44,9 +44,9 @@ const core = {
 };
 
 // B2d: EDGEfab's core, which the mod loads only at the first Import (edgebuilder/fab.cjs, beside
-// mod.mjs), so EDGEbuilder starts as fast as before. From npm once @edgemodders/edgefab-core is there
-// (EDGEfab #5); until then from an EDGEfab checkout next to this repo, for development only. With
-// neither, a stand-in that says Import is missing, so the build and the release workflow still run.
+// mod.mjs), so EDGEbuilder starts as fast as before. From npm (@edgemodders/edgefab-core, a
+// devDependency since 0.11.1); without node_modules, from an EDGEfab checkout next to this repo, for
+// development only. With neither, a stand-in that says Import is missing.
 const fabPackage = "node_modules/@edgemodders/edgefab-core";
 const fabCheckout = "../EDGEfab/packages/edgefab-core";
 const fabFrom = fs.existsSync(fabPackage) ? fabPackage : fs.existsSync(`${fabCheckout}/dist/index.cjs`) ? fabCheckout : undefined;

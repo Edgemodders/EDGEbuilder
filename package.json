@@ -15,6 +15,7 @@
     "nexus:status": "node ../EDGErepo/tools/nexus/nexus.mjs status"
   },
   "devDependencies": {
+    "@edgemodders/edgefab-core": "^0.1.0",
     "@types/node": "^22.10.0",
     "esbuild": "^0.24.2",
     "typescript": "^5.7.2"
