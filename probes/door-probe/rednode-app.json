@@ -1,7 +1,7 @@
 {
   "id": "edgebuilder-door-probe",
   "name": "EDGEbuilder door probe",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "Edgemodders",
   "description": "EDGEbuilder's D0 probe (docs/testing.md, \"D0 Doors probe\"): finds the doors near V, ties each to the sector node that placed it, hides it two ways, opens, closes and locks it, and writes an ArchiveXL removal for the doors chosen. Development only; switching it off shows again what it hid.",
   "main": "mod.mjs",

@@ -248,7 +248,8 @@ async function partsOff(entity, hash) {
       await c.Toggle(false).catch(() => {});
     }
   }
-  hiddenParts.set(hash, was);
+  // A second press finds them already off: keep the first press's list, or Show turns nothing back on.
+  hiddenParts.set(hash, [...new Set([...(hiddenParts.get(hash) ?? []), ...was])]);
   say(`  components: ${[...kinds].map(([k, n]) => `${k} ${n}`).join(', ')}`);
   return was.length;
 }
@@ -317,12 +318,21 @@ function showRemoval() {
   });
 }
 
-function addNode(n, sectorPath, label) {
+// ArchiveXL counts a sector's node data entries, not its nodes, and a deletion's index is an entry's
+// index (the first run, 2026-11-19: "The target sector has 853 node(s), but the mod expects 438").
+// The entry is the registry's instance, the number after the colon in its id; the count comes from
+// the sector file through REDbridge.
+async function addNode(n, sectorPath, label) {
   if (!sectorPath) throw new Error('no sector path: REDbridge must name the sector (the bridge permission)');
-  if (removal.some((r) => r.sectorPath === sectorPath && r.index === n.index)) return 'already listed';
-  removal.push({ sectorPath, expectedNodes: n.nodeCount, index: n.index, type: n.kind, label });
+  const entry = n.instance ?? Number(String(n.id).split(':').pop());
+  if (!Number.isInteger(entry)) throw new Error(`no entry index for ${n.id}`);
+  if (removal.some((r) => r.sectorPath === sectorPath && r.index === entry)) return 'already listed';
+  const items = pick(await bridgeCall('sector.nodes', { path: sectorPath }), 'items', 'Items') ?? [];
+  const item = items.find((x) => pick(x, 'index', 'Index') === entry);
+  if (item && pick(item, 'kind', 'Kind') !== n.kind) throw new Error(`entry ${entry} is a ${pick(item, 'kind', 'Kind')} in the file, not a ${n.kind}`);
+  removal.push({ sectorPath, expectedNodes: items.length, index: entry, node: n.index, type: n.kind, label });
   showRemoval();
-  return `listed ${n.kind} ${n.index} of ${n.nodeCount}`;
+  return `listed ${n.kind} entry ${entry} of ${items.length} (node ${n.index} of ${n.nodeCount})`;
 }
 
 const addChosen = () =>
