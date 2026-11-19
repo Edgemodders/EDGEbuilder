@@ -337,6 +337,19 @@ For EDGEdeck: the `rednode` kind, so a zip or folder with `rednode-app.json` dep
 
 Each phase ends with an in-game test on the owner's PC, with the steps written down in a results page, as REDnode does.
 
+### The long-term goal: new interiors
+
+The owner, 2026-11-19: build interiors for buildings the game leaves shut (most of them behind painted-on doors), with working doors and rooms that are wholly new, made of **tiles**: pieces cut from the game's own interiors (their nodes), copied to another place and joined together. Not designed yet, and no phase of its own yet. The work now lays its ground, so it weighs in planning:
+
+| Now | What the goal takes from it |
+|---|---|
+| Doors D0 to D2 | Removing a painted-on door and its proxy, then a working door put in its place |
+| B3b World objects | Picking the game's nodes and copying them into a scene: a tile is many of them at once |
+| B4b Edit the world | Removing what blocks the way in, baked as ArchiveXL node deletions |
+| B6 Comfort | Prefabs and snapping, which tiles that join need |
+
+What D0 found that it needs: a deleted entity leaves its proxy mesh behind (a `worldEntityProxyMeshNode` in another sector, its `ownerGlobalId` the entity), and a sector is counted in node data entries, not nodes.
+
 ## Release stages
 
 Agreed with the owner on 2026-10-18 (B3b and B4b added the same day). Before the bake, nothing EDGEbuilder places outlasts the session, so there is nothing worth offering players; the first public release follows B4.
