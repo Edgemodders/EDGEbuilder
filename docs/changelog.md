@@ -6,11 +6,20 @@ title: Changelog
 
 What changed in each EDGEbuilder release, newest first. The release workflow takes a release's notes from its section here (`tools/release/notes.mjs`). From the public preview on, the Nexus page's changelog gets the same section as plain lines.
 
-With each change a player or modder would notice, add a line under **Unreleased** in the same commit, grouped **New**, **Changed**, **Fixed**, **Other**. Before a release, rename **Unreleased** to `## <version> (<date>)` (the version in `edgebuilder/rednode-app.json`) and start a new empty one.
+With each change a player or modder would notice, add a line under **Unreleased** in the same commit, grouped **New**, **Changed**, **Fixed**, **Other**. Before a release, rename **Unreleased** to `## <version> (<date>)` (the version in `edgebuilder/rednode-app.json`) and start a new empty one. Under the heading, a `<!-- nexus ... -->` comment holds the Nexus page's changelog: one short plain line per change, each starting with New:, Changed:, Fixed:, Removed:, Other: or Needs:, at most 120 characters and 12 lines (`tools/release/notes.mjs` checks them). Sections without one give Nexus their bullets as plain lines.
 
 ## Unreleased
 
 ## 0.11.1 (2026-11-19)
+
+<!-- nexus
+New: Import a model: a textured GLB from Blender, a store or an AI model maker becomes a prop in the game, ready to drop
+New: Import from the Library tab (your Library, the project's source\raw, EDGEfab's Desk) or from any path
+New: Import again under the same name and every placed copy changes with it
+New: Import needs a REDcode project open and the new Archives permission in REDnode's Mod Manager
+Changed: The green outline on selected objects goes away when Edit goes off, so it no longer shows through walls
+Other: EDGEfab's core 0.1.0 comes inside EDGEbuilder: nothing more to install
+-->
 
 **New**
 

@@ -33,8 +33,43 @@ if (!section.some((line) => line.trim())) {
   process.exit(1);
 }
 
-if (nexus) {
-  // Nexus's changelog takes one plain line per change: no markdown, links as "text (url)".
+// A section's Nexus summary, as EDGEmat's notes.mjs reads it (EDGEmat #14): short lines written by
+// hand in an HTML comment under the heading, so GitHub and the docs site show none of it.
+//
+//   <!-- nexus
+//   New: Import a model: a textured GLB becomes a prop in the running game
+//   -->
+//
+// Each line starts with New:, Changed:, Fixed:, Removed:, Other: or Needs:, has no markdown and at most
+// NexusLine characters; at most NexusLines lines, then a "Full changelog" line. Sections from before
+// 0.11.1 have none: Nexus then gets their bullets as plain lines, as before.
+const NexusLine = 120;
+const NexusLines = 12;
+const open = section.findIndex((line) => line.trim() === "<!-- nexus");
+const close = open < 0 ? -1 : section.findIndex((line, i) => i > open && line.trim() === "-->");
+if (open >= 0 && close < 0) {
+  console.error(`docs/changelog.md: the Nexus summary for ${version} has no closing "-->"`);
+  process.exit(1);
+}
+const github = open < 0 ? section : [...section.slice(0, open), ...section.slice(close + 1)];
+
+if (nexus && open >= 0) {
+  const summary = section.slice(open + 1, close).map((line) => line.trim()).filter(Boolean);
+  const wrong = [];
+  if (!summary.length) wrong.push("it is empty");
+  if (summary.length > NexusLines) wrong.push(`${summary.length} lines, at most ${NexusLines}`);
+  for (const line of summary) {
+    if (!/^(New|Changed|Fixed|Removed|Other|Needs): \S/.test(line)) wrong.push(`"${line}" does not start with New:, Changed:, Fixed:, Removed:, Other: or Needs:`);
+    if (line.length > NexusLine) wrong.push(`"${line.slice(0, 50)}..." is ${line.length} characters, at most ${NexusLine}`);
+    if (/`|\*\*|\]\(|^#|^- /.test(line)) wrong.push(`"${line.slice(0, 50)}..." has markdown`);
+  }
+  if (wrong.length) {
+    console.error(`docs/changelog.md: the Nexus summary for ${version}:\n- ${wrong.join("\n- ")}`);
+    process.exit(1);
+  }
+  write([...summary, `Full changelog: ${Docs}changelog.html`].join("\n"));
+} else if (nexus) {
+  // No summary: Nexus's changelog takes one plain line per change: no markdown, links as "text (url)".
   const plain = (text) => text
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
@@ -49,9 +84,9 @@ if (nexus) {
   }
   write(result.join("\n"));
 } else {
-  write(`${section.join("\n").trim()}
+  write(`${github.join("\n").trim()}
 
-**Install:** \`EDGEbuilder-${version}.zip\` below, the same file as on Nexus Mods (https://www.nexusmods.com/cyberpunk2077/mods/36627), is laid out like the game folder: add it in EDGEdeck or Vortex and deploy with the game closed, or extract it into the game folder. Then allow REDbridge for EDGEbuilder in REDnode's Mod Manager (EDGEbuilder, Permissions). Needs REDnode 0.58.0 or later, Codeware and REDbridge 0.12.1 or later: https://edgemodders.ai/wiki/edgebuilder/install.html
+**Install:** \`EDGEbuilder-${version}.zip\` below, the same file as on Nexus Mods (https://www.nexusmods.com/cyberpunk2077/mods/36627), is laid out like the game folder: add it in EDGEdeck or Vortex and deploy with the game closed, or extract it into the game folder. Then allow REDbridge and Archives for EDGEbuilder in REDnode's Mod Manager (EDGEbuilder, Permissions). Needs REDnode 0.58.0 or later, Codeware and REDbridge 0.12.1 or later: https://edgemodders.ai/wiki/edgebuilder/install.html
 
 Docs: ${Docs} (changelog: ${Docs}changelog.html)`);
 }
