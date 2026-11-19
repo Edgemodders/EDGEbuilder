@@ -816,7 +816,7 @@ Agreed on 2026-11-12 ([design, Import a model](design.md#import-a-model-b2d)). T
 | R6 | Select it with Edit on, then turn Edit off | The green outline goes; the Scene tab still has it selected |
 | R7 | Turn Edit on | The outline is back |
 
-**The 0.11.1 retest passed in game on 2026-11-18** (the owner's desktop, deployed with EDGEdeck): R1 to R7 all as expected. 0.11.1 is the B2d-1 release candidate; its release waits on edgefab-core reaching npm ([EDGEfab #5](https://github.com/Edgemodders/EDGEfab/issues/5)).
+**The 0.11.1 retest passed in game on 2026-11-18** (the owner's desktop, deployed with EDGEdeck): R1 to R7 all as expected. 0.11.1 is the B2d-1 release candidate. edgefab-core 0.1.0 reached npm on 2026-11-19 ([EDGEfab #5](https://github.com/Edgemodders/EDGEfab/issues/5)), its build byte-identical to the checkout tested here, and **0.11.1 is released on 2026-11-19** with it.
 
 **I1:** 224 s and 226 s for `neon_vending_box` (29 textures, 4096 px), of which textures about 215 s; pack and swap under a second. **I2:** the swap of a new archive into a loaded save worked every time it was allowed (steps 4, 6, 7). **I3:** the copy dropped in step 5 changed in place when step 7 replaced it. **I5** was not judged on its own: detail up close stays EDGEfab's research, as after B2d-0.
 
