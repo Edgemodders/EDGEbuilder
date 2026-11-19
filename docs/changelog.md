@@ -10,6 +10,8 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.11.1 (2026-11-19)
+
 **New**
 
 - Import a model: a textured GLB (from Blender, a store or an AI model maker) becomes a prop in the running game from inside EDGEbuilder. Pick it on the Library tab (GLBs in your Library and in the open REDcode project's source\raw, props on EDGEfab's Desk) or type its path, choose a name, its height when the file has no real size, and how solid it is, then press **Import**. EDGEbuilder prepares it with EDGEfab's core (size, facing, levels of detail, textures), puts it into the open REDcode project, packs the project and swaps it into the game, then picks it on the Assets tab, ready to Drop. Large textures take a while: about two minutes for a model with 4096 px textures. Importing again under the same name replaces the prop, and the copies already placed change with it. Needs a REDcode project open, and the new Archives permission for EDGEbuilder in REDnode's Mod Manager. If the game could not take the new prop (Archives not allowed yet, or no save loaded), Drop tries again, with no second Import. **Stop** ends an Import within one texture; the project then holds part of the model until you Import it again.
@@ -17,6 +19,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 **Changed**
 
 - The game's green outline on selected objects goes away when Edit goes off, so it no longer shows through walls while you play. The selection stays, and its outline comes back with Edit or when you select something.
+
+**Other**
+
+- EDGEfab's core 0.1.0 (https://github.com/Edgemodders/EDGEfab), which prepares imported models, comes inside EDGEbuilder: nothing more to install. Its licenses are in `fab-notices.txt`.
 
 ## 0.10.9 (2026-11-12)
 
