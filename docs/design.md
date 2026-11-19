@@ -348,6 +348,19 @@ The owner, 2026-11-19: build interiors for buildings the game leaves shut (most 
 | B4b Edit the world | Removing what blocks the way in, baked as ArchiveXL node deletions |
 | B6 Comfort | Prefabs and snapping, which tiles that join need |
 
+The hope, in the owner's words: analyse an interior (a building with three floors, stairs, rooms, hallways, intersections, stairwells), cut it into prefabs, and paint new layouts with them: a hallway tile four times, then a left, right or T intersection, a hallway with doors on both sides, rooms behind those doors. The seams between tiles are the hard part, perhaps for a Blender tool through MCP; dug into when the time comes.
+
+Leads for then, not decisions:
+
+| Lead | Why it may help |
+|---|---|
+| The game's own prefab tree survives in node references (D0 saw `loc_megabuilding_a_prefab…/#loc_megabuilding_a_devices/{q001_door_v_flat}_prefab…`) | Tiles may be found as the prefabs the level designers already used, not cut by hand |
+| Megabuilding corridors look built from a modular kit | Pieces cut along the kit's grid join without seams; measuring that grid is a first probe |
+| Cooked nodes (`worldCookedStaticMeshNode`, `worldCookedCollisionNode`) merge many pieces into one buffer | These cannot be split by nodes; a tile that crosses one needs its mesh cut, where a Blender tool comes in |
+| Interiors carry more than meshes: collision, lights, decals, occluders, navigation for NPCs, community spots | A tile is all of these, and NPCs walk a new layout only with navigation |
+
+A first probe, when the time comes: REDbridge's `sector.nodes` over one building's interior sectors, grouping nodes by prefab and measuring the spacing of repeated meshes.
+
 What D0 found that it needs: a deleted entity leaves its proxy mesh behind (a `worldEntityProxyMeshNode` in another sector, its `ownerGlobalId` the entity), and a sector is counted in node data entries, not nodes.
 
 ## Release stages
