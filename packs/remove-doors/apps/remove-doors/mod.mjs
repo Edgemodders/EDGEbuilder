@@ -138,7 +138,8 @@ async function look() {
 
 async function outline(entity, colour) {
   try {
-    const event = await api.$new('entRenderHighlightEvent', { seeThroughWalls: true, opacity: colour ? 1 : 0, outlineIndex: colour, fillIndex: 0 });
+    // Not see-through: through walls the game drew it white whatever the colour (the owner's test, 2026-11-19).
+    const event = await api.$new('entRenderHighlightEvent', { seeThroughWalls: false, opacity: colour ? 1 : 0, outlineIndex: colour, fillIndex: 0 });
     await entity.QueueEvent(event);
   } catch {
     // Gone since the look (a load): nothing to outline.
@@ -159,7 +160,7 @@ async function updatePins() {
         await world.pin({
           at: { hash: d.id, x, y, z },
           title: isPicked ? `${i + 1} PICKED` : `${i + 1}`,
-          text: d.id === lookedAt ? 'looking at' : nameOf(d.type, ''),
+          text: nameOf(d.type, ''),
           style: { ...PinStyle, color: isPicked ? RedPin : Cyan },
         }),
       );
@@ -174,6 +175,55 @@ async function outlines() {
   for (const d of doors) await outline(d.entity, d.id === picked ? Red : settings.showAll ? White : 0);
   await updatePins();
 }
+
+/** How far in front of a door Jump puts V, and how far down it looks for a floor. */
+const JumpDistance = 1.4;
+const FloorGroups = ['Static', 'Terrain', 'PlayerBlocker'];
+
+/** The nearest floor straight below a point (from 1.5 m above it to 3 m below), or undefined. */
+async function floorBelow([x, y, z]) {
+  const queries = await api.GameInstance.GetSpatialQueriesSystem(game.instance);
+  if (!queries) return undefined;
+  let best;
+  for (const group of FloorGroups) {
+    try {
+      const r = await queries.SyncRaycastByCollisionGroup({ X: x, Y: y, Z: z + 1.5, W: 1 }, { X: x, Y: y, Z: z - 3, W: 1 }, group, null, false, false);
+      const p = r?.out?.result?.position;
+      if (r?.result && p && (best === undefined || p.Z > best)) best = p.Z;
+    } catch {
+      // That group answered nothing.
+    }
+  }
+  return best;
+}
+
+/**
+ * Jump: V stands JumpDistance in front of the door, on V's side first, then the other, facing it,
+ * on the floor there. Not when neither side has a floor.
+ */
+const jump = (door) =>
+  run('Jump', async () => {
+    const f = await door.entity.GetWorldForward().catch(() => null);
+    const me = await game.player.position();
+    const fwd = f && Math.hypot(f.X, f.Y) > 0.1 ? [f.X / Math.hypot(f.X, f.Y), f.Y / Math.hypot(f.X, f.Y)] : [me.x - door.position[0], me.y - door.position[1]];
+    const n = Math.hypot(fwd[0], fwd[1]) || 1;
+    const dir = [fwd[0] / n, fwd[1] / n];
+    const mySide = Math.sign((me.x - door.position[0]) * dir[0] + (me.y - door.position[1]) * dir[1]) || 1;
+    for (const side of [mySide, -mySide]) {
+      const spot = [door.position[0] + dir[0] * JumpDistance * side, door.position[1] + dir[1] * JumpDistance * side, door.position[2]];
+      const floor = await floorBelow(spot);
+      if (floor === undefined) continue;
+      // Facing the door: the game's yaw turns +Y towards -X.
+      const yaw = (Math.atan2(-(door.position[0] - spot[0]), door.position[1] - spot[1]) * 180) / Math.PI;
+      await game.player.teleport({ x: spot[0], y: spot[1], z: floor + 0.05, yaw });
+      note = `Jumped to ${nameOf(door.type, door.appearance)}.`;
+      await new Promise((r) => setTimeout(r, 600));
+      await look();
+      await outlines();
+      return;
+    }
+    note = `No floor in front of ${nameOf(door.type, door.appearance)} on either side, so V stays where V is.`;
+  });
 
 /** The door V's camera looks at: the first whose line from its foot up comes within LookReach of the view. */
 async function doorLookedAt() {
@@ -365,18 +415,20 @@ function doorRows() {
   if (!doors.length) return [ui.text(`No doors within ${Radius} m of V. Walk closer, then Scan Doors.`, { tone: 'dim' })];
   return doors.map((d, i) => {
     const gone = isRemoved(d);
-    const looking = d.id === lookedAt ? '  ◀ LOOKING AT' : '';
-    const text = `${i + 1}.  ${d.distance.toFixed(1)} m  ${nameOf(d.type, d.appearance)}${d.state ? `, ${d.state}` : ''}${gone ? ', removed' : ''}${looking}`;
+    const text = `${i + 1}.  ${d.distance.toFixed(1)} m  ${nameOf(d.type, d.appearance)}${d.state ? `, ${d.state}` : ''}${gone ? ', removed' : ''}`;
     return ui.row(
       ui.text(text, { tone: d.id === picked ? 'accent' : gone ? 'dim' : 'normal' }),
+      ui.button('Jump', () => jump(d), { variant: 'ghost' }),
       ui.button(d.id === picked ? 'Picked' : 'Pick', () => pick(d), { variant: d.id === picked ? 'primary' : 'ghost', disabled: gone }),
+      // The door V looked at when the doors were scanned.
+      ...(d.id === lookedAt ? [ui.text('\u{1F441}', { tone: 'accent' })] : []),
     );
   });
 }
 
 function pickedRows() {
   const d = doors.find((x) => x.id === picked);
-  if (!d) return [ui.text('Look at a door and press Scan Doors, or pick one in the list: it gets a red pin and outline in the game.', { tone: 'dim' })];
+  if (!d) return [ui.text('Look at a door and press Scan Doors (its row gets an eye), or pick one in the list: it gets a red pin and outline in the game. Jump takes V to a door.', { tone: 'dim' })];
   return [
     ui.text(`${nameOf(d.type, d.appearance)}${d.state ? `, ${d.state}` : ''}, ${d.distance.toFixed(1)} m from V`, { tone: 'accent' }),
     ui.row(ui.button('Remove', () => remove(d), { variant: 'danger' })),
@@ -399,7 +451,7 @@ const win = ui.window({
   anchor: 'left',
   x: 40,
   y: 120,
-  width: 480,
+  width: 560,
   height: 680,
   children: [],
 });

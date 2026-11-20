@@ -972,11 +972,11 @@ Before: the game closed; Claude deploys the draft zip with EDGEdeck. EDGEbuilder
 | # | Do | Expected |
 |---|---|---|
 | 1 | Start the game. Before loading a save: F10, Mod Manager, switch **Remove Doors** on and pin it | Its window: two switches, Look again, Show all, and the three sections |
-| 2 | Load the save at V's flat. Look at a door and press **Scan Doors** | **Doors near V** lists the doors, numbered, with their distance and state; the one V looks at says **◀ LOOKING AT** and is picked: a red outline and a red pin "PICKED" over it |
+| 2 | Load the save at V's flat. Look at a door and press **Scan Doors** | **Doors near V** lists the doors, numbered, with their distance and state; the one V looks at has an **eye** after its Pick button and is picked: a red outline and a red pin "PICKED" over it |
 | 3 | **Show all** on, then off | On: every listed door outlined (white, colour 5) and pinned with its number; off: only the picked one stays marked |
 | 4 | **Pick** another door (V's secret room door, or a far elevator door) | A **red** outline on it (colour 3) and the red pin moves to it; **Picked** names it |
 | 5 | **Remove** | The door goes; with Edit nothing, walk V through the doorway. It is listed under **Removed doors** |
-| 6 | Pick a painted-on door and **Remove** it | It goes |
+| 6 | Press **Jump** on a painted-on door (or another door out of reach), then **Pick** and **Remove** it | Jump puts V in front of it, facing it, on the floor (or says there is no floor on either side and V stays); Remove: it goes |
 | 7 | Save, load that save | Within a few seconds both are gone again, with no stand-in in the doorway |
 | 8 | **Bring back** the first | The message says it shows as its stand-in until the area loads again; fast travel away and back: the working door |
 | 9 | Close the window with its X, then open it again from the launcher | The removed painted-on door is still listed and still gone |
@@ -990,3 +990,5 @@ Before: the game closed; Claude deploys the draft zip with EDGEdeck. EDGEbuilder
 | RD3 | Is the window clear enough for a player without the wiki? |
 
 **First run (2026-11-19, 0.1.0 draft): stopped at step 4.** No red outline on a picked door (the app drew it without see-through, where the D0 probe, whose outline the owner saw in normal play, drew it see-through), and the owner asked for an indicator on the door V looks at and for **Look again** to read **Scan Doors**. The next draft: the outline see-through as the probe's; pins from REDnode's overlay as well (each listed door's number with Show all, the picked one red "PICKED"), so a door is marked even where the game draws no outline; **Scan Doors** finds the door V's camera looks at, marks it **◀ LOOKING AT** and picks it when none is picked. Steps 2 to 4 above say so.
+
+**Second run (2026-11-19):** the first run's missing outline was a stand-in the owner looked at (no outline reaches a stand-in); with see-through the outline came out **white**, not red. The owner asked for an eye icon after Pick in place of the LOOKING AT text, and a **Jump** button before Pick (V to the door, when there is a floor), since a painted-on door was out of reach. The next draft: the outline not see-through again (red, colour 3, as REDnode's VATS spike saw it), the eye, Jump (1.4 m in front, V's side first, the floor found by a raycast down from 1.5 m above to 3 m below, facing the door), the window 560 px wide.
