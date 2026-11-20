@@ -25,6 +25,9 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - F10 while Edit is on gives V the view and the HUD back, so you can play; F10 again returns to EDGEbuilder's camera where you left it, with Edit still on.
 - A door brought back after a save load shows as its stand-in until its area loads again, and EDGEbuilder now says so.
 - A scene or bake says what it adds and what it removes, as "2 added, 1 removed" ("+2 −1" in lists), so a scene that only removes things no longer reads "0 objects".
+**Fixed**
+
+- A long file path in a tooltip (on the Bake and Library tabs) wraps inside the tooltip instead of running out of it.
 
 ## 0.11.1 (2026-11-19)
 

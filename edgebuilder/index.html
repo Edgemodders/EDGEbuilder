@@ -47,6 +47,8 @@
   .tag { font-family: var(--rn-mono, monospace); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--rn-ok, #5dffa1); margin-left: 6px; }
   .tag.warn { color: var(--rn-warn, #ffcc4d); }
   #worldWarnings { color: var(--rn-warn, #ffcc4d); }
+  /* REDnode's kit draws title tooltips in #rn-tip, 280 px wide: a long path has no space to wrap at, so let it break anywhere. */
+  #rn-tip { overflow-wrap: anywhere; }
   #worldEdits rn-item button { font: inherit; font-size: 11px; background: none; color: var(--rn-accent, #f4d03f); border: 1px solid currentColor; padding: 0 6px; margin-left: 6px; cursor: pointer; }
   .tag.dim { color: var(--rn-dim, #999); }
   .update { background: none; border: 1px solid var(--rn-line, #333); color: var(--rn-accent, #f2e600); cursor: pointer; font: 11px var(--rn-mono, monospace); padding: 0 6px; margin-right: 6px; }

@@ -4049,7 +4049,7 @@ async function importModel(m) {
     return say(`Import is not available: ${err.message}`, "error");
   }
   const target = project;
-  const version = `EDGEbuilder ${"0.12.4"}`;
+  const version = `EDGEbuilder ${"0.12.5"}`;
   const call = (method, params) => stopAsked ? Promise.reject(new Error(ImportStopped)) : b.call(method, params);
   const began = Date.now();
   const step2 = (text) => {
@@ -4209,7 +4209,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.12.4"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.12.5"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs9.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

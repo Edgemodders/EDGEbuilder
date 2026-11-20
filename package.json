@@ -1,6 +1,6 @@
 {
   "name": "edgebuilder",
-  "version": "0.12.4",
+  "version": "0.12.5",
   "private": true,
   "description": "A world builder for Cyberpunk 2077 that runs inside the game on REDnode.",
   "license": "MIT",
