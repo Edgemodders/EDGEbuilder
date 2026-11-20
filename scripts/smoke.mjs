@@ -595,6 +595,52 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   console.log("world edits: ok");
 }
 
+// S1 Sectors (EDGEbuilder #9): finding sectors, a sector's rows, and the scenes that remove from one.
+{
+  const m = core;
+  const v = String.raw`base\worlds\03_night_city\_compiled\default\exterior_-22_19_1_0.streamingsector`;
+  assert.equal(m.sectorHash(v), "0x3c9117867951bc5a", "the registry's sector hash (D0's V's door)");
+  assert.equal(m.sectorHash(v.toUpperCase()), m.sectorHash(v), "case does not matter");
+  assert.equal(m.sectorName(v), "exterior_-22_19_1_0");
+  const ext = { path: v, kind: "exterior", grid: [-22, 19, 1], level: 0, box: { min: [-1400, 1260, 100], max: [-1380, 1280, 140] }, block: "base" };
+  const int = { path: String.raw`base\worlds\03_night_city\_compiled\default\interior_-22_19_1_1.streamingsector`, kind: "interior", grid: [-22, 19, 1], level: 1, box: { min: [-1500, 1200, 90], max: [-1300, 1300, 150] }, block: "ep1" };
+  const quest = { path: String.raw`base\worlds\03_night_city\_compiled\default\quest_acd280b2b73c4d5b.streamingsector`, kind: "quest", grid: null, level: 0, box: { min: [0, 0, 0], max: [1, 1, 1] }, block: "base" };
+  assert.ok(m.sectorMatches(ext, "-22 19") && m.sectorMatches(ext, "-22_19") && m.sectorMatches(ext, "-22, 19, 1"), "a grid cell, written three ways");
+  assert.ok(!m.sectorMatches(ext, "-22 18") && !m.sectorMatches(quest, "-22 19"), "another cell, or none");
+  assert.ok(m.sectorMatches(int, "interior -22") && !m.sectorMatches(int, "exterior"), "words in its path");
+  assert.deepEqual(m.bridgeKinds(["exterior", "other"]), ["exterior", "navigation", "alwaysLoaded", "unknown"]);
+  assert.deepEqual([m.levelsOf(null), m.levelsOf(1), m.levelsOf(3)?.[0]], [undefined, [1], 3]);
+  assert.equal(m.distanceToBox([-1390, 1270, 120], ext.box), 0, "inside its box");
+  assert.equal(m.distanceToBox([-1370, 1270, 120], ext.box), 10);
+  const rows = m.sectorRows([int, quest, ext], [-1390, 1270, 120], 2);
+  assert.deepEqual(rows.map((r) => r.name), ["exterior_-22_19_1_0", "quest_acd280b2b73c4d5b"], "finest level first, then the nearest middle, cut to the limit");
+  assert.deepEqual(m.sectorRows([int, quest, ext], undefined, 3).map((r) => r.kind), ["exterior", "quest", "interior"], "by name: level, then exterior before quest");
+  assert.equal(Math.round(m.distanceToMiddle([-1390, 1270, 120], ext.box)), 0);
+  assert.equal(rows[0].grid?.[0], -22);
+  const items = [
+    { index: 0, node: 0, kind: "worldInstancedMeshNode", resource: String.raw`base\props\crate.mesh`, transform: { position: [1, 2, 3], rotation: [0, 0, 0, 1], scale: [1, 1, 1] }, instances: [{}, {}, {}] },
+    { index: 288, node: 271, kind: "worldEntityNode", resource: String.raw`base\gameplay\devices\doors\final\single_door.ent`, ref: "$/q001_door_v_flat", hash: "6132383399567759307", transform: { position: [-1388.56, 1271.94, 123.07], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
+  ];
+  assert.deepEqual(m.nodeRows(items, "", 10).rows.map((r) => [r.entry, r.copies ?? 0]), [[0, 3], [288, 0]]);
+  assert.deepEqual(m.nodeRows(items, "door", 10).rows.map((r) => r.entry), [288], "the filter: its file");
+  assert.deepEqual(m.nodeRows(items, "#288", 10).rows.map((r) => r.entry), [288], "or its entry");
+  assert.deepEqual([m.nodeRows(items, "", 1).rows.length, m.nodeRows(items, "", 1).matching], [1, 2], "cut, with how many match");
+  assert.ok(m.placesEntity("worldEntityNode") && m.placesEntity("worldDeviceNode") && !m.placesEntity("worldEntityProxyMeshNode") && !m.placesEntity("worldMeshNode"));
+  assert.equal(m.shortKind("worldCookedStaticMeshNode"), "CookedStaticMesh");
+  const edits = [
+    { action: "remove", node: { sector: v, sectorHash: "0x3c9117867951bc5a", entry: 288 } },
+    { action: "remove", node: { sector: "", sectorHash: "0x3c9117867951bc5a", entry: 12 } },
+    { action: "door", node: { sector: v, sectorHash: "0x3c9117867951bc5a", entry: 288 } },
+    { action: "remove", node: { sector: int.path, sectorHash: "0x1", entry: 1 } },
+  ];
+  assert.equal(m.editsInSector(edits, v), 2, "removals by path or hash; door states are not counted");
+  assert.equal(m.editsInSector(undefined, v), 0);
+  const project = { name: "P", dir: "x", archive: "x", raw: "x", resources: "x" };
+  const replaced = checkBake({ file: "f", name: "Doors", objects: [], project, bridgeReady: true, needs: [], worldEdits: [{ ...edits[0], id: "a", what: "door", label: "V's door", fingerprint: { position: [0, 0, 0] } }], replacedSectors: [v] });
+  assert.ok(replaced.some((c) => c.tone === "warn" && /ArchiveXL refuses the removal/.test(c.text)), "a project that replaces a sector it removes from is warned about");
+  console.log("sectors: ok");
+}
+
 // The viewport's geometry against a simulated game camera, for both ways ProjectPoint might answer.
 {
   const m = core;

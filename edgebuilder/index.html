@@ -21,6 +21,15 @@
   #drawerTitle { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rn-fg, #eee); }
   #drawerInfo { margin-bottom: 6px; word-break: normal; }
   #drawerList { --rn-list-height: 800px; }
+  /* S1: the Sector drawer, in the same place: one of the two is open at a time. */
+  #sectorDrawer { position: absolute; right: 656px; top: 70px; width: 420px; height: 920px; box-sizing: border-box; padding: 10px; background: var(--rn-bg, #08090d); border: 1px solid var(--rn-line, #333); border-top: 2px solid var(--rn-accent, #fcee0a); opacity: 0; visibility: hidden; transform: translateX(60px); transition: transform .16s ease-out, opacity .16s, visibility .16s; }
+  #sectorDrawer.open { opacity: 1; visibility: visible; transform: none; }
+  #sectorHead { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  #sectorTitle { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rn-fg, #eee); }
+  #sectorInfo { margin-bottom: 6px; word-break: normal; }
+  #sectorList { --rn-list-height: 730px; margin-top: 6px; }
+  .streamed { color: var(--rn-ok, #5eff8f); }
+  .act.on { color: var(--rn-warn, #ffcc4d); }
   .act { background: none; border: none; color: var(--rn-dim, #999); cursor: pointer; padding: 2px 4px; line-height: 0; }
   .act:hover { color: var(--rn-danger, #ff5e5e); }
   .act svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; }
@@ -83,6 +92,12 @@
     <div id="drawerHead"><span id="drawerTitle" class="section"></span><button id="drawerClose" class="act" title="Close"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
     <div id="drawerInfo" class="count"></div>
     <rn-list id="drawerList"></rn-list>
+  </div>
+  <div id="sectorDrawer">
+    <div id="sectorHead"><span id="sectorTitle" class="section"></span><button id="sectorClose" class="act" title="Close"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+    <div id="sectorInfo" class="count"></div>
+    <rn-input id="sectorFilter" placeholder="Filter: a class, a file or an entry, such as door or #288"></rn-input>
+    <rn-list id="sectorList"></rn-list>
   </div>
   <rn-window title="EDGEbuilder">
     <rn-toggle id="edit" slot="status" label="Edit"></rn-toggle>
@@ -201,14 +216,34 @@
         </rn-panel>
       </rn-tab>
       <rn-tab label="World">
+        <rn-tabs id="worldTabs">
+        <rn-tab label="Nearby" active>
         <div id="worldInfo" class="count"></div>
         <div class="row">
           <rn-toggle id="kindDoor" label="Doors" title="Interactive doors, elevator doors and shutters: a click with Edit on picks one"></rn-toggle>
           <rn-toggle id="kindFakeDoor" label="Painted-on doors" title="Doors that do not open, which the game places as decoration"></rn-toggle>
           <rn-toggle id="kindMesh" label="Meshes" title="Any mesh the game placed. Off by default: with it on, a click on a wall picks the wall"></rn-toggle>
         </div>
-        <div class="row"><rn-button id="worldRefresh" variant="ghost" title="Look for the doors near V again">Look again</rn-button></div>
+        <div class="row"><rn-button id="worldRefresh" variant="ghost" title="Look for the doors near V again">Scan Doors</rn-button></div>
         <rn-list id="worldList"></rn-list>
+        </rn-tab>
+        <rn-tab label="Sectors">
+        <div id="sectorsInfo" class="count"></div>
+        <div class="row">
+          <rn-button id="sectorsNearV" title="The game's sectors streamed at V's place">Near V</rn-button>
+          <rn-button id="sectorsNearCamera" variant="ghost" title="The game's sectors streamed at the camera's place">Near the camera</rn-button>
+        </div>
+        <rn-input id="sectorsText" placeholder="Find by name or grid cell, such as watson, interior or -22 19"></rn-input>
+        <div class="row">
+          <rn-toggle id="secExterior" label="Exterior" title="The city outside, in grid cells (exterior_x_y_z_level)"></rn-toggle>
+          <rn-toggle id="secInterior" label="Interior" title="Inside buildings"></rn-toggle>
+          <rn-toggle id="secQuest" label="Quest" title="Sectors quests switch on and off"></rn-toggle>
+          <rn-toggle id="secOther" label="Other" title="Navigation and always-loaded sectors"></rn-toggle>
+        </div>
+        <rn-tabs id="sectorLevel" title="Level 0 holds the near detail; coarser levels hold what is seen from further away"><rn-tab label="All levels" active></rn-tab><rn-tab label="Level 0"></rn-tab><rn-tab label="1"></rn-tab><rn-tab label="2"></rn-tab><rn-tab label="3 and up"></rn-tab></rn-tabs>
+        <rn-list id="sectorsList"></rn-list>
+        </rn-tab>
+        </rn-tabs>
         <rn-panel id="worldPanel" class="pinnable" title="Picked in the world" data-pin-note="so Remove from world stays in view">
           <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
           <pre id="worldPicked">Nothing picked. With Edit on, click a door, or pick one in the list.</pre>

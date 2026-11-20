@@ -103,6 +103,8 @@ export function checkBake(input: {
   bridgeVersion?: string;
   /** D1b: the game's own objects the scene removes. */
   worldEdits?: WorldEdit[];
+  /** S1: the sectors it removes from that the project replaces with its own file. */
+  replacedSectors?: string[];
 }): BakeCheck[] {
   const out: BakeCheck[] = [];
   const say = (tone: BakeCheck["tone"], text: string) => out.push({ tone, text });
@@ -145,6 +147,10 @@ export function checkBake(input: {
   if (seenFar.length && !atLeast(input.bridgeVersion, [0, 12, 1])) say("warn", `REDbridge ${input.bridgeVersion} does not pass Seen from on to the game's own hide distance: ${seenFar.length === 1 ? "a mesh with Seen from shows" : `${seenFar.length} meshes with Seen from show`} only as far as the game allows for ${seenFar.length === 1 ? "its" : "their"} size (about 60 m for a crate). Update it to 0.12.1 or later (EDGEdeck: Get REDbridge).`);
   if (unnamed.length) say("warn", `Left out, since the sector ${unnamed.length === 1 ? "it is in has" : "they are in have"} no name (REDbridge was not running when ${unnamed.length === 1 ? "it was" : "they were"} removed): ${unnamed.map((e) => e.label).join(", ")}. Restore and remove ${unnamed.length === 1 ? "it" : "them"} again.`);
   if (removals.length && input.bridgeVersion && !atLeast(input.bridgeVersion, [0, 16, 0])) say("error", `REDbridge ${input.bridgeVersion} cannot bake removals: it needs 0.16.0 or later. Update it in EDGEdeck (Get REDbridge) or REDnode's Mod Manager.`);
+  for (const p of input.replacedSectors ?? []) {
+    const n = (input.worldEdits ?? []).filter((e) => e.action === "remove" && e.node.sector.toLowerCase() === p.toLowerCase()).length;
+    say("warn", `This project has its own ${path.win32.basename(p)}, which replaces the game's: its entries change, so ArchiveXL refuses ${n === 1 ? "the removal" : `the ${n} removals`} in it and removes nothing there. Remove them from the project's sector instead, or leave that sector out of the project.`);
+  }
   const doorStates = (input.worldEdits ?? []).filter((e) => e.action === "door").length;
   if (doorStates) say("info", `${doorStates === 1 ? "A door's state is" : `${doorStates} doors' states are`} kept while the scene is open in EDGEbuilder. A bake can't set a door's state, so the bake leaves ${doorStates === 1 ? "it" : "them"} out.`);
   if (removals.length) say("info", `${removals.length === 1 ? "1 of the game's own objects is" : `${removals.length} of the game's own objects are`} removed: the bake writes ${removals.length === 1 ? "it" : "them"} as ArchiveXL node deletions, with ${removals.length === 1 ? "its" : "their"} stand-in meshes, so the baked mod needs ArchiveXL. Finding the stand-ins can take half a minute the first time.`);

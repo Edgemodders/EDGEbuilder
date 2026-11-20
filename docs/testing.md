@@ -1022,3 +1022,28 @@ Before: the game closed; Claude deploys EDGEbuilder 0.13.0 with EDGEdeck (0.12.5
 | T2 | Does a door kept open stop closing by itself (its setup switched off), or does EDGEbuilder have to open it again? |
 | T3 | Is the kept state there after a save loads and after a fast travel? |
 | T4 | Do Restore, Undo and closing the scene put the door back as it was, closing by itself too? |
+
+### S1 Sectors (0.13.0)
+
+Sector Tools' first stage ([World objects, "Sector Tools"](world-objects.md#sector-tools-s1-to-s3-edgebuilder-9), EDGEbuilder #9). Built on 2026-11-20; checked against REDbridge 0.15.0 outside the game and in REDnode's host (the sub-tabs, a grid-cell search, the drawer with V's sector's 853 entries and its filter). Run after the D2 steps, with the same deploy. Needs REDbridge 0.12.0 or later.
+
+| # | Do | Expected | Answers |
+|---|---|---|---|
+| 1 | At V's flat: **World** tab, **Sectors**, **Near V** | A list of up to 200 sectors, level 0 first: interior sectors of V's building first, `exterior_-22_19_1_0` among the first ten. Loaded ones say **in** | Q1, Q2 |
+| 2 | Type `-22 19` | Six sectors: three exterior, three interior | Q1 |
+| 3 | Click `exterior_-22_19_1_0` | A drawer opens to the left: "exterior, level 0. 853 entries, streamed in now"; rows with ● (streamed in) and ○ | Q2 |
+| 4 | Filter `door`; click **#288** | Picked in the world: V's door, with Open, Close and Lock and the quest warning; outlined in the game | Q3 |
+| 5 | Two clicks on **#289** | Edit goes on and the camera flies to the elevator door | Q3 |
+| 6 | Clear the filter, find a mesh row with ● you can see (filter `mesh`), and press its eye | It disappears from the game; the eye shows it crossed out. Press it again: back | Q3 |
+| 7 | Click that mesh row, then **Remove from world**; then **Restore** on the Scene tab | Removed and back, as with a door | Q3 |
+| 8 | Fly the camera a few hundred metres away (Edit on), then **Near the camera** | Another list: the sectors there | Q1 |
+| 9 | Switch **Interior** off; pick **Level 0** | The list narrows each time | |
+| 10 | **Objects** on the Library tab | The Sector drawer closes and the Objects drawer opens in its place; a sector click swaps them back | |
+| 11 | From REDcode's sector view (or an assistant through REDnode's MCP server): `edgebuilder__select` with V's sector and entry 288; then `edgebuilder__focus`; then `edgebuilder__scenesEditing` with V's sector | Select: the drawer opens with #288 picked, `{ selected: true, streamed: true }`. Focus: the camera flies there. ScenesEditing: the scenes that remove from that sector (a D1 test scene) | Q4 |
+
+| # | Question |
+|---|---|
+| Q1 | Do Near V, Near the camera and a typed name or cell find the sectors that are there? |
+| Q2 | Are the streamed-in marks right (sectors and entries)? |
+| Q3 | Do pick, outline, fly to, hide and Remove from world work on a sector's entries, doors and meshes alike? |
+| Q4 | Does REDcode reach EDGEbuilder through the service? |

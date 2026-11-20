@@ -134,6 +134,8 @@ export interface WorldEdit {
 export interface WorldThing {
   /** The entity's id for a door, the registry's node id for a mesh. */
   key: string;
+  /** S1: picked from the Sector drawer, this sector's path (the kind switches do not take it away). */
+  fromSector?: string;
   what: WorldKind;
   /** The game class, such as `Door` or `FakeDoor`, or the node class for a mesh. */
   className: string;
@@ -315,6 +317,8 @@ export interface Snapshot {
     registry?: { sectors: number; nodes: number };
     note?: string;
   };
+  /** S1 (EDGEbuilder #9): the World tab's Sectors sub-tab and the Sector drawer. */
+  sectors: Sectors;
   /**
    * B3-2: the Library root (absent until the player sets one) and the folder offered for it; the
    * three places with their folders and scenes; the scenes switched on (shown, not edited), by file.
@@ -366,6 +370,79 @@ export interface Snapshot {
   settings: { bridgePath?: string; gameDir?: string; hideHud?: boolean; editorCamera?: boolean; settingsFile: string };
   /** What is in use when a setting is left empty: the REDbridge found or shared, and the game folder found. */
   inUse: { bridge?: string; gameDir?: string };
+}
+
+/** One streaming sector on the Sectors sub-tab, from REDbridge's sector.find. */
+export interface SectorRow {
+  path: string;
+  name: string;
+  /** exterior, interior, quest, navigation or alwaysLoaded. */
+  kind: string;
+  level: number;
+  grid?: number[];
+  /** "base" or "ep1": the streaming block that lists it. */
+  block: string;
+  variants?: number;
+  /** A Phantom Liberty sector that the base game lists too: the game streams Phantom Liberty's. */
+  replaces?: boolean;
+  /** Metres from the place looked around to its streaming box, 0 inside it. */
+  distance?: number;
+  /** Whether REDnode's world node registry has it loaded now. */
+  streamed?: boolean;
+}
+
+/** One node data entry of the open sector, a row of the Sector drawer. */
+export interface SectorNodeRow {
+  entry: number;
+  node: number;
+  kind: string;
+  resource?: string;
+  ref?: string;
+  /** Its global node id, decimal. */
+  hash?: string;
+  appearance?: string;
+  position: [number, number, number];
+  /** An instanced mesh: how many copies the entry places. */
+  copies?: number;
+  /** Streamed in now (REDnode's registry); null when the sector is not loaded or the registry cannot say. */
+  streamed?: boolean | null;
+  /** Hidden for the session from the drawer. */
+  hidden?: boolean;
+}
+
+export interface SectorView {
+  path: string;
+  hash: string;
+  kind: string;
+  level: number;
+  status: "reading" | "ready" | "error";
+  error?: string;
+  /** Entries in the sector, those matching the filter, and the rows shown (at most a few hundred). */
+  total: number;
+  matching: number;
+  filter: string;
+  nodes: SectorNodeRow[];
+  /** Whether REDnode's registry has the sector loaded now. */
+  loaded?: boolean;
+  /** The entry picked from the drawer. */
+  selected?: number;
+}
+
+export interface Sectors {
+  status: "idle" | "looking" | "ready" | "unavailable";
+  note?: string;
+  /** What the last find looked for. */
+  around?: "V" | "camera" | "text";
+  text: string;
+  /** The kinds switched on (exterior, interior, quest, other) and the level chosen (null: all; 3 means 3 and coarser). */
+  kinds: string[];
+  level: number | null;
+  found: SectorRow[];
+  /** How many matched, before the list was cut. */
+  total: number;
+  open?: SectorView;
+  /** The service's focus: the page flies the camera there when seq changes. */
+  fly?: { seq: number; position: [number, number, number] };
 }
 
 export type PageMessage =
@@ -463,6 +540,15 @@ export type PageMessage =
   | { type: "world.remove" }
   /** D2: open, close, lock or unlock the picked door, kept in the scene. One undo step. */
   | { type: "world.door"; act: "open" | "close" | "lock" | "unlock" }
+  /** S1: find sectors around V, around the camera (at its place) or by name or grid. */
+  | { type: "sectors.find"; around: "V" | "camera" | "text"; at?: [number, number, number]; text?: string; kinds: string[]; level: number | null }
+  | { type: "sectors.open"; path: string }
+  | { type: "sectors.close" }
+  | { type: "sectors.filter"; text: string }
+  /** Picks the open sector's entry into Picked in the world. */
+  | { type: "sectors.select"; entry: number }
+  /** Hides an entry for the session (not kept in the scene), or shows it again. */
+  | { type: "sectors.hide"; entry: number; hidden: boolean }
   /** Take a world edit out of the scene: what it removed is back. One undo step. */
   | { type: "world.restore"; id: string }
   | { type: "undo" }

@@ -2,7 +2,7 @@
 
 // src/mod.ts
 import * as fs9 from "node:fs";
-import * as path10 from "node:path";
+import * as path11 from "node:path";
 import { api, archives, channel, game, kernel, pkg, service, ui, world as world2 } from "rednode";
 
 // src/bridge.ts
@@ -1056,6 +1056,10 @@ function checkBake(input) {
   if (seenFar.length && !atLeast(input.bridgeVersion, [0, 12, 1])) say2("warn", `REDbridge ${input.bridgeVersion} does not pass Seen from on to the game's own hide distance: ${seenFar.length === 1 ? "a mesh with Seen from shows" : `${seenFar.length} meshes with Seen from show`} only as far as the game allows for ${seenFar.length === 1 ? "its" : "their"} size (about 60 m for a crate). Update it to 0.12.1 or later (EDGEdeck: Get REDbridge).`);
   if (unnamed.length) say2("warn", `Left out, since the sector ${unnamed.length === 1 ? "it is in has" : "they are in have"} no name (REDbridge was not running when ${unnamed.length === 1 ? "it was" : "they were"} removed): ${unnamed.map((e) => e.label).join(", ")}. Restore and remove ${unnamed.length === 1 ? "it" : "them"} again.`);
   if (removals.length && input.bridgeVersion && !atLeast(input.bridgeVersion, [0, 16, 0])) say2("error", `REDbridge ${input.bridgeVersion} cannot bake removals: it needs 0.16.0 or later. Update it in EDGEdeck (Get REDbridge) or REDnode's Mod Manager.`);
+  for (const p of input.replacedSectors ?? []) {
+    const n = (input.worldEdits ?? []).filter((e) => e.action === "remove" && e.node.sector.toLowerCase() === p.toLowerCase()).length;
+    say2("warn", `This project has its own ${path6.win32.basename(p)}, which replaces the game's: its entries change, so ArchiveXL refuses ${n === 1 ? "the removal" : `the ${n} removals`} in it and removes nothing there. Remove them from the project's sector instead, or leave that sector out of the project.`);
+  }
   const doorStates = (input.worldEdits ?? []).filter((e) => e.action === "door").length;
   if (doorStates) say2("info", `${doorStates === 1 ? "A door's state is" : `${doorStates} doors' states are`} kept while the scene is open in EDGEbuilder. A bake can't set a door's state, so the bake leaves ${doorStates === 1 ? "it" : "them"} out.`);
   if (removals.length) say2("info", `${removals.length === 1 ? "1 of the game's own objects is" : `${removals.length} of the game's own objects are`} removed: the bake writes ${removals.length === 1 ? "it" : "them"} as ArchiveXL node deletions, with ${removals.length === 1 ? "its" : "their"} stand-in meshes, so the baked mod needs ArchiveXL. Finding the stand-ins can take half a minute the first time.`);
@@ -1531,6 +1535,106 @@ function yawToQuaternion(yawDegrees) {
   return [0, 0, Math.sin(half), Math.cos(half)];
 }
 
+// src/sectors.ts
+import * as path8 from "node:path";
+var FnvOffset = 0xcbf29ce484222325n;
+var FnvPrime = 0x100000001b3n;
+var Mask = 0xffffffffffffffffn;
+function sectorHash(depotPath) {
+  let h = FnvOffset;
+  for (const byte of Buffer.from(depotPath.toLowerCase().replace(/\//g, "\\"), "utf8")) {
+    h ^= BigInt(byte);
+    h = h * FnvPrime & Mask;
+  }
+  return `0x${h.toString(16)}`;
+}
+function sectorName(depotPath) {
+  return path8.win32.basename(depotPath).replace(/\.streamingsector$/i, "");
+}
+var SectorKinds = {
+  exterior: ["exterior"],
+  interior: ["interior"],
+  quest: ["quest"],
+  other: ["navigation", "alwaysLoaded", "unknown"]
+};
+function bridgeKinds(on) {
+  return on.flatMap((k) => SectorKinds[k] ?? []);
+}
+function levelsOf(level) {
+  if (level === null || level === void 0) return void 0;
+  return level >= 3 ? [3, 4, 5, 6, 7, 8] : [level];
+}
+function sectorMatches(s, text) {
+  const t = text.trim().toLowerCase();
+  if (!t) return true;
+  const cell = t.match(/^(-?\d+)[\s_,]+(-?\d+)(?:[\s_,]+(-?\d+))?$/);
+  if (cell) {
+    if (!s.grid) return false;
+    return s.grid[0] === Number(cell[1]) && s.grid[1] === Number(cell[2]) && (cell[3] === void 0 || s.grid[2] === Number(cell[3]));
+  }
+  const p = s.path.toLowerCase();
+  return t.split(/\s+/).every((w) => p.includes(w));
+}
+function distanceToMiddle(p, box) {
+  return Math.hypot(...[0, 1, 2].map((i) => p[i] - (box.min[i] + box.max[i]) / 2));
+}
+function sectorRows(found, at, limit) {
+  const order = ["exterior", "interior", "quest"];
+  const rank = (k) => order.includes(k) ? order.indexOf(k) : order.length;
+  const rows = found.map(
+    (s) => ({
+      path: s.path,
+      name: sectorName(s.path),
+      kind: s.kind,
+      level: s.level,
+      ...s.grid ? { grid: s.grid } : {},
+      block: s.block,
+      ...s.variants ? { variants: s.variants } : {},
+      ...s.replaces ? { replaces: true } : {},
+      ...at ? { distance: distanceToMiddle(at, s.box) } : {}
+    })
+  );
+  rows.sort((a, b) => a.level - b.level || (at ? (a.distance ?? 0) - (b.distance ?? 0) : rank(a.kind) - rank(b.kind)) || a.name.localeCompare(b.name));
+  return rows.slice(0, limit);
+}
+function shortKind(kind) {
+  return kind.replace(/^world/, "").replace(/Node$/, "") || kind;
+}
+function nodeMatches(item, text) {
+  const t = text.trim().toLowerCase();
+  if (!t) return true;
+  const hay = [item.kind, item.resource ?? item.resourceHash ?? "", item.ref ?? "", item.appearance ?? "", `#${item.index}`].join(" ").toLowerCase();
+  return t.split(/\s+/).every((w) => hay.includes(w));
+}
+function nodeRows(items, text, limit) {
+  const hits = items.filter((i) => nodeMatches(i, text));
+  return {
+    matching: hits.length,
+    rows: hits.slice(0, limit).map(
+      (i) => ({
+        entry: i.index,
+        node: i.node,
+        kind: i.kind,
+        ...i.resource ? { resource: i.resource } : i.resourceHash ? { resource: i.resourceHash } : {},
+        ...i.ref ? { ref: i.ref } : {},
+        ...i.hash ? { hash: i.hash } : {},
+        ...i.appearance ? { appearance: i.appearance } : {},
+        position: [i.transform.position[0] ?? 0, i.transform.position[1] ?? 0, i.transform.position[2] ?? 0],
+        ...i.instances?.length ? { copies: i.instances.length } : {}
+      })
+    )
+  };
+}
+function placesEntity(kind) {
+  return /Entity|Device/.test(kind) && kind !== "worldEntityProxyMeshNode";
+}
+function editsInSector(edits, depotPath) {
+  if (!Array.isArray(edits)) return 0;
+  const p = depotPath.toLowerCase();
+  const h = sectorHash(depotPath);
+  return edits.filter((e) => e?.action === "remove" && (e.node?.sector && e.node.sector.toLowerCase() === p || e.node?.sectorHash?.toLowerCase() === h)).length;
+}
+
 // src/move.ts
 import { world } from "rednode";
 async function movePreview(o, position, rotation) {
@@ -1544,20 +1648,20 @@ function sameTransform(a, b) {
 
 // src/models.ts
 import * as fs8 from "node:fs";
-import * as path8 from "node:path";
+import * as path9 from "node:path";
 var MaxModels = 2e3;
 var MaxDepth2 = 8;
 var PropEnding = ".prop.asset";
 function deskDir(env = process.env) {
-  return path8.join(env.LOCALAPPDATA ?? path8.join(env.USERPROFILE ?? "", "AppData", "Local"), "EDGEfab", "desk");
+  return path9.join(env.LOCALAPPDATA ?? path9.join(env.USERPROFILE ?? "", "AppData", "Local"), "EDGEfab", "desk");
 }
 function propName(folder) {
   try {
-    const a = JSON.parse(fs8.readFileSync(path8.join(folder, "asset.json"), "utf8"));
+    const a = JSON.parse(fs8.readFileSync(path9.join(folder, "asset.json"), "utf8"));
     if (typeof a.name === "string" && a.name) return a.name;
   } catch {
   }
-  return path8.basename(folder).slice(0, -PropEnding.length);
+  return path9.basename(folder).slice(0, -PropEnding.length);
 }
 function scanModels(place2, root) {
   const out = [];
@@ -1572,7 +1676,7 @@ function scanModels(place2, root) {
     names.sort((a, b) => a.name.localeCompare(b.name, void 0, { sensitivity: "base" }));
     for (const d of names) {
       if (out.length >= MaxModels) return;
-      const full = path8.join(dir, d.name);
+      const full = path9.join(dir, d.name);
       const lower = d.name.toLowerCase();
       if (d.isDirectory()) {
         if (lower.endsWith(PropEnding)) {
@@ -1606,7 +1710,7 @@ function checkModelPath(p) {
   const file = p.trim().replace(/^"(.*)"$/, "$1");
   if (!file) return { ok: false, why: "Type the full path of a .glb file." };
   const lower = file.toLowerCase();
-  if (lower.endsWith(PropEnding.toLowerCase()) && fs8.existsSync(path8.join(file, "asset.json"))) return { ok: true, kind: "prop", file };
+  if (lower.endsWith(PropEnding.toLowerCase()) && fs8.existsSync(path9.join(file, "asset.json"))) return { ok: true, kind: "prop", file };
   if (!lower.endsWith(".glb")) return { ok: false, why: "Import takes a .glb file (a textured glTF in one file), or a prop from EDGEfab's Desk." };
   if (!fs8.existsSync(file)) return { ok: false, why: `There is no file at ${file}.` };
   return { ok: true, kind: "glb", file };
@@ -1614,11 +1718,11 @@ function checkModelPath(p) {
 
 // src/fab.ts
 import { createRequire } from "node:module";
-import * as path9 from "node:path";
+import * as path10 from "node:path";
 var loaded;
 function loadFab(packageDir) {
   if (loaded) return loaded;
-  const require2 = createRequire(path9.join(packageDir, "mod.mjs"));
+  const require2 = createRequire(path10.join(packageDir, "mod.mjs"));
   const core = require2("./fab.cjs");
   if (typeof core.makeModel !== "function" || typeof core.addToProject !== "function") throw new Error("fab.cjs is not EDGEfab's core.");
   loaded = core;
@@ -1635,21 +1739,21 @@ var AnyLook = "Any: the game picks";
 var EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
 var SpawnDistance = 3;
 var ResultLimit = 120;
-var settingsFile = path10.join(pkg.dataDir, "settings.json");
+var settingsFile = path11.join(pkg.dataDir, "settings.json");
 var settings = {};
 try {
   settings = JSON.parse(fs9.readFileSync(settingsFile, "utf8"));
 } catch {
 }
-var dataScenes = path10.join(pkg.dataDir, "scenes");
-var WorkingScene = path10.join(dataScenes, "working.scene.json");
-var sessionFile = path10.join(pkg.dataDir, "session.json");
+var dataScenes = path11.join(pkg.dataDir, "scenes");
+var WorkingScene = path11.join(dataScenes, "working.scene.json");
+var sessionFile = path11.join(pkg.dataDir, "session.json");
 var session = {};
 try {
   session = JSON.parse(fs9.readFileSync(sessionFile, "utf8"));
 } catch {
 }
-var lastGone = session.open && !fs9.existsSync(session.open) && path10.resolve(session.open).toLowerCase() !== WorkingScene.toLowerCase() ? session.open : void 0;
+var lastGone = session.open && !fs9.existsSync(session.open) && path11.resolve(session.open).toLowerCase() !== WorkingScene.toLowerCase() ? session.open : void 0;
 var scene = new Scene(session.open === "" ? "" : session.open && !lastGone ? session.open : WorkingScene);
 if (scene.file) scene.load();
 else scene.name = "";
@@ -1660,9 +1764,9 @@ var past = [];
 var future = [];
 var HistoryLength = 100;
 var duplicates = 0;
-var index = new AssetIndex(path10.join(pkg.dataDir, "index"));
-var npcs = new NpcList(path10.join(pkg.dataDir, "index"));
-var sources = new ModSources(path10.join(pkg.dataDir, "sources", "mods.json"));
+var index = new AssetIndex(path11.join(pkg.dataDir, "index"));
+var npcs = new NpcList(path11.join(pkg.dataDir, "index"));
+var sources = new ModSources(path11.join(pkg.dataDir, "sources", "mods.json"));
 index.extra = sources.entries();
 var bridge;
 var blockedRetry;
@@ -1680,6 +1784,7 @@ var state = {
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
   scene: { name: scene.name, objects: scene.objects, groups: scene.groups, worldEdits: scene.worldEdits, file: scene.file, needs: [] },
   worldObjects: { kinds: settings.worldKinds ?? DefaultKinds, status: "idle", things: [] },
+  sectors: { status: "idle", text: "", kinds: ["exterior", "interior", "quest"], level: null, found: [], total: 0 },
   library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [], bakes: [], models: [], modelPlaces: [] },
   bake: { project: null, checks: [], stale: false, list: [] },
   selected: [],
@@ -1707,7 +1812,7 @@ function gameDir() {
   if (isGameFolder(settings.gameDir)) return settings.gameDir;
   let dir = pkg.dir;
   for (let i = 0; i < 6; i++) {
-    dir = path10.dirname(dir);
+    dir = path11.dirname(dir);
     if (isGameFolder(dir)) return dir;
   }
   return void 0;
@@ -2255,7 +2360,7 @@ async function floorUnder(o) {
   console.log(`Drop to floor ${o.id} from z ${startZ.toFixed(2)}: ${tried.join("; ")}`);
   return floor === void 0 ? void 0 : { ...o.transform, position: [x, y, floor - lowest] };
 }
-var builderFile = path10.join(pkg.dataDir, "builder-mode.json");
+var builderFile = path11.join(pkg.dataDir, "builder-mode.json");
 var CameraName = "edgebuilder_camera";
 var HudHiddenTier = 4;
 var editorCam;
@@ -2627,7 +2732,7 @@ async function lookNear() {
       }
       const p = await e.entity.GetWorldPosition();
       const word = what === "fakeDoor" ? "Painted-on door" : e.type;
-      const label = [word, template ? path10.basename(template) : "", e.appearance ? `(${e.appearance})` : ""].filter(Boolean).join(" ");
+      const label = [word, template ? path11.basename(template) : "", e.appearance ? `(${e.appearance})` : ""].filter(Boolean).join(" ");
       things.push({
         key: e.id.hash,
         what,
@@ -2707,7 +2812,8 @@ async function findNode(p, seq) {
     const found = node;
     const sector = await pathOf(found.sector);
     p.node = refOfNode(found, sector);
-    const proxies = p.what === "mesh" ? [] : proxiesAmong(hits, found, p.position);
+    if (p.what === "mesh" && placesEntity(found.kind)) hits.push(...await nodesAt(p.position));
+    const proxies = p.what === "mesh" && !placesEntity(found.kind) ? [] : proxiesAmong(hits, found, p.position);
     if (proxies.length) p.proxies = await Promise.all(proxies.map(async (h) => refOfNode(h, await pathOf(h.sector))));
     p.note = void 0;
     if (bridge?.running && sector) {
@@ -2742,7 +2848,7 @@ async function pickMesh(n) {
     key: n.id,
     what: "mesh",
     className: n.kind,
-    label: `${n.kind.replace(/^world|Node$/g, "")} ${resource ? path10.basename(resource) : n.id}`,
+    label: `${n.kind.replace(/^world|Node$/g, "")} ${resource ? path11.basename(resource) : n.id}`,
     resource: resource || void 0,
     appearance: n.appearance ?? void 0,
     position: n.position,
@@ -2782,7 +2888,7 @@ async function hoverThing(key) {
 var ProxyLooks = 30;
 var proxyLooks = /* @__PURE__ */ new Map();
 async function findProxies(e) {
-  if (e.what === "mesh" || e.proxies?.length) return;
+  if (e.what === "mesh" && !placesEntity(e.node.type) || e.proxies?.length) return;
   const id = registryId(e.node);
   const tries = proxyLooks.get(id) ?? 0;
   if (tries >= ProxyLooks) return;
@@ -2813,7 +2919,7 @@ async function hideEdit(e) {
   let done = await hideNode(id, e.id);
   await findProxies(e);
   for (const p of e.proxies ?? []) if (!await hideNode(registryId(p), `the proxy of ${e.id}`)) done = false;
-  const proxyMissing = e.what !== "mesh" && !e.proxies?.length && (proxyLooks.get(id) ?? 0) < ProxyLooks;
+  const proxyMissing = (e.what !== "mesh" || placesEntity(e.node.type)) && !e.proxies?.length && (proxyLooks.get(id) ?? 0) < ProxyLooks;
   if (done && !proxyMissing) pendingHides.delete(id);
   else {
     pendingHides.set(id, e);
@@ -3098,7 +3204,261 @@ function setKinds(kinds) {
   const known = kinds.filter((k) => k in KindLabels);
   state.worldObjects.kinds = known;
   saveSettings({ worldKinds: known });
-  if (state.worldObjects.picked && !known.includes(state.worldObjects.picked.what)) void clearPicked();
+  if (state.worldObjects.picked && !state.worldObjects.picked.fromSector && !known.includes(state.worldObjects.picked.what)) void clearPicked();
+}
+var SectorRowsShown = 200;
+var SectorNodesShown = 300;
+var sectorItems = [];
+var sectorFindSeq = 0;
+var sectorOpenSeq = 0;
+var flySeq = 0;
+var sessionHidden = /* @__PURE__ */ new Set();
+async function vPosition() {
+  try {
+    const player = await api.GetPlayer(game.instance);
+    if (!player) return void 0;
+    const p = await player.GetWorldPosition();
+    return [p.X, p.Y, p.Z];
+  } catch {
+    return void 0;
+  }
+}
+async function sectorLoaded(hash) {
+  if (typeof world2.node !== "function" || state.world !== "ready") return void 0;
+  try {
+    return !!await world2.node(`${hash}:0`);
+  } catch {
+    return void 0;
+  }
+}
+var noBridgeForSectors = "REDbridge is not running, and it reads the game's sectors. The pills at the top say why.";
+async function findSectors(m) {
+  const sx = state.sectors;
+  sx.kinds = m.kinds.filter((k) => k in SectorKinds);
+  sx.level = m.level;
+  sx.around = m.around;
+  sx.text = m.text ?? "";
+  if (!bridge?.running) {
+    sx.status = "unavailable";
+    sx.note = noBridgeForSectors;
+    return publish();
+  }
+  const empty = (note) => {
+    sx.found = [];
+    sx.total = 0;
+    sx.status = "ready";
+    sx.note = note;
+    publish();
+  };
+  if (!sx.kinds.length) return empty("Switch a kind on.");
+  if (m.around === "text" && !sx.text.trim()) return empty("Type part of a sector's name, such as watson or interior, or a grid cell, such as -22 19.");
+  let at;
+  if (m.around !== "text") {
+    if (state.world !== "ready") return empty("Load a save: the sectors around V or the camera are listed then.");
+    at = m.around === "camera" && m.at ? m.at : await vPosition();
+    if (!at) return empty("V's place is not known yet.");
+  }
+  const seq = ++sectorFindSeq;
+  sx.status = "looking";
+  sx.note = void 0;
+  publish();
+  try {
+    const started = Date.now();
+    const levels = levelsOf(sx.level);
+    const r = await bridge.call("sector.find", {
+      kinds: bridgeKinds(sx.kinds),
+      ...levels ? { levels } : {},
+      ...at ? { box: { min: [at[0] - 1, at[1] - 1, at[2] - 1], max: [at[0] + 1, at[1] + 1, at[2] + 1] } } : {}
+    });
+    if (seq !== sectorFindSeq) return;
+    const hits = m.around === "text" ? r.sectors.filter((s) => sectorMatches(s, sx.text)) : r.sectors;
+    sx.found = sectorRows(hits, at, SectorRowsShown);
+    sx.total = hits.length;
+    await Promise.all(
+      sx.found.map(async (row) => {
+        const on = await sectorLoaded(sectorHash(row.path));
+        if (on !== void 0) row.streamed = on;
+      })
+    );
+    if (seq !== sectorFindSeq) return;
+    sx.status = "ready";
+    console.log(`Sectors ${m.around === "text" ? `matching "${sx.text}"` : `around ${m.around === "V" ? "V" : "the camera"}`}: ${hits.length} (${Date.now() - started} ms)`);
+  } catch (err) {
+    if (seq !== sectorFindSeq) return;
+    const msg = err.message;
+    sx.status = "ready";
+    sx.found = [];
+    sx.total = 0;
+    sx.note = /not found|unknown method/i.test(msg) ? "This REDbridge cannot list sectors: it needs 0.12.0 or later (EDGEdeck: Get REDbridge)." : `REDbridge could not list the sectors: ${msg}`;
+  }
+  publish();
+}
+async function showSectorRows() {
+  const view = state.sectors.open;
+  if (!view || view.status !== "ready") return;
+  const { rows, matching } = nodeRows(sectorItems, view.filter, SectorNodesShown);
+  view.matching = matching;
+  view.loaded = await sectorLoaded(view.hash);
+  for (const r of rows) {
+    if (sessionHidden.has(`${view.hash}:${r.entry}`)) r.hidden = true;
+    r.streamed = null;
+  }
+  if (view.loaded && typeof world2.node === "function") {
+    for (let i = 0; i < rows.length; i += 40) {
+      await Promise.all(
+        rows.slice(i, i + 40).map(async (r) => {
+          try {
+            const n = await world2.node(`${view.hash}:${r.entry}`);
+            r.streamed = n ? n.streamed : null;
+          } catch {
+            r.streamed = null;
+          }
+        })
+      );
+    }
+  }
+  if (state.sectors.open === view) view.nodes = rows;
+}
+async function openSector(depotPath) {
+  const known = state.sectors.open;
+  if (known && known.path.toLowerCase() === depotPath.toLowerCase() && known.status === "ready") return known;
+  const seq = ++sectorOpenSeq;
+  const row = state.sectors.found.find((r) => r.path.toLowerCase() === depotPath.toLowerCase());
+  const view = { path: depotPath, hash: sectorHash(depotPath), kind: row?.kind ?? "", level: row?.level ?? 0, status: "reading", total: 0, matching: 0, filter: "", nodes: [] };
+  state.sectors.open = view;
+  sectorItems = [];
+  publish();
+  if (!bridge?.running) {
+    view.status = "error";
+    view.error = noBridgeForSectors;
+    publish();
+    return view;
+  }
+  try {
+    const started = Date.now();
+    const r = await bridge.call("sector.nodes", { path: depotPath });
+    if (seq !== sectorOpenSeq) return view;
+    sectorItems = r.items ?? [];
+    if (r.kind) view.kind = r.kind;
+    if (typeof r.level === "number") view.level = r.level;
+    view.total = sectorItems.length;
+    view.status = "ready";
+    for (const w of r.warnings ?? []) console.log(`${sectorName(depotPath)}: ${w}`);
+    console.log(`${sectorName(depotPath)}: ${view.total} entries (${Date.now() - started} ms)`);
+    await showSectorRows();
+  } catch (err) {
+    if (seq !== sectorOpenSeq) return view;
+    view.status = "error";
+    view.error = `REDbridge could not read it: ${err.message}`;
+  }
+  publish();
+  return view;
+}
+async function filterSector(text) {
+  const view = state.sectors.open;
+  if (!view) return;
+  view.filter = text;
+  await showSectorRows();
+  publish();
+}
+async function sectorThing(view, item) {
+  const key = `${view.hash}:${item.index}`;
+  const resource = item.resource ?? void 0;
+  const position = [item.transform.position[0] ?? 0, item.transform.position[1] ?? 0, item.transform.position[2] ?? 0];
+  if (placesEntity(item.kind) && item.hash) {
+    const entity = await world2.entity(item.hash).catch(() => null);
+    const cls = entity ? String(await entity.GetClassName().catch(() => "")) : "";
+    const what = kindOfClass(cls);
+    if (entity && what) {
+      liveThings.set(item.hash, entity);
+      return {
+        key: item.hash,
+        what,
+        fromSector: view.path,
+        className: cls,
+        label: [what === "fakeDoor" ? "Painted-on door" : cls, resource ? path11.basename(resource) : "", item.appearance ? `(${item.appearance})` : ""].filter(Boolean).join(" "),
+        resource,
+        appearance: item.appearance ?? void 0,
+        position,
+        door: what === "door" ? await doorStateOf(entity) : void 0,
+        removedBy: scene.worldEdits.find((x) => x.action === "remove" && sameId(x.node.globalId, item.hash))?.id,
+        stateBy: scene.worldEdits.find((x) => x.action === "door" && sameId(x.node.globalId, item.hash))?.id
+      };
+    }
+  }
+  return {
+    key,
+    what: "mesh",
+    fromSector: view.path,
+    className: item.kind,
+    label: `${shortKind(item.kind)} ${resource ? path11.basename(resource) : `#${item.index}`}`,
+    resource,
+    appearance: item.appearance ?? void 0,
+    position,
+    removedBy: editFor(scene.worldEdits, { sectorHash: view.hash, entry: item.index })?.id
+  };
+}
+async function selectSectorEntry(entry) {
+  const view = state.sectors.open;
+  const item = sectorItems.find((i) => i.index === entry);
+  if (!view || !item) return { selected: false, streamed: false };
+  view.selected = entry;
+  const t = await sectorThing(view, item);
+  await pickThing(t);
+  const n = typeof world2.node === "function" ? await world2.node(`${view.hash}:${entry}`).catch(() => null) : null;
+  const p = state.worldObjects.picked;
+  if (p && !p.node && !n) p.note = "Not streamed in now: go near it (or fly there) for the game to load it, then pick it again.";
+  publish();
+  return { selected: true, streamed: !!n?.streamed };
+}
+async function hideSectorEntry(entry, hidden) {
+  const view = state.sectors.open;
+  if (!view || typeof world2.setVisible !== "function") return;
+  const id = `${view.hash}:${entry}`;
+  try {
+    const done = await world2.setVisible(id, !hidden);
+    if (hidden && done) sessionHidden.add(id);
+    if (!hidden) sessionHidden.delete(id);
+    if (hidden && !done) say(`Entry ${entry} was not hidden: it is not streamed in now.`, "info");
+  } catch (err) {
+    say(`Entry ${entry}: ${err.message}`, "warn");
+  }
+  for (const r of view.nodes) if (r.entry === entry) r.hidden = sessionHidden.has(id);
+  publish();
+}
+async function serviceSelect(where) {
+  if (!where?.sector || !Number.isInteger(where.entry)) throw new Error("select takes { sector, entry }: the sector's depot path and a node data entry");
+  const view = await openSector(where.sector);
+  if (view.status !== "ready") return { selected: false, streamed: false, why: view.error ?? "the sector is not read yet" };
+  if (!sectorItems.some((i) => i.index === where.entry)) return { selected: false, streamed: false, why: `the sector has no entry ${where.entry} (it has ${view.total})` };
+  return selectSectorEntry(where.entry);
+}
+async function serviceFocus(where) {
+  if (state.world !== "ready") return { focused: false, why: "No save is loaded in the game." };
+  const r = await serviceSelect(where);
+  if (!r.selected) return { focused: false, why: r.why };
+  const item = sectorItems.find((i) => i.index === where.entry);
+  if (item) state.sectors.fly = { seq: ++flySeq, position: [item.transform.position[0] ?? 0, item.transform.position[1] ?? 0, item.transform.position[2] ?? 0] };
+  publish();
+  return { focused: true, streamed: r.streamed };
+}
+function replacedSectors(project2, edits) {
+  const sectors = [...new Set(edits.filter((e) => e.action === "remove" && e.node.sector).map((e) => e.node.sector))];
+  return sectors.filter((p) => fs9.existsSync(path11.join(project2.archive, ...p.split(/[\/]/))));
+}
+function serviceScenesEditing(sector) {
+  if (!sector) throw new Error("scenesEditing takes a sector's depot path");
+  const out = [];
+  for (const sc of listScenes()) {
+    let removals = 0;
+    try {
+      removals = sc.open ? editsInSector(scene.worldEdits, sector) : editsInSector(JSON.parse(fs9.readFileSync(sc.file, "utf8")).worldEdits, sector);
+    } catch {
+      continue;
+    }
+    if (removals) out.push({ name: sc.name, file: sc.file, place: sc.place, removals });
+  }
+  return out;
 }
 function runSearch() {
   state.results = index.entries.length || index.extra.length ? index.search(state.query.text, state.query.kind, ResultLimit, state.query.from) : [];
@@ -3116,9 +3476,9 @@ async function drop(assetPath, appearance, at) {
   const waiting2 = unswapped.get(assetKey(assetPath));
   if (waiting2) {
     const why = await swapIn(waiting2);
-    if (why) return say(`${path10.basename(assetPath, ".ent")} was imported, but it is not in the game yet: ${why}. Then press Drop again.`, "warn");
+    if (why) return say(`${path11.basename(assetPath, ".ent")} was imported, but it is not in the game yet: ${why}. Then press Drop again.`, "warn");
     unswapped.delete(assetKey(assetPath));
-    console.log(`Swapped ${path10.basename(waiting2)} in for ${assetPath}`);
+    console.log(`Swapped ${path11.basename(waiting2)} in for ${assetPath}`);
   }
   let added;
   const before = scene.state();
@@ -3149,7 +3509,7 @@ async function drop(assetPath, appearance, at) {
     await select([o.id]);
     const from = sourceOf(assetPath)?.source;
     const note = from?.kind === "project" ? await inGameArchives(assetPath) ? ` From the REDcode project ${from.name}, at a game file's path: the game shows its own version until the project is packed and loaded (REDcode's Pack and Play).` : ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).` : from?.kind === "mod" ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}` : "";
-    const what = person ? `${person.name ?? person.path}${o.appearance ? ` (${o.appearance})` : ""}` : path10.basename(assetPath);
+    const what = person ? `${person.name ?? person.path}${o.appearance ? ` (${o.appearance})` : ""}` : path11.basename(assetPath);
     say(`Dropped ${what} in ${Date.now() - started} ms.${note}`, "ok");
   } catch (err) {
     if (added) {
@@ -3329,7 +3689,7 @@ function peek(file) {
     state.library.peek = { file, name: d.name, objects: d.objects, groups: d.groups ?? [] };
   } catch (err) {
     delete state.library.peek;
-    say(`${path10.basename(file)} cannot be read: ${err.message}.`, "error");
+    say(`${path11.basename(file)} cannot be read: ${err.message}.`, "error");
   }
   publish();
 }
@@ -3340,10 +3700,10 @@ async function removeFromScene(file, id) {
     other.load();
     if (!other.remove(id)) return peek(file);
   } catch (err) {
-    return say(`${path10.basename(file)}: ${err.message}.`, "error");
+    return say(`${path11.basename(file)}: ${err.message}.`, "error");
   }
   const shown = [...onScenes.keys()].find((f) => sameFile(f, file));
-  if (shown && state.world === "ready") await loadOn(shown).catch((err) => console.log(`${path10.basename(shown)} not shown: ${err.message}`));
+  if (shown && state.world === "ready") await loadOn(shown).catch((err) => console.log(`${path11.basename(shown)} not shown: ${err.message}`));
   scanLibrary();
   peek(file);
   say(`Removed ${id} from ${other.name}. That scene is not open, so Undo cannot bring it back.`, "ok");
@@ -3359,7 +3719,7 @@ async function clear() {
 function placeRoots() {
   const out = [];
   if (libraryRoot) out.push({ place: "library", dir: libraryRoot, label: "Library" });
-  if (project) out.push({ place: "project", dir: path10.join(path10.dirname(project.archive), "scenes"), label: `Project: ${project.name}` });
+  if (project) out.push({ place: "project", dir: path11.join(path11.dirname(project.archive), "scenes"), label: `Project: ${project.name}` });
   out.push({ place: "data", dir: dataScenes, label: "This PC" });
   return out;
 }
@@ -3389,7 +3749,7 @@ function writeSession() {
     console.log(`session.json not written: ${err.message}`);
   }
 }
-var sameFile = (a, b) => path10.resolve(a).toLowerCase() === path10.resolve(b).toLowerCase();
+var sameFile = (a, b) => path11.resolve(a).toLowerCase() === path11.resolve(b).toLowerCase();
 var switchStandIns = 0;
 async function switchTo(data, file) {
   for (const o of scene.objects) await removePreview(o);
@@ -3422,7 +3782,7 @@ async function openScene(file) {
   try {
     data = readSceneFile(file);
   } catch (err) {
-    return say(`${path10.basename(file)} cannot be opened: ${err.message}.`, "error");
+    return say(`${path11.basename(file)} cannot be opened: ${err.message}.`, "error");
   }
   const wasOn = [...onScenes.keys()].find((f) => sameFile(f, file));
   if (wasOn) await sceneOff(wasOn);
@@ -3441,8 +3801,8 @@ function newFile(name, place2, folder) {
   name = name.trim();
   if (!name) throw new Error("Give the scene a name.");
   const dir = folderIn(rootOf(place2).dir, folder);
-  const file = path10.join(dir, fileNameOf(name));
-  if (fs9.existsSync(file)) throw new Error(`${whereText(file)} already has a scene called ${path10.basename(file)}: open it, or pick another name.`);
+  const file = path11.join(dir, fileNameOf(name));
+  if (fs9.existsSync(file)) throw new Error(`${whereText(file)} already has a scene called ${path11.basename(file)}: open it, or pick another name.`);
   return { name, file };
 }
 function attempt(make) {
@@ -3479,9 +3839,9 @@ function renameScene(name) {
   name = name.trim();
   if (!name || name === scene.name) return publish();
   const was = scene.file;
-  const file = path10.join(path10.dirname(was), fileNameOf(name));
+  const file = path11.join(path11.dirname(was), fileNameOf(name));
   const sameName = sameFile(file, was);
-  if (!sameName && fs9.existsSync(file)) return say(`${whereText(file)} already has a scene called ${path10.basename(file)}. Pick another name.`, "warn");
+  if (!sameName && fs9.existsSync(file)) return say(`${whereText(file)} already has a scene called ${path11.basename(file)}. Pick another name.`, "warn");
   scene.name = name;
   scene.file = file;
   scene.save();
@@ -3494,7 +3854,7 @@ function renameScene(name) {
   }
   writeSession();
   scanLibrary();
-  say(`Renamed the scene ${name}${sameName ? "" : ` (${path10.basename(file)})`}.`, "ok");
+  say(`Renamed the scene ${name}${sameName ? "" : ` (${path11.basename(file)})`}.`, "ok");
 }
 function saveNow() {
   scene.save();
@@ -3505,7 +3865,7 @@ async function loadOn(file) {
   if (typeof world2.load !== "function") throw new Error("Showing other scenes needs REDnode 0.40.1 or later");
   const data = readSceneFile(file);
   const r = await world2.load(forReader(data), { name: file, wait: false, alwaysSpawned: true });
-  for (const s of r.skipped) console.log(`${path10.basename(file)}: ${s.object} not shown: ${s.why}`);
+  for (const s of r.skipped) console.log(`${path11.basename(file)}: ${s.object} not shown: ${s.why}`);
   onScenes.set(file, r.spawned.length);
   const edits = readableEdits(data.worldEdits);
   if (edits.length) {
@@ -3519,19 +3879,19 @@ async function sceneOn(file) {
   try {
     readSceneFile(file);
   } catch (err) {
-    return say(`${path10.basename(file)} cannot be shown: ${err.message}.`, "error");
+    return say(`${path11.basename(file)} cannot be shown: ${err.message}.`, "error");
   }
   onScenes.set(file, 0);
   writeSession();
-  if (state.world !== "ready") return say(`${path10.basename(file)} is on; it shows once a save is loaded.`, "info");
+  if (state.world !== "ready") return say(`${path11.basename(file)} is on; it shows once a save is loaded.`, "info");
   const n = await loadOn(file);
-  say(`Showing ${path10.basename(file)}: ${n} object${n === 1 ? "" : "s"}. They cannot be selected: open the scene to change it.`, "ok");
+  say(`Showing ${path11.basename(file)}: ${n} object${n === 1 ? "" : "s"}. They cannot be selected: open the scene to change it.`, "ok");
 }
 async function sceneOff(file) {
   const known = [...onScenes.keys()].find((f) => sameFile(f, file)) ?? file;
   onScenes.delete(known);
   writeSession();
-  console.log(`No longer showing ${path10.basename(known)}`);
+  console.log(`No longer showing ${path11.basename(known)}`);
   const edits = onEdits.get(known) ?? [];
   onEdits.delete(known);
   for (const e of edits) await unapplyEdit(e);
@@ -3550,7 +3910,7 @@ async function reloadOn() {
       if (inGameNow.has(slugOf(readSceneFile(file).name))) continue;
       n += await loadOn(file);
     } catch (err) {
-      console.log(`${path10.basename(file)} not shown: ${err.message}`);
+      console.log(`${path11.basename(file)} not shown: ${err.message}`);
     }
   }
   writeSession();
@@ -3559,11 +3919,11 @@ async function reloadOn() {
 }
 function setLibraryRoot(root) {
   root = root.trim().replace(/^"(.*)"$/, "$1");
-  if (!root || !path10.isAbsolute(root)) return say(`Give the Library a full folder path, such as ${suggestedRoot}.`, "warn");
+  if (!root || !path11.isAbsolute(root)) return say(`Give the Library a full folder path, such as ${suggestedRoot}.`, "warn");
   const inside = (dir) => {
     if (!dir) return false;
-    const rel = path10.relative(path10.resolve(dir), path10.resolve(root));
-    return !rel.startsWith("..") && !path10.isAbsolute(rel);
+    const rel = path11.relative(path11.resolve(dir), path11.resolve(root));
+    return !rel.startsWith("..") && !path11.isAbsolute(rel);
   };
   if (inside(gameDir()) || inside(pkg.dir) || inside(pkg.dataDir)) return say("The Library cannot be inside the game's folder or EDGEbuilder's own folders: deploys and reloads would touch it. Pick another folder.", "warn");
   try {
@@ -3571,18 +3931,18 @@ function setLibraryRoot(root) {
   } catch (err) {
     return say(`The Library folder could not be made: ${err.message}`, "error");
   }
-  libraryRoot = path10.resolve(root);
+  libraryRoot = path11.resolve(root);
   scanLibrary();
   say(`The Library is ${libraryRoot}. Every EDGE tool uses this folder.`, "ok");
 }
 function newFolder(folder, name) {
   if (!libraryRoot) return say("Set the Library folder in Settings first.", "warn");
   const root = libraryRoot;
-  const dir = attempt(() => path10.join(folderIn(root, folder), cleanFolderName(name)));
+  const dir = attempt(() => path11.join(folderIn(root, folder), cleanFolderName(name)));
   if (!dir) return;
   fs9.mkdirSync(dir, { recursive: true });
   scanLibrary();
-  say(`Made the folder ${whereText(path10.join(dir, "x"))}.`, "ok");
+  say(`Made the folder ${whereText(path11.join(dir, "x"))}.`, "ok");
 }
 function listScenes() {
   scanLibrary();
@@ -3607,7 +3967,7 @@ function sceneRefs(which) {
   if (!which || sameFile(which, scene.file) || which.toLowerCase() === scene.name.toLowerCase()) data = scene.data();
   else {
     const all = listScenes();
-    const found = all.find((s) => path10.isAbsolute(which) && sameFile(s.file, which)) ?? all.find((s) => s.name.toLowerCase() === which.toLowerCase());
+    const found = all.find((s) => path11.isAbsolute(which) && sameFile(s.file, which)) ?? all.find((s) => s.name.toLowerCase() === which.toLowerCase());
     if (!found) throw new Error(`No scene "${which}": scenes() lists them`);
     file = found.file;
     data = readSceneFile(file);
@@ -3702,6 +4062,27 @@ channel.on((m) => {
         break;
       case "world.remove":
         await inTurn("Remove from world", () => removePicked());
+        break;
+      case "sectors.find":
+        await findSectors(m);
+        break;
+      case "sectors.open":
+        await openSector(m.path);
+        break;
+      case "sectors.close":
+        state.sectors.open = void 0;
+        sectorItems = [];
+        sectorOpenSeq++;
+        publish();
+        break;
+      case "sectors.filter":
+        await filterSector(m.text);
+        break;
+      case "sectors.select":
+        await selectSectorEntry(m.entry);
+        break;
+      case "sectors.hide":
+        await hideSectorEntry(m.entry, m.hidden);
         break;
       case "world.door":
         await inTurn("Door", () => doorAction(m.act));
@@ -3947,7 +4328,8 @@ function lookAtBakes() {
       sameNameFrom: fromElsewhere ? whereText(fromElsewhere.file) : void 0,
       noCollision: new Set(state.noCollision),
       bridgeVersion: state.bridge.version,
-      worldEdits: scene.worldEdits
+      worldEdits: scene.worldEdits,
+      replacedSectors: target ? replacedSectors(target, scene.worldEdits) : []
     }),
     current,
     stale: !!current?.hash && !fromElsewhere && current.hash !== bakeHash(scene.objects, scene.worldEdits),
@@ -4037,8 +4419,8 @@ async function bakeOpenScene() {
   const refused = done.built.refused ?? [];
   state.bake.last = {
     slug: done.built.name,
-    files: [done.built.sector, done.built.block, done.xl].filter((f) => !!f).map((f) => path10.relative(target.dir, f)),
-    warnings: [...done.built.warnings, ...refused.map((r) => `A removal was not written (${path10.win32.basename(r.sector)} entry ${r.index}): ${r.why}`)]
+    files: [done.built.sector, done.built.block, done.xl].filter((f) => !!f).map((f) => path11.relative(target.dir, f)),
+    warnings: [...done.built.warnings, ...refused.map((r) => `A removal was not written (${path11.win32.basename(r.sector)} entry ${r.index}): ${r.why}`)]
   };
   lookAtBakes();
   const n = done.built.nodes;
@@ -4092,7 +4474,7 @@ function lookAtLibraryBakes() {
     try {
       meta = readBakeMeta(dir);
     } catch (err) {
-      out.push({ dir, folder, name: path10.basename(dir), id: "", version: 0, scenes: [], inGame: false, collides: [], error: err.message });
+      out.push({ dir, folder, name: path11.basename(dir), id: "", version: 0, scenes: [], inGame: false, collides: [], error: err.message });
       continue;
     }
     const scenes = meta.scenes.map((s) => {
@@ -4119,9 +4501,9 @@ function lookAtLibraryBakes() {
 }
 function libraryBakeDir(dir) {
   if (!libraryRoot) throw new Error("Set the Library folder first (Library tab or Settings).");
-  const rel = path10.relative(path10.resolve(libraryRoot), path10.resolve(dir));
-  if (rel.startsWith("..") || path10.isAbsolute(rel) || !dir.toLowerCase().endsWith(BakeFolderEnding)) throw new Error("That is not a bake in the Library.");
-  return path10.resolve(dir);
+  const rel = path11.relative(path11.resolve(libraryRoot), path11.resolve(dir));
+  if (rel.startsWith("..") || path11.isAbsolute(rel) || !dir.toLowerCase().endsWith(BakeFolderEnding)) throw new Error("That is not a bake in the Library.");
+  return path11.resolve(dir);
 }
 async function changeLibraryBake(dir, meta, files, drop2 = []) {
   const root = libraryRoot;
@@ -4229,7 +4611,7 @@ function deleteLibraryBake(dir) {
       try {
         return readBakeMeta(dir).name;
       } catch {
-        return path10.basename(dir);
+        return path11.basename(dir);
       }
     })();
     fs9.rmSync(dir, { recursive: true, force: true });
@@ -4279,7 +4661,7 @@ async function importModel(m) {
     let item = checked.file;
     let prepared;
     if (checked.kind === "glb") {
-      step2(`preparing ${path10.basename(checked.file)} (size, facing, levels of detail, textures)`);
+      step2(`preparing ${path11.basename(checked.file)} (size, facing, levels of detail, textures)`);
       const made = await fab.makeModel({ from: "file", file: checked.file, ...m.name ? { name: m.name } : {} }, { version });
       item = made.folder;
       prepared = made.prepared;
@@ -4306,7 +4688,7 @@ async function importModel(m) {
     });
     if (stopAsked) return stopped("adding it to the project: pack and swap it from REDcode, or Import again");
     step2("packing the project");
-    const packed = await b.call("project.pack", { dir: folders.archive, outDir: path10.join(target.dir, "packed", "archive", "pc", "mod"), modName: target.modName || target.name });
+    const packed = await b.call("project.pack", { dir: folders.archive, outDir: path11.join(target.dir, "packed", "archive", "pc", "mod"), modName: target.modName || target.name });
     scanProject();
     step2("swapping it into the game");
     const why = await swapIn(packed.archive);
@@ -4319,7 +4701,7 @@ async function importModel(m) {
     scanModelPlaces();
     const guess = prepared.sizeUnknown && !m.height ? ` Its file has no real size, so its height of ${prepared.size.height.toFixed(2)} m is a guess: type Height and Import again.` : "";
     const secs = Math.round((Date.now() - began) / 1e3);
-    say(`Imported ${path10.basename(added.entity, ".ent")} into ${target.name} in ${secs} s${added.replaced ? ", replacing the earlier one" : ""}${textures ? ` (${textures} textures)` : ""}.${swap}${guess} It is picked on the Assets tab.`, guess ? "warn" : tone);
+    say(`Imported ${path11.basename(added.entity, ".ent")} into ${target.name} in ${secs} s${added.replaced ? ", replacing the earlier one" : ""}${textures ? ` (${textures} textures)` : ""}.${swap}${guess} It is picked on the Assets tab.`, guess ? "warn" : tone);
   } catch (err) {
     if (stopAsked) {
       return say("Import stopped while it added the model to the project, so the project holds part of it. Import it again to finish it, or delete its folder under the project's source\\archive.", "info");
@@ -4432,7 +4814,7 @@ if (lastGone) {
 }
 writeSession();
 if (scene.loadError) {
-  state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path10.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
+  state.message = { text: `The scene file could not be read (${scene.loadError}). ${scene.setAside ? `It was kept as ${path11.basename(scene.setAside)}; ` : ""}starting with an empty scene.`, tone: "warn" };
   console.log(state.message.text);
 }
 if (index.loadNewest()) {
@@ -4447,5 +4829,8 @@ watchMods();
 void connectRedcode();
 export {
   listScenes,
-  sceneRefs
+  sceneRefs,
+  serviceFocus,
+  serviceScenesEditing,
+  serviceSelect
 };

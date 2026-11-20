@@ -37,3 +37,4 @@ export { PropEnding, checkModelPath, deskDir, propName, propSlug, scanModels } f
 export { isTextureLine } from "./fab";
 export * from "./math";
 export type * from "./protocol";
+export { SectorKinds, bridgeKinds, distanceToBox, distanceToMiddle, editsInSector, levelsOf, nodeMatches, nodeRows, placesEntity, sectorHash, sectorMatches, sectorName, sectorRows, shortKind } from "./sectors";

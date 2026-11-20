@@ -41,6 +41,7 @@ import {
   type BakeProject,
 } from "./bake";
 import { Scene, forReader, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
+import { SectorKinds, bridgeKinds, editsInSector, levelsOf, nodeRows, placesEntity, sectorHash, sectorMatches, sectorName, sectorRows, shortKind, type FoundSector, type SectorItem } from "./sectors";
 import { DefaultKinds, KindLabels, MeshNodeKinds, doorActions, doorAfter, doorStateText, doorUnderRay, editFor, editId, idText, kindOfClass, questWarnings, readableEdits, registryId, sameId } from "./worldedits";
 import { movePreview, sameTransform } from "./move";
 import { checkModelPath, deskDir, scanModels } from "./models";
@@ -48,7 +49,7 @@ import { isTextureLine, loadFab, type BridgeCall, type FabCore, type FabPrepared
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, upright, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
-import { AnyLook, type AssetEntry, type AssetFrom, type AssetInfo, type AssetKind, type BakeRecord, type LibraryBake, type PageMessage, type Place, type PlaceRoot, type SceneObject, type SceneTransform, type Snapshot, type DoorState, type WorldEdit, type WorldKind, type WorldNodeRef, type WorldPicked, type WorldThing } from "./protocol";
+import { AnyLook, type AssetEntry, type AssetFrom, type AssetInfo, type AssetKind, type BakeRecord, type LibraryBake, type PageMessage, type Place, type PlaceRoot, type SceneObject, type SceneTransform, type Snapshot, type DoorState, type SectorView, type WorldEdit, type WorldKind, type WorldNodeRef, type WorldPicked, type WorldThing } from "./protocol";
 
 /** A base-game entity template that is a bare entity: no components, no appearances. The editor camera is this with a camera component attached. */
 const EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
@@ -131,6 +132,7 @@ const state: Snapshot = {
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
   scene: { name: scene.name, objects: scene.objects, groups: scene.groups, worldEdits: scene.worldEdits, file: scene.file, needs: [] },
   worldObjects: { kinds: settings.worldKinds ?? DefaultKinds, status: "idle", things: [] },
+  sectors: { status: "idle", text: "", kinds: ["exterior", "interior", "quest"], level: null, found: [], total: 0 },
   library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [], bakes: [], models: [], modelPlaces: [] },
   bake: { project: null, checks: [], stale: false, list: [] },
   selected: [],
@@ -1434,7 +1436,8 @@ async function findNode(p: WorldPicked, seq: number): Promise<void> {
     p.node = refOfNode(found, sector);
     // Its proxy mesh, when the registry has it loaded. Hidden with it: a hidden entity does not come in
     // after a save loads, and the game then shows its proxy in its place (D1a test, step 9). The bake removes it too (D0).
-    const proxies = p.what === "mesh" ? [] : proxiesAmong(hits, found, p.position);
+    if (p.what === "mesh" && placesEntity(found.kind)) hits.push(...(await nodesAt(p.position)));
+    const proxies = p.what === "mesh" && !placesEntity(found.kind) ? [] : proxiesAmong(hits, found, p.position);
     if (proxies.length) p.proxies = await Promise.all(proxies.map(async (h) => refOfNode(h, await pathOf(h.sector))));
     p.note = undefined;
     if (bridge?.running && sector) {
@@ -1520,7 +1523,7 @@ const proxyLooks = new Map<string, number>();
 
 /** A removal of an entity saved without its proxy (0.12.0): looks for it at the entity's place, and keeps it. */
 async function findProxies(e: WorldEdit): Promise<void> {
-  if (e.what === "mesh" || e.proxies?.length) return;
+  if ((e.what === "mesh" && !placesEntity(e.node.type)) || e.proxies?.length) return;
   const id = registryId(e.node);
   const tries = proxyLooks.get(id) ?? 0;
   if (tries >= ProxyLooks) return;
@@ -1558,7 +1561,7 @@ async function hideEdit(e: WorldEdit): Promise<boolean> {
   let done = await hideNode(id, e.id);
   await findProxies(e);
   for (const p of e.proxies ?? []) if (!(await hideNode(registryId(p), `the proxy of ${e.id}`))) done = false;
-  const proxyMissing = e.what !== "mesh" && !e.proxies?.length && (proxyLooks.get(id) ?? 0) < ProxyLooks;
+  const proxyMissing = (e.what !== "mesh" || placesEntity(e.node.type)) && !e.proxies?.length && (proxyLooks.get(id) ?? 0) < ProxyLooks;
   if (done && !proxyMissing) pendingHides.delete(id);
   else {
     pendingHides.set(id, e);
@@ -1900,7 +1903,295 @@ function setKinds(kinds: WorldKind[]): void {
   const known = kinds.filter((k): k is WorldKind => k in KindLabels);
   state.worldObjects.kinds = known;
   saveSettings({ worldKinds: known });
-  if (state.worldObjects.picked && !known.includes(state.worldObjects.picked.what)) void clearPicked();
+  if (state.worldObjects.picked && !state.worldObjects.picked.fromSector && !known.includes(state.worldObjects.picked.what)) void clearPicked();
+}
+
+// ---- sectors (S1, EDGEbuilder #9) ----------------------------------------------------------------
+// The World tab's Sectors sub-tab lists the game's streaming sectors (REDbridge's sector.find) around V,
+// around the camera, or by name or grid; the Sector drawer lists one sector's node data entries
+// (sector.nodes), marked when REDnode's registry has them streamed in. A row picked there goes into
+// Picked in the world, with the same actions as a door near V. REDcode calls the same through the
+// service (select, focus, scenesEditing).
+
+/** At most this many sectors in the list, and node rows in the drawer (the filter narrows them). */
+const SectorRowsShown = 200;
+const SectorNodesShown = 300;
+/** The open sector's entries, as REDbridge read them. */
+let sectorItems: SectorItem[] = [];
+let sectorFindSeq = 0;
+let sectorOpenSeq = 0;
+let flySeq = 0;
+/** The registry ids hidden for the session from the drawer (not kept in a scene). */
+const sessionHidden = new Set<string>();
+
+async function vPosition(): Promise<V3 | undefined> {
+  try {
+    const player = (await api.GetPlayer(game.instance)) as GameRef | null;
+    if (!player) return undefined;
+    const p = (await player.GetWorldPosition()) as { X: number; Y: number; Z: number };
+    return [p.X, p.Y, p.Z];
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether REDnode's registry has a sector loaded now: undefined when it cannot say. */
+async function sectorLoaded(hash: string): Promise<boolean | undefined> {
+  if (typeof world.node !== "function" || state.world !== "ready") return undefined;
+  try {
+    return !!(await world.node(`${hash}:0`));
+  } catch {
+    return undefined;
+  }
+}
+
+const noBridgeForSectors = "REDbridge is not running, and it reads the game's sectors. The pills at the top say why.";
+
+async function findSectors(m: Extract<PageMessage, { type: "sectors.find" }>): Promise<void> {
+  const sx = state.sectors;
+  sx.kinds = m.kinds.filter((k) => k in SectorKinds);
+  sx.level = m.level;
+  sx.around = m.around;
+  sx.text = m.text ?? "";
+  if (!bridge?.running) {
+    sx.status = "unavailable";
+    sx.note = noBridgeForSectors;
+    return publish();
+  }
+  const empty = (note: string) => {
+    sx.found = [];
+    sx.total = 0;
+    sx.status = "ready";
+    sx.note = note;
+    publish();
+  };
+  if (!sx.kinds.length) return empty("Switch a kind on.");
+  if (m.around === "text" && !sx.text.trim()) return empty("Type part of a sector's name, such as watson or interior, or a grid cell, such as -22 19.");
+  let at: V3 | undefined;
+  if (m.around !== "text") {
+    if (state.world !== "ready") return empty("Load a save: the sectors around V or the camera are listed then.");
+    at = m.around === "camera" && m.at ? m.at : await vPosition();
+    if (!at) return empty("V's place is not known yet.");
+  }
+  const seq = ++sectorFindSeq;
+  sx.status = "looking";
+  sx.note = undefined;
+  publish();
+  try {
+    const started = Date.now();
+    const levels = levelsOf(sx.level);
+    const r = await bridge.call<{ total: number; sectors: FoundSector[] }>("sector.find", {
+      kinds: bridgeKinds(sx.kinds),
+      ...(levels ? { levels } : {}),
+      ...(at ? { box: { min: [at[0] - 1, at[1] - 1, at[2] - 1], max: [at[0] + 1, at[1] + 1, at[2] + 1] } } : {}),
+    });
+    if (seq !== sectorFindSeq) return;
+    const hits = m.around === "text" ? r.sectors.filter((s) => sectorMatches(s, sx.text)) : r.sectors;
+    sx.found = sectorRows(hits, at, SectorRowsShown);
+    sx.total = hits.length;
+    await Promise.all(
+      sx.found.map(async (row) => {
+        const on = await sectorLoaded(sectorHash(row.path));
+        if (on !== undefined) row.streamed = on;
+      }),
+    );
+    if (seq !== sectorFindSeq) return;
+    sx.status = "ready";
+    console.log(`Sectors ${m.around === "text" ? `matching "${sx.text}"` : `around ${m.around === "V" ? "V" : "the camera"}`}: ${hits.length} (${Date.now() - started} ms)`);
+  } catch (err) {
+    if (seq !== sectorFindSeq) return;
+    const msg = (err as Error).message;
+    sx.status = "ready";
+    sx.found = [];
+    sx.total = 0;
+    sx.note = /not found|unknown method/i.test(msg) ? "This REDbridge cannot list sectors: it needs 0.12.0 or later (EDGEdeck: Get REDbridge)." : `REDbridge could not list the sectors: ${msg}`;
+  }
+  publish();
+}
+
+/** The drawer's rows from the open sector's entries and filter, with the registry's marks. */
+async function showSectorRows(): Promise<void> {
+  const view = state.sectors.open;
+  if (!view || view.status !== "ready") return;
+  const { rows, matching } = nodeRows(sectorItems, view.filter, SectorNodesShown);
+  view.matching = matching;
+  view.loaded = await sectorLoaded(view.hash);
+  for (const r of rows) {
+    if (sessionHidden.has(`${view.hash}:${r.entry}`)) r.hidden = true;
+    r.streamed = null;
+  }
+  if (view.loaded && typeof world.node === "function") {
+    for (let i = 0; i < rows.length; i += 40) {
+      await Promise.all(
+        rows.slice(i, i + 40).map(async (r) => {
+          try {
+            const n = await world.node!(`${view.hash}:${r.entry}`);
+            r.streamed = n ? n.streamed : null;
+          } catch {
+            r.streamed = null;
+          }
+        }),
+      );
+    }
+  }
+  if (state.sectors.open === view) view.nodes = rows;
+}
+
+/** Opens the Sector drawer on a sector: its entries read through REDbridge. */
+async function openSector(depotPath: string): Promise<SectorView> {
+  const known = state.sectors.open;
+  if (known && known.path.toLowerCase() === depotPath.toLowerCase() && known.status === "ready") return known;
+  const seq = ++sectorOpenSeq;
+  const row = state.sectors.found.find((r) => r.path.toLowerCase() === depotPath.toLowerCase());
+  const view: SectorView = { path: depotPath, hash: sectorHash(depotPath), kind: row?.kind ?? "", level: row?.level ?? 0, status: "reading", total: 0, matching: 0, filter: "", nodes: [] };
+  state.sectors.open = view;
+  sectorItems = [];
+  publish();
+  if (!bridge?.running) {
+    view.status = "error";
+    view.error = noBridgeForSectors;
+    publish();
+    return view;
+  }
+  try {
+    const started = Date.now();
+    const r = await bridge.call<{ kind?: string; level?: number; items: SectorItem[]; warnings?: string[] }>("sector.nodes", { path: depotPath });
+    if (seq !== sectorOpenSeq) return view;
+    sectorItems = r.items ?? [];
+    if (r.kind) view.kind = r.kind;
+    if (typeof r.level === "number") view.level = r.level;
+    view.total = sectorItems.length;
+    view.status = "ready";
+    for (const w of r.warnings ?? []) console.log(`${sectorName(depotPath)}: ${w}`);
+    console.log(`${sectorName(depotPath)}: ${view.total} entries (${Date.now() - started} ms)`);
+    await showSectorRows();
+  } catch (err) {
+    if (seq !== sectorOpenSeq) return view;
+    view.status = "error";
+    view.error = `REDbridge could not read it: ${(err as Error).message}`;
+  }
+  publish();
+  return view;
+}
+
+async function filterSector(text: string): Promise<void> {
+  const view = state.sectors.open;
+  if (!view) return;
+  view.filter = text;
+  await showSectorRows();
+  publish();
+}
+
+/** The world thing a sector's entry is: a door by its entity when one is in the world, else a node by its registry id. */
+async function sectorThing(view: SectorView, item: SectorItem): Promise<WorldThing> {
+  const key = `${view.hash}:${item.index}`;
+  const resource = item.resource ?? undefined;
+  const position: V3 = [item.transform.position[0] ?? 0, item.transform.position[1] ?? 0, item.transform.position[2] ?? 0];
+  if (placesEntity(item.kind) && item.hash) {
+    const entity = await world.entity(item.hash).catch(() => null);
+    const cls = entity ? String(await (entity.GetClassName as () => Promise<unknown>)().catch(() => "")) : "";
+    const what = kindOfClass(cls);
+    if (entity && what) {
+      liveThings.set(item.hash, entity);
+      return {
+        key: item.hash,
+        what,
+        fromSector: view.path,
+        className: cls,
+        label: [what === "fakeDoor" ? "Painted-on door" : cls, resource ? path.basename(resource) : "", item.appearance ? `(${item.appearance})` : ""].filter(Boolean).join(" "),
+        resource,
+        appearance: item.appearance ?? undefined,
+        position,
+        door: what === "door" ? await doorStateOf(entity) : undefined,
+        removedBy: scene.worldEdits.find((x) => x.action === "remove" && sameId(x.node.globalId, item.hash))?.id,
+        stateBy: scene.worldEdits.find((x) => x.action === "door" && sameId(x.node.globalId, item.hash))?.id,
+      };
+    }
+  }
+  return {
+    key,
+    what: "mesh",
+    fromSector: view.path,
+    className: item.kind,
+    label: `${shortKind(item.kind)} ${resource ? path.basename(resource) : `#${item.index}`}`,
+    resource,
+    appearance: item.appearance ?? undefined,
+    position,
+    removedBy: editFor(scene.worldEdits, { sectorHash: view.hash, entry: item.index })?.id,
+  };
+}
+
+/** Picks one of the open sector's entries into Picked in the world; whether it is streamed in now. */
+async function selectSectorEntry(entry: number): Promise<{ selected: boolean; streamed: boolean }> {
+  const view = state.sectors.open;
+  const item = sectorItems.find((i) => i.index === entry);
+  if (!view || !item) return { selected: false, streamed: false };
+  view.selected = entry;
+  const t = await sectorThing(view, item);
+  await pickThing(t);
+  const n = typeof world.node === "function" ? await world.node(`${view.hash}:${entry}`).catch(() => null) : null;
+  const p = state.worldObjects.picked;
+  if (p && !p.node && !n) p.note = "Not streamed in now: go near it (or fly there) for the game to load it, then pick it again.";
+  publish();
+  return { selected: true, streamed: !!n?.streamed };
+}
+
+async function hideSectorEntry(entry: number, hidden: boolean): Promise<void> {
+  const view = state.sectors.open;
+  if (!view || typeof world.setVisible !== "function") return;
+  const id = `${view.hash}:${entry}`;
+  try {
+    const done = await world.setVisible(id, !hidden);
+    if (hidden && done) sessionHidden.add(id);
+    if (!hidden) sessionHidden.delete(id);
+    if (hidden && !done) say(`Entry ${entry} was not hidden: it is not streamed in now.`, "info");
+  } catch (err) {
+    say(`Entry ${entry}: ${(err as Error).message}`, "warn");
+  }
+  for (const r of view.nodes) if (r.entry === entry) r.hidden = sessionHidden.has(id);
+  publish();
+}
+
+/** The service's select: opens the drawer on the sector with the entry picked. */
+export async function serviceSelect(where: { sector: string; entry: number }): Promise<{ selected: boolean; streamed: boolean; why?: string }> {
+  if (!where?.sector || !Number.isInteger(where.entry)) throw new Error("select takes { sector, entry }: the sector's depot path and a node data entry");
+  const view = await openSector(where.sector);
+  if (view.status !== "ready") return { selected: false, streamed: false, why: view.error ?? "the sector is not read yet" };
+  if (!sectorItems.some((i) => i.index === where.entry)) return { selected: false, streamed: false, why: `the sector has no entry ${where.entry} (it has ${view.total})` };
+  return selectSectorEntry(where.entry);
+}
+
+/** The service's focus: as select, then the camera flies there with Edit on. */
+export async function serviceFocus(where: { sector: string; entry: number }): Promise<{ focused: boolean; streamed?: boolean; why?: string }> {
+  if (state.world !== "ready") return { focused: false, why: "No save is loaded in the game." };
+  const r = await serviceSelect(where);
+  if (!r.selected) return { focused: false, why: r.why };
+  const item = sectorItems.find((i) => i.index === where.entry);
+  if (item) state.sectors.fly = { seq: ++flySeq, position: [item.transform.position[0] ?? 0, item.transform.position[1] ?? 0, item.transform.position[2] ?? 0] };
+  publish();
+  return { focused: true, streamed: r.streamed };
+}
+
+/** The sectors a scene removes from that the project has a file of its own for: ArchiveXL refuses those removals (the entry count changes). */
+function replacedSectors(project: { archive: string }, edits: WorldEdit[]): string[] {
+  const sectors = [...new Set(edits.filter((e) => e.action === "remove" && e.node.sector).map((e) => e.node.sector))];
+  return sectors.filter((p) => fs.existsSync(path.join(project.archive, ...p.split(/[\/]/))));
+}
+
+/** The service's scenesEditing: the scenes whose removals name the sector. */
+export function serviceScenesEditing(sector: string): { name: string; file: string; place: string; removals: number }[] {
+  if (!sector) throw new Error("scenesEditing takes a sector's depot path");
+  const out: { name: string; file: string; place: string; removals: number }[] = [];
+  for (const sc of listScenes()) {
+    let removals = 0;
+    try {
+      removals = sc.open ? editsInSector(scene.worldEdits, sector) : editsInSector((JSON.parse(fs.readFileSync(sc.file, "utf8")) as { worldEdits?: [] }).worldEdits, sector);
+    } catch {
+      continue;
+    }
+    if (removals) out.push({ name: sc.name, file: sc.file, place: sc.place, removals });
+  }
+  return out;
 }
 
 // ---- requests from the page -------------------------------------------------------------------
@@ -2650,6 +2941,27 @@ channel.on<PageMessage>((m) => {
       case "world.remove":
         await inTurn("Remove from world", () => removePicked());
         break;
+      case "sectors.find":
+        await findSectors(m);
+        break;
+      case "sectors.open":
+        await openSector(m.path);
+        break;
+      case "sectors.close":
+        state.sectors.open = undefined;
+        sectorItems = [];
+        sectorOpenSeq++;
+        publish();
+        break;
+      case "sectors.filter":
+        await filterSector(m.text);
+        break;
+      case "sectors.select":
+        await selectSectorEntry(m.entry);
+        break;
+      case "sectors.hide":
+        await hideSectorEntry(m.entry, m.hidden);
+        break;
       case "world.door":
         await inTurn("Door", () => doorAction(m.act));
         break;
@@ -2916,6 +3228,7 @@ function lookAtBakes(): void {
       noCollision: new Set(state.noCollision),
       bridgeVersion: state.bridge.version,
       worldEdits: scene.worldEdits,
+      replacedSectors: target ? replacedSectors(target, scene.worldEdits) : [],
     }),
     current,
     stale: !!current?.hash && !fromElsewhere && current.hash !== bakeHash(scene.objects, scene.worldEdits),

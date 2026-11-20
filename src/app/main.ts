@@ -177,6 +177,8 @@ function render(s: Snapshot): void {
   viewport.setScene(s.scene.objects, s.selected);
   renderDrawer(s);
   renderWorld(s);
+  renderSectors(s);
+  renderSectorDrawer(s);
   renderEdits(s);
   viewport.setCamera(s.camera?.entityId);
   viewport.setPaused(!!s.camera?.paused);
@@ -1180,6 +1182,7 @@ function goToObject(s: Snapshot, id: string): void {
 
 $("pickedObjects").addEventListener("click", () => {
   drawerOpen = !drawerOpen;
+  if (drawerOpen && state?.sectors.open) post({ type: "sectors.close" });
   peekAsked = "";
   confirming = undefined;
   if (state) render(state);
@@ -1409,6 +1412,184 @@ $("worldEdits").addEventListener(
     if (!id) return;
     e.stopPropagation();
     post({ type: "world.restore", id });
+  },
+  true,
+);
+
+// ---- World > Sectors and the Sector drawer (S1, EDGEbuilder #9) --------------------------------------
+//
+// The game's streaming sectors around V, around the camera, or by name or grid cell (REDbridge's
+// sector.find), and in a drawer to the left one sector's node data entries (sector.nodes), marked when
+// streamed in. A row picked there goes into Picked in the world; two clicks fly there.
+
+const SectorToggles: [string, string][] = [
+  ["secExterior", "exterior"],
+  ["secInterior", "interior"],
+  ["secQuest", "quest"],
+  ["secOther", "other"],
+];
+const SectorLevels = [null, 0, 1, 2, 3] as const;
+let sectorsHtml = "";
+let sectorRowsHtml = "";
+let sectorLevel: number | null = null;
+let sectorKindsShown = false;
+let lastSector = "";
+let lastSectorRow = { entry: -1, at: 0 };
+let lastFly = -1;
+let sectorsTyped: ReturnType<typeof setTimeout> | undefined;
+let sectorFiltered: ReturnType<typeof setTimeout> | undefined;
+const EyeIcon = `<svg viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>`;
+const EyeOffIcon = `<svg viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8zM2.5 13.5l11-11"/></svg>`;
+
+function sectorKinds(): string[] {
+  return SectorToggles.filter(([id]) => ($(id) as HTMLElement & { checked: boolean }).checked).map(([, k]) => k);
+}
+
+function findSectors(around: "V" | "camera" | "text"): void {
+  const text = (($("sectorsText") as HTMLInputElement).value ?? "").trim();
+  const at = around === "camera" ? viewport.cameraAt() : undefined;
+  post({ type: "sectors.find", around, ...(at ? { at } : {}), ...(around === "text" ? { text } : {}), kinds: sectorKinds(), level: sectorLevel });
+}
+
+function renderSectors(s: Snapshot): void {
+  const sx = s.sectors;
+  if (!sectorKindsShown) {
+    sectorKindsShown = true;
+    for (const [id, k] of SectorToggles) ($(id) as HTMLElement & { checked: boolean }).checked = sx.kinds.includes(k);
+  }
+  const n = sx.found.length;
+  const where = sx.around === "text" ? `matching "${sx.text}"` : sx.around === "camera" ? "at the camera's place" : "at V's place";
+  $("sectorsInfo").textContent =
+    sx.status === "looking"
+      ? "Looking for sectors... (the first time, REDbridge reads the game's list: a few seconds)"
+      : sx.note
+        ? sx.note
+        : sx.around
+          ? `${sx.total} sector${sx.total === 1 ? "" : "s"} ${where}${sx.total > n ? `, the first ${n} shown` : ""}. Finest level first. A click opens one beside this window.`
+          : "Near V lists the sectors the game streams at V's place. Or type part of a name, or a grid cell.";
+  const html = sx.found
+    .map((r) => {
+      const end = [
+        r.streamed ? '<span class="tag streamed" title="Streamed in now">in</span>' : "",
+        `<span class="tag">${esc(r.kind)}</span>`,
+        `L${r.level}`,
+        r.block === "ep1" ? '<span class="tag" title="Phantom Liberty">PL</span>' : "",
+        r.distance !== undefined && r.distance > 0 ? `${r.distance.toFixed(0)} m` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return `<rn-item value="${esc(r.path)}" title="${esc(r.path)}"${s.sectors.open?.path === r.path ? " selected" : ""}>${esc(r.name)}<span slot="end">${end}</span></rn-item>`;
+    })
+    .join("");
+  if (html !== sectorsHtml) $("sectorsList").innerHTML = sectorsHtml = html;
+  // The service's focus: fly there.
+  if (lastFly < 0) lastFly = sx.fly?.seq ?? 0;
+  if (sx.fly && sx.fly.seq !== lastFly) {
+    lastFly = sx.fly.seq;
+    mainTabs().select?.(WorldTab);
+    (document.getElementById("worldTabs") as HTMLElement & { select?(i: number): void }).select?.(1);
+    flyToPoint(sx.fly.position);
+  }
+}
+
+function renderSectorDrawer(s: Snapshot): void {
+  const v = s.sectors.open;
+  $("sectorDrawer").classList.toggle("open", !!v);
+  if (!v) {
+    lastSector = "";
+    return;
+  }
+  if (v.path !== lastSector) {
+    lastSector = v.path;
+    drawerOpen = false;
+    ($("sectorFilter") as HTMLInputElement).value = v.filter;
+  }
+  const name = shortName(v.path).replace(/\.streamingsector$/i, "");
+  $("sectorTitle").textContent = `Sector: ${name}`;
+  $("sectorTitle").title = v.path;
+  const streamed = v.loaded === true ? "streamed in now" : v.loaded === false ? "not streamed in now: go near it for its nodes to be in the game" : "";
+  $("sectorInfo").textContent =
+    v.status === "reading"
+      ? "Reading the sector through REDbridge..."
+      : v.status === "error"
+        ? (v.error ?? "It could not be read.")
+        : [
+            `${v.kind}${v.kind ? ", " : ""}level ${v.level}. ${v.total} entr${v.total === 1 ? "y" : "ies"}${streamed ? `, ${streamed}` : ""}.`,
+            v.matching > v.nodes.length ? `${v.matching} match; the first ${v.nodes.length} shown: the filter narrows them.` : v.filter ? `${v.matching} match.` : "",
+            "A click picks one (Picked in the world, on the World tab); two clicks fly there. The eye hides one until EDGEbuilder stops.",
+          ]
+            .filter(Boolean)
+            .join("\n");
+  const html = v.nodes
+    .map((r) => {
+      const mark = r.streamed === true ? '<span class="streamed" title="Streamed in now">●</span>' : r.streamed === false ? '<span title="Not streamed in now">○</span>' : "";
+      const end = [r.copies ? `<span class="tag" title="An instanced mesh: copies it places">×${r.copies}</span>` : "", mark, `<button class="act${r.hidden ? " on" : ""}" data-act="hide" data-entry="${r.entry}" title="${r.hidden ? "Show it again" : "Hide it until EDGEbuilder stops (not kept in the scene)"}">${r.hidden ? EyeOffIcon : EyeIcon}</button>`].filter(Boolean).join(" ");
+      const label = `#${r.entry} ${r.kind.replace(/^world/, "").replace(/Node$/, "")}${r.resource ? ` ${shortName(r.resource)}` : ""}`;
+      const tip = [r.resource ?? "", r.ref ?? "", r.appearance ? `appearance ${r.appearance}` : "", `node ${r.node}, at ${r.position.map((x) => x.toFixed(1)).join(", ")}`].filter(Boolean).join("\n");
+      return `<rn-item value="${r.entry}" title="${esc(tip)}"${v.selected === r.entry ? " selected" : ""}>${esc(label)}<span slot="end">${end}</span></rn-item>`;
+    })
+    .join("");
+  if (html !== sectorRowsHtml) $("sectorList").innerHTML = sectorRowsHtml = html;
+}
+
+/** Edit on and the camera on its way to a place, a few metres back. */
+function flyToPoint(position: [number, number, number]): void {
+  if (!state || state.world !== "ready" || state.settings.editorCamera === false) return;
+  const edit = $("edit") as HTMLElement & { checked: boolean };
+  if (!edit.checked) {
+    edit.checked = true;
+    viewport.setEdit(true);
+  }
+  const box: SceneObject = { id: "sector-node", kind: "entity", transform: { position, rotation: [0, 0, 0, 1], scale: [1, 1, 1] }, bounds: { min: [-1, -1, 0], max: [1, 1, 2] } };
+  viewport.flyTo(box);
+}
+
+$("sectorsNearV").addEventListener("click", () => findSectors("V"));
+$("sectorsNearCamera").addEventListener("click", () => findSectors("camera"));
+$("sectorsText").addEventListener("input", () => {
+  clearTimeout(sectorsTyped);
+  sectorsTyped = setTimeout(() => findSectors("text"), 350);
+});
+for (const [id] of SectorToggles) $(id).addEventListener("change", () => state?.sectors.around && findSectors(state.sectors.around));
+$("sectorLevel").addEventListener("change", (e) => {
+  e.stopPropagation();
+  sectorLevel = SectorLevels[(e as CustomEvent<{ index: number }>).detail.index] ?? null;
+  if (state?.sectors.around) findSectors(state.sectors.around);
+});
+$("worldTabs").addEventListener("change", (e) => e.stopPropagation());
+$("sectorsList").addEventListener("select", (e) => {
+  const p = (e as CustomEvent<{ value: string }>).detail.value;
+  if (p) post({ type: "sectors.open", path: p });
+});
+$("sectorClose").addEventListener("click", () => post({ type: "sectors.close" }));
+$("sectorFilter").addEventListener("input", () => {
+  clearTimeout(sectorFiltered);
+  sectorFiltered = setTimeout(() => post({ type: "sectors.filter", text: ($("sectorFilter") as HTMLInputElement).value ?? "" }), 250);
+});
+$("sectorList").addEventListener(
+  "click",
+  (e) => {
+    const target = e.target as HTMLElement;
+    const hide = target.closest?.("[data-act=hide]") as HTMLElement | null;
+    if (hide) {
+      e.stopPropagation();
+      const entry = Number(hide.dataset.entry);
+      const row = state?.sectors.open?.nodes.find((r) => r.entry === entry);
+      if (row) post({ type: "sectors.hide", entry, hidden: !row.hidden });
+      return;
+    }
+    const v = target.closest?.("rn-item")?.getAttribute("value");
+    if (v === null || v === undefined) return;
+    const entry = Number(v);
+    const twice = entry === lastSectorRow.entry && performance.now() - lastSectorRow.at < 500;
+    lastSectorRow = twice ? { entry: -1, at: 0 } : { entry, at: performance.now() };
+    if (!twice) {
+      worldClickAt = 0;
+      post({ type: "sectors.select", entry });
+    } else {
+      const row = state?.sectors.open?.nodes.find((r) => r.entry === entry);
+      if (row) flyToPoint(row.position);
+    }
   },
   true,
 );

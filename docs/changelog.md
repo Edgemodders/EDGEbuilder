@@ -15,6 +15,13 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - Open, Close, Lock and Unlock a picked door on the World tab. The scene keeps the door that way while it is open in EDGEbuilder: after a save loads, after a fast travel, and each time the door comes back into the world. Restore and Undo put the door back as it was.
 - A door kept open no longer closes by itself while the scene keeps it.
 - The Scene tab lists the doors a scene keeps, with their state, beside what it removes; scenes and bakes count them ("0 added, 0 removed, 1 door set").
+- World > Sectors: find the game's streaming sectors near V, near the camera, or by name or grid cell (such as `-22 19`), by kind and level. A click opens a sector in a drawer to the left with all its entries, marked when streamed in; a click picks one (Remove from world works on it), two clicks fly there, and the eye hides one until EDGEbuilder stops.
+- For REDcode's sector view: EDGEbuilder's service has `select`, `focus` and `scenesEditing` (https://github.com/Edgemodders/EDGEbuilder/issues/9).
+- The Bake tab warns when the open project replaces a sector the scene removes from, since ArchiveXL then refuses those removals.
+
+**Changed**
+
+- The World tab has two sub-tabs, Nearby (the doors near V) and Sectors. Look again is now Scan Doors.
 
 **Other**
 

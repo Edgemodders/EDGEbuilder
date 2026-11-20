@@ -135,6 +135,8 @@ export class Viewport {
   private camEntity: string | undefined;
   private camComp: GameRef | null = null;
   private camPos: V3 | undefined;
+  /** Where the camera was at the last frame, whichever camera it is (S1: Near the camera). */
+  private lastPos: V3 | undefined;
   private look: Look | undefined;
   private flyAsk: { object: SceneObject; until: number } | undefined;
   private camDirty = false;
@@ -215,6 +217,11 @@ export class Viewport {
   }
 
   /** The mod paused builder mode (the overlay is passive) or resumed it. */
+  /** The camera's place at the last frame, if any frame was drawn. */
+  cameraAt(): V3 | undefined {
+    return this.lastPos;
+  }
+
   setPaused(on: boolean): void {
     if (on === this.paused) return;
     this.paused = on;
@@ -333,6 +340,7 @@ export class Viewport {
       }
       const source = this.camEntity && this.camComp ? this.camComp : this.fpp;
       const b = basisFromMatrix((await source.GetLocalToWorld()) as GameMatrix);
+      this.lastPos = b.pos;
       if (this.camEntity && this.camComp && !this.camPos) {
         this.camPos = b.pos;
         this.look = lookOf(b.fwd);

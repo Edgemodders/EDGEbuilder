@@ -5,7 +5,7 @@
 // argument checks and the MCP tools, and a bundler drops comments. It runs in EDGEbuilder's Node
 // mod after mod.mjs, so the import below is the same running module: the same open scene.
 
-import { listScenes, sceneRefs } from './mod.mjs';
+import { listScenes, sceneRefs, serviceFocus, serviceScenesEditing, serviceSelect } from './mod.mjs';
 
 /**
  * @event scene-changed {{ name: string, file: string, objects: number }} The open scene changed: an edit was saved, or another scene was opened, made, renamed or closed (then name and file are empty). Sent half a second after the last save.
@@ -30,4 +30,37 @@ export function scenes() {
  */
 export function refs(scene) {
   return sceneRefs(scene || undefined);
+}
+
+/**
+ * Opens EDGEbuilder's Sector drawer (World tab, Sectors) on a game sector with one node data entry picked, and outlines it in the game when it is streamed in. Needs REDbridge running: it reads the sector.
+ * @tool
+ * @param {string | { sector: string, entry: number }} sector The sector's depot path (base\worlds\...\name.streamingsector), or { sector, entry }.
+ * @param {number} [entry] The node data entry's index, when sector is the path.
+ * @returns {{ selected: boolean, streamed: boolean, why?: string }} Whether it was picked, whether it is streamed in now, and why not.
+ */
+export function select(sector, entry) {
+  return serviceSelect(typeof sector === 'object' && sector ? sector : { sector, entry });
+}
+
+/**
+ * As select, then flies EDGEbuilder's camera to the entry with Edit on. A node far from V may not be streamed in yet.
+ * @tool
+ * @param {string | { sector: string, entry: number }} sector The sector's depot path, or { sector, entry }.
+ * @param {number} [entry] The node data entry's index, when sector is the path.
+ * @returns {{ focused: boolean, streamed?: boolean, why?: string }} Whether the camera went there; when not, why (no save loaded, no such entry).
+ */
+export function focus(sector, entry) {
+  return serviceFocus(typeof sector === 'object' && sector ? sector : { sector, entry });
+}
+
+/**
+ * The scenes (in the Library, the open REDcode project and This PC) whose world edits remove nodes from this sector. A project that replaces the sector changes its entry count, and ArchiveXL then refuses those removals: name these scenes in a warning.
+ * @tool
+ * @readonly
+ * @param {string} sector The sector's depot path.
+ * @returns {{ name: string, file: string, place: string, removals: number }[]} Each scene, where it is, and how many of its removals are in that sector.
+ */
+export function scenesEditing(sector) {
+  return serviceScenesEditing(sector);
 }

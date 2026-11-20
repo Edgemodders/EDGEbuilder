@@ -358,6 +358,8 @@ var Viewport = class {
   camEntity;
   camComp = null;
   camPos;
+  /** Where the camera was at the last frame, whichever camera it is (S1: Near the camera). */
+  lastPos;
   look;
   flyAsk;
   camDirty = false;
@@ -380,6 +382,10 @@ var Viewport = class {
     this.busyWith = b;
   }
   /** The mod paused builder mode (the overlay is passive) or resumed it. */
+  /** The camera's place at the last frame, if any frame was drawn. */
+  cameraAt() {
+    return this.lastPos;
+  }
   setPaused(on) {
     if (on === this.paused) return;
     this.paused = on;
@@ -480,6 +486,7 @@ var Viewport = class {
       }
       const source = this.camEntity && this.camComp ? this.camComp : this.fpp;
       const b = basisFromMatrix(await source.GetLocalToWorld());
+      this.lastPos = b.pos;
       if (this.camEntity && this.camComp && !this.camPos) {
         this.camPos = b.pos;
         this.look = lookOf(b.fwd);
@@ -1350,6 +1357,8 @@ ${looked.path}`;
   viewport.setScene(s.scene.objects, s.selected);
   renderDrawer(s);
   renderWorld(s);
+  renderSectors(s);
+  renderSectorDrawer(s);
   renderEdits(s);
   viewport.setCamera(s.camera?.entityId);
   viewport.setPaused(!!s.camera?.paused);
@@ -2216,6 +2225,7 @@ function goToObject(s, id) {
 }
 $("pickedObjects").addEventListener("click", () => {
   drawerOpen = !drawerOpen;
+  if (drawerOpen && state?.sectors.open) post({ type: "sectors.close" });
   peekAsked = "";
   confirming = void 0;
   if (state) render(state);
@@ -2413,6 +2423,149 @@ $("worldEdits").addEventListener(
     if (!id) return;
     e.stopPropagation();
     post({ type: "world.restore", id });
+  },
+  true
+);
+var SectorToggles = [
+  ["secExterior", "exterior"],
+  ["secInterior", "interior"],
+  ["secQuest", "quest"],
+  ["secOther", "other"]
+];
+var SectorLevels = [null, 0, 1, 2, 3];
+var sectorsHtml = "";
+var sectorRowsHtml = "";
+var sectorLevel = null;
+var sectorKindsShown = false;
+var lastSector = "";
+var lastSectorRow = { entry: -1, at: 0 };
+var lastFly = -1;
+var sectorsTyped;
+var sectorFiltered;
+var EyeIcon = `<svg viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>`;
+var EyeOffIcon = `<svg viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8zM2.5 13.5l11-11"/></svg>`;
+function sectorKinds() {
+  return SectorToggles.filter(([id]) => $(id).checked).map(([, k]) => k);
+}
+function findSectors(around) {
+  const text = ($("sectorsText").value ?? "").trim();
+  const at = around === "camera" ? viewport.cameraAt() : void 0;
+  post({ type: "sectors.find", around, ...at ? { at } : {}, ...around === "text" ? { text } : {}, kinds: sectorKinds(), level: sectorLevel });
+}
+function renderSectors(s) {
+  const sx = s.sectors;
+  if (!sectorKindsShown) {
+    sectorKindsShown = true;
+    for (const [id, k] of SectorToggles) $(id).checked = sx.kinds.includes(k);
+  }
+  const n = sx.found.length;
+  const where = sx.around === "text" ? `matching "${sx.text}"` : sx.around === "camera" ? "at the camera's place" : "at V's place";
+  $("sectorsInfo").textContent = sx.status === "looking" ? "Looking for sectors... (the first time, REDbridge reads the game's list: a few seconds)" : sx.note ? sx.note : sx.around ? `${sx.total} sector${sx.total === 1 ? "" : "s"} ${where}${sx.total > n ? `, the first ${n} shown` : ""}. Finest level first. A click opens one beside this window.` : "Near V lists the sectors the game streams at V's place. Or type part of a name, or a grid cell.";
+  const html = sx.found.map((r) => {
+    const end = [
+      r.streamed ? '<span class="tag streamed" title="Streamed in now">in</span>' : "",
+      `<span class="tag">${esc(r.kind)}</span>`,
+      `L${r.level}`,
+      r.block === "ep1" ? '<span class="tag" title="Phantom Liberty">PL</span>' : "",
+      r.distance !== void 0 && r.distance > 0 ? `${r.distance.toFixed(0)} m` : ""
+    ].filter(Boolean).join(" ");
+    return `<rn-item value="${esc(r.path)}" title="${esc(r.path)}"${s.sectors.open?.path === r.path ? " selected" : ""}>${esc(r.name)}<span slot="end">${end}</span></rn-item>`;
+  }).join("");
+  if (html !== sectorsHtml) $("sectorsList").innerHTML = sectorsHtml = html;
+  if (lastFly < 0) lastFly = sx.fly?.seq ?? 0;
+  if (sx.fly && sx.fly.seq !== lastFly) {
+    lastFly = sx.fly.seq;
+    mainTabs().select?.(WorldTab);
+    document.getElementById("worldTabs").select?.(1);
+    flyToPoint(sx.fly.position);
+  }
+}
+function renderSectorDrawer(s) {
+  const v2 = s.sectors.open;
+  $("sectorDrawer").classList.toggle("open", !!v2);
+  if (!v2) {
+    lastSector = "";
+    return;
+  }
+  if (v2.path !== lastSector) {
+    lastSector = v2.path;
+    drawerOpen = false;
+    $("sectorFilter").value = v2.filter;
+  }
+  const name = shortName(v2.path).replace(/\.streamingsector$/i, "");
+  $("sectorTitle").textContent = `Sector: ${name}`;
+  $("sectorTitle").title = v2.path;
+  const streamed = v2.loaded === true ? "streamed in now" : v2.loaded === false ? "not streamed in now: go near it for its nodes to be in the game" : "";
+  $("sectorInfo").textContent = v2.status === "reading" ? "Reading the sector through REDbridge..." : v2.status === "error" ? v2.error ?? "It could not be read." : [
+    `${v2.kind}${v2.kind ? ", " : ""}level ${v2.level}. ${v2.total} entr${v2.total === 1 ? "y" : "ies"}${streamed ? `, ${streamed}` : ""}.`,
+    v2.matching > v2.nodes.length ? `${v2.matching} match; the first ${v2.nodes.length} shown: the filter narrows them.` : v2.filter ? `${v2.matching} match.` : "",
+    "A click picks one (Picked in the world, on the World tab); two clicks fly there. The eye hides one until EDGEbuilder stops."
+  ].filter(Boolean).join("\n");
+  const html = v2.nodes.map((r) => {
+    const mark = r.streamed === true ? '<span class="streamed" title="Streamed in now">\u25CF</span>' : r.streamed === false ? '<span title="Not streamed in now">\u25CB</span>' : "";
+    const end = [r.copies ? `<span class="tag" title="An instanced mesh: copies it places">\xD7${r.copies}</span>` : "", mark, `<button class="act${r.hidden ? " on" : ""}" data-act="hide" data-entry="${r.entry}" title="${r.hidden ? "Show it again" : "Hide it until EDGEbuilder stops (not kept in the scene)"}">${r.hidden ? EyeOffIcon : EyeIcon}</button>`].filter(Boolean).join(" ");
+    const label = `#${r.entry} ${r.kind.replace(/^world/, "").replace(/Node$/, "")}${r.resource ? ` ${shortName(r.resource)}` : ""}`;
+    const tip = [r.resource ?? "", r.ref ?? "", r.appearance ? `appearance ${r.appearance}` : "", `node ${r.node}, at ${r.position.map((x) => x.toFixed(1)).join(", ")}`].filter(Boolean).join("\n");
+    return `<rn-item value="${r.entry}" title="${esc(tip)}"${v2.selected === r.entry ? " selected" : ""}>${esc(label)}<span slot="end">${end}</span></rn-item>`;
+  }).join("");
+  if (html !== sectorRowsHtml) $("sectorList").innerHTML = sectorRowsHtml = html;
+}
+function flyToPoint(position) {
+  if (!state || state.world !== "ready" || state.settings.editorCamera === false) return;
+  const edit = $("edit");
+  if (!edit.checked) {
+    edit.checked = true;
+    viewport.setEdit(true);
+  }
+  const box = { id: "sector-node", kind: "entity", transform: { position, rotation: [0, 0, 0, 1], scale: [1, 1, 1] }, bounds: { min: [-1, -1, 0], max: [1, 1, 2] } };
+  viewport.flyTo(box);
+}
+$("sectorsNearV").addEventListener("click", () => findSectors("V"));
+$("sectorsNearCamera").addEventListener("click", () => findSectors("camera"));
+$("sectorsText").addEventListener("input", () => {
+  clearTimeout(sectorsTyped);
+  sectorsTyped = setTimeout(() => findSectors("text"), 350);
+});
+for (const [id] of SectorToggles) $(id).addEventListener("change", () => state?.sectors.around && findSectors(state.sectors.around));
+$("sectorLevel").addEventListener("change", (e) => {
+  e.stopPropagation();
+  sectorLevel = SectorLevels[e.detail.index] ?? null;
+  if (state?.sectors.around) findSectors(state.sectors.around);
+});
+$("worldTabs").addEventListener("change", (e) => e.stopPropagation());
+$("sectorsList").addEventListener("select", (e) => {
+  const p = e.detail.value;
+  if (p) post({ type: "sectors.open", path: p });
+});
+$("sectorClose").addEventListener("click", () => post({ type: "sectors.close" }));
+$("sectorFilter").addEventListener("input", () => {
+  clearTimeout(sectorFiltered);
+  sectorFiltered = setTimeout(() => post({ type: "sectors.filter", text: $("sectorFilter").value ?? "" }), 250);
+});
+$("sectorList").addEventListener(
+  "click",
+  (e) => {
+    const target2 = e.target;
+    const hide = target2.closest?.("[data-act=hide]");
+    if (hide) {
+      e.stopPropagation();
+      const entry2 = Number(hide.dataset.entry);
+      const row = state?.sectors.open?.nodes.find((r) => r.entry === entry2);
+      if (row) post({ type: "sectors.hide", entry: entry2, hidden: !row.hidden });
+      return;
+    }
+    const v2 = target2.closest?.("rn-item")?.getAttribute("value");
+    if (v2 === null || v2 === void 0) return;
+    const entry = Number(v2);
+    const twice = entry === lastSectorRow.entry && performance.now() - lastSectorRow.at < 500;
+    lastSectorRow = twice ? { entry: -1, at: 0 } : { entry, at: performance.now() };
+    if (!twice) {
+      worldClickAt = 0;
+      post({ type: "sectors.select", entry });
+    } else {
+      const row = state?.sectors.open?.nodes.find((r) => r.entry === entry);
+      if (row) flyToPoint(row.position);
+    }
   },
   true
 );

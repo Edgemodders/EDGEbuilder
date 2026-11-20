@@ -135,4 +135,27 @@ The four choices: the World tab looks around the camera through REDnode's regist
 
 
 
+## Sector Tools (S1 to S3, EDGEbuilder #9)
+
+REDcode's request ([EDGEbuilder #9](https://github.com/Edgemodders/EDGEbuilder/issues/9), 2026-11-20), answered with the owner's agreement and confirmed by REDcode the same day: Sector Tools live inside EDGEbuilder, under the **World** tab, since they need its camera, Edit, picking, outlines and hiding. The owner's rule for the panel: one tree, **world, sector, node**, with nothing beside a thing that contains it, and big views in a drawer to the left of the window.
+
+| Where | What |
+|---|---|
+| **World > Nearby** | The doors near V, as D1 made them (the World tab before S1). **Look again** became **Scan Doors**, as in Remove Doors |
+| **World > Sectors** | **Near V** and **Near the camera** (REDbridge's `sector.find` with a small box at that place), or a name or grid cell typed (`watson`, `interior`, `-22 19`); the kinds as switches (Exterior, Interior, Quest, Other) and the level (all, 0, 1, 2, 3 and up). At most 200 rows: finest level first, then the sector whose box's middle is nearest (about 3,000 sectors' streaming boxes hold V's flat; the nearest middles are the building's interior cells and V's own exterior cell). **in** marks a sector REDnode's registry has loaded |
+| **The Sector drawer** | Opens to the left on a click: the sector's node data entries from `sector.nodes` (853 for V's `exterior_-22_19_1_0`), a filter (class, file, reference, `#288`), at most 300 rows, ● streamed in now and ○ not. A click picks an entry into Picked in the world; two clicks fly there with Edit on; the eye hides it until EDGEbuilder stops (not kept in the scene) |
+| **Picked in the world** | One panel under both sub-tabs. An entry that places a door in the world is picked as that door (Open, Close, Lock, Remove from world with its stand-in); any other entry as a node (Remove from world, with its stand-in when it places an entity) |
+| **The service** | `select({ sector, entry })` opens the drawer with the entry picked; `focus` also flies there (or says why not: no save loaded, no such entry); `scenesEditing(sector)` names the scenes whose removals are in that sector. Both call forms work: `select({ sector, entry })` from a package, `edgebuilder__select` with `sector` and `entry` through REDnode's MCP server |
+| **The Bake tab** | Warns when the open project has its own file for a sector the scene removes from: the sector's entry count changes, so ArchiveXL refuses those removals |
+
+| Stage | Delivers | State |
+|---|---|---|
+| **S1 Sectors** | The above | Built on 2026-11-20 in 0.13.0; checked against REDbridge 0.15.0 outside the game (V's sector found by its grid cell, its 853 entries, its hash `0x3c9117867951bc5a` as the registry writes it) and in REDnode's host. Test steps in [Tests](testing.md#s1-sectors-0130) |
+| **S2 The 3D view** | REDcode's drawing package (`world-view`) at the top of the drawer | After S1, when the package is on npm |
+| **S3 Previews** | `preview` and `clearPreviews` for REDcode's edits | After S1 |
+
+Not in S1: **Open in REDcode**. REDcode's extension has `openSector(path, { select })`, but its REDnode service does not offer it yet, so the game has no way to ask for it. It needs REDcode's service to carry it (a request to file).
+
+## Not in this plan
+
 Editing NPCs from crowds and traffic, which have no node; changing a node's materials or components beyond its appearance; and editing objects in other mods' sectors beyond hiding them, until the owner decides how a scene should depend on another author's mod.
