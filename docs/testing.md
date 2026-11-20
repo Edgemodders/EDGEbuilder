@@ -860,3 +860,33 @@ Before: the game closed, the probe deployed with EDGEdeck. Use a save you don't 
 | 13 | V's door's node holds its setup in `instanceData` → `persistentState` (`DoorControllerPS`) → `doorProperties`: `initialDoorState` CLOSED, `automaticallyClosesItself` true, lock and seal switches, and a fact `q001_vroom_door_opened` in its operations. ArchiveXL's node mutations change position, orientation, scale, resource, appearance, record and proxy counts, not instance data (its `WorldStreaming/Config.hpp`). So a bake cannot set a door's starting state in place; only a new door node of the bake's own can, which loses the original's id (quest links, saved state). And a save keeps a door's state over its start (step 9) (D5) |
 
 **What D1 and D2 take from it:** Remove from world hides through REDnode (D1 waits on nothing in REDnode's N2). A removal names a sector entry and the sector's entry count, and **removing an entity also removes its proxy**, found by `ownerGlobalId` (for REDbridge #18). Open, close and lock (D2) live in the game through REDnode, as agreed for this case on 2026-11-18; a new door with its own starting state is a node the bake writes, for later (new interiors). After the test: switch off `door-probe-removal` in EDGEdeck and deploy, or V's flat keeps no door.
+
+### D1a Remove from world (0.12.0)
+
+The first half of D1 ([World objects, "D1 plan"](world-objects.md#doors-first-d0-to-d2), agreed with the owner on 2026-11-19): pick the game's doors, list them on the World tab, remove them live as world edits kept in the scene (scene format 3, [draft](scene.md#format-3-draft-world-edits)). Not baked yet: that is D1b. Checked in REDnode's host without the game on 2026-11-19 (the World tab, the kind switches, the Scene tab's world edits with Restore and Undo, a format 3 file, the window widened to 624 px so seven tabs fit).
+
+Before: the game closed; Claude deploys EDGEbuilder 0.12.0 with EDGEdeck, with 0.11.1, the door probe and `door-probe-removal` off. REDnode 0.67.3 or later (the world node registry). A save at V's flat in Megabuilding H10, and a scene open (the working scene is fine).
+
+| # | Do | Expected | Answers |
+|---|---|---|---|
+| 1 | Start the game and load the save. Open EDGEbuilder, the **World** tab | No note about the registry; "N near V, within 30 m" and a list: V's door, the elevator doors, shutters, painted-on doors, each with its state and distance | R1 |
+| 2 | Hover a row, then move off the list | The door gets an outline while hovered, in another colour than the scene's objects | R2 |
+| 3 | Click V's door's row | Edit goes on and the camera flies to it. **Picked in the world**: `single_door.ent`, its appearance, "closed; starts closed; closes by itself", `worldEntityNode, entry 288 (node 271) in exterior_-22_19_1_0.streamingsector`, its reference with `q001_door_v_flat`, and a warning that a quest addresses it | R1 |
+| 4 | With Edit on, click the elevator door in the world; then click a bare wall | The elevator door is picked and the World tab shows it; the wall picks nothing | R3 |
+| 5 | Pick V's door again and press **Remove from world** | The door goes. "Removed ... from the world". The Scene tab lists it under World edits with **Restore**. Edit off: V walks through the doorway | R4 |
+| 6 | Ctrl+Z, then Ctrl+Y | Undo: the door is back. Redo: gone again | |
+| 7 | **Restore** on the Scene tab | The door is back; the list is empty | |
+| 8 | Remove V's door again. Fast travel to another district and back | Still gone | R5 |
+| 9 | Save, then load that save | Within a few seconds of the load the door is gone again (the log: "World edits: 1 of 1 removal in the game") | R5 |
+| 10 | Scene tab **Close**; then open the scene again from the Library tab | Closed: the door is back. Opened: gone again | |
+| 11 | World tab: switch **Meshes** on. With Edit on, click a painted-on door that is a mesh (the one from D0's step 10) | Picked as a mesh, with "This node holds several meshes as one" if it is cooked. **Remove from world**: it goes. Then **Restore** | R3 |
+| 12 | The **Bake** tab | A line: the scene removes 1 of the game's own objects, not baked yet (D1b) | |
+| 13 | Mod Manager: switch EDGEbuilder off, then on again | Off: the door comes back (REDnode shows what a package hid). On: gone again once the World tab or a save load runs | R5 |
+
+| # | Question |
+|---|---|
+| R1 | Does the World tab find the doors near V, with the right states and their nodes? |
+| R2 | Are the outlines clear: hover, picked, and the scene's own? |
+| R3 | Does a click pick the door aimed at, and nothing on a bare wall? |
+| R4 | Is a removed door gone with its collision, as in D0? |
+| R5 | Do removals hold after a fast travel, a save load and a restart of EDGEbuilder? |

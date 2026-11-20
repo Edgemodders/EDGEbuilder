@@ -88,3 +88,44 @@ Format 2 adds one kind and changes nothing else. A format 1 file is a valid form
 | `props.behaviour` | `idle` (the default): stands where it was placed and stays friendly to V. Other behaviours (walk, talk, fight) are a later phase |
 
 **Baking NPCs is open.** The game places people through community and population spawner nodes, not `worldEntityNode`, and nothing here has been tried. Until a bake is planned, an `npc` object loads in the running game (EDGEbuilder's previews, REDnode's `world.load`) and the bake skips it with a warning.
+
+## Format 3 draft: world edits
+
+Drafted on 2026-11-19 for D1, the Doors slice ([World objects, "Doors first"](world-objects.md#doors-first-d0-to-d2)); built in EDGEbuilder 0.12.0 (D1a), **not pinned until D1 passes in game**. A scene can change the game's own world: D1 removes doors, painted-on doors and meshes the game placed. EDGEbuilder writes `format: 3` only for a scene with at least one world edit, and format 2 or 1 otherwise, as before. Format 3 adds one list, `worldEdits`, and changes nothing else.
+
+```json
+"worldEdits": [
+  {
+    "id": "remove_single_door",
+    "action": "remove",
+    "what": "door",
+    "label": "Door single_door.ent (doors_single_kitsch_g_frameless)",
+    "node": {
+      "sector": "base\worlds\03_night_city\_compiled\default\exterior_-22_19_1_0.streamingsector",
+      "sectorHash": "0x3c9117867951bc5a",
+      "entry": 288,
+      "node": 271,
+      "type": "worldEntityNode",
+      "globalId": "6132383399567759307"
+    },
+    "fingerprint": { "resource": "base\gameplay\devices\doors\final\single_door.ent", "appearance": "doors_single_kitsch_g_frameless", "position": [-1388.56, 1271.94, 123.07] },
+    "ref": "$/03_night_city/c_watson/little_china/.../#q001_door_v_flat"
+  }
+]
+```
+
+| Field | Meaning |
+|---|---|
+| `id` | Unique in the scene |
+| `action` | `remove` (D1). Later edits (move, rescale, an appearance, a door's state in D2) get their own actions |
+| `what` | The picker's kind: `door`, `fakeDoor` or `mesh` |
+| `label` | What the Scene tab shows |
+| `node.sector`, `node.sectorHash` | The sector's depot path (empty if REDbridge did not name it) and its path hash, as REDnode's world node registry gives it |
+| `node.entry` | The node data entry: what ArchiveXL's `nodeDeletions` names, and what REDnode's registry calls the instance. ArchiveXL counts a sector's entries, not its nodes (D0) |
+| `node.node`, `node.type` | The node the entry places and its class; ArchiveXL checks the class |
+| `node.globalId` | The node's global id in decimal, when it has one; for a door, its entity's id (D0) |
+| `fingerprint` | The file, appearance and place, to find the node again if a game patch renumbers the sector |
+| `proxies` | An entity's proxy meshes seen in the game (`worldEntityProxyMeshNode`s whose `ownerGlobalId` is the entity): the bake removes them too, and finds them itself when absent |
+| `ref` | The node's reference, when it has one: a quest can address a node that has one |
+
+**Who reads it.** EDGEbuilder hides each removal live through REDnode's world node registry (`world.setVisible`) while the scene is open or on, and the bake (D1b) writes them as ArchiveXL node deletions through REDbridge's `sector.build`. REDnode's own reader (`world.load`) takes formats 1 and 2, so EDGEbuilder hands it a format 2 copy without `worldEdits` for the scenes that are on; other packages loading a format 3 scene through REDnode need its reader to take format 3 (a request for REDnode).
