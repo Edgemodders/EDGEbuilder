@@ -950,11 +950,11 @@ function scanShelf(root) {
     for (const d of names) {
       if (shelf.scenes.length >= MaxScenes) return;
       const full = path5.join(dir, d.name);
-      const sub2 = rel ? `${rel}/${d.name}` : d.name;
+      const sub3 = rel ? `${rel}/${d.name}` : d.name;
       if (d.isDirectory()) {
         if (d.name.startsWith(".") || d.name.toLowerCase().endsWith(".bake") || d.name.toLowerCase().endsWith(".asset") || d.name === "node_modules" || depth >= MaxDepth) continue;
-        shelf.folders.push(sub2);
-        walk(full, sub2, depth + 1);
+        shelf.folders.push(sub3);
+        walk(full, sub3, depth + 1);
       } else if (d.isFile() && d.name.toLowerCase().endsWith(SceneEnding)) {
         let st;
         try {
@@ -1257,10 +1257,107 @@ function forgetInNote(projectDir, slug) {
 // src/scene.ts
 import * as fs7 from "node:fs";
 import * as path7 from "node:path";
+
+// src/worldedits.ts
+var DoorClasses = /* @__PURE__ */ new Set(["Door", "BunkerDoor", "MovableWallScreen", "Window"]);
+var MeshNodeKinds = ["worldMeshNode", "worldInstancedMeshNode", "worldCookedStaticMeshNode", "worldStaticMeshNode", "worldBendedMeshNode", "worldFoliageNode"];
+function kindOfClass(type) {
+  if (type === "FakeDoor") return "fakeDoor";
+  if (DoorClasses.has(type) || /door/i.test(type)) return "door";
+  return void 0;
+}
+var KindLabels = { door: "Doors", fakeDoor: "Painted-on doors", mesh: "Meshes" };
+var DefaultKinds = ["door", "fakeDoor"];
+function registryId(n) {
+  return `${n.sectorHash}:${n.entry}`;
+}
+function idText(id) {
+  if (id === null || id === void 0 || id === "") return null;
+  try {
+    const n = BigInt(id);
+    return n === 0n ? null : n.toString();
+  } catch {
+    return null;
+  }
+}
+function sameId(a, b) {
+  const x = idText(a);
+  return x !== null && x === idText(b);
+}
+function questWarnings(ref, sector) {
+  const out = [];
+  if (ref && /(^|[\\/#{_])(q|sq|mq|ep1_|mws_)\d{2,3}_/i.test(ref)) out.push("A quest addresses this object (its reference names a quest): removing it may break that mission or open unfinished space.");
+  if (sector && /\\quest_[0-9a-f]+\.streamingsector$/i.test(sector)) out.push("It is in one of the game's quest sectors, which quests switch on and off: removing it may change a mission.");
+  return out;
+}
+var dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+var sub2 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+function rayToSegment(origin, dir, a, b) {
+  const u = dir;
+  const v2 = sub2(b, a);
+  const w = sub2(origin, a);
+  const uu = dot(u, u);
+  const uv = dot(u, v2);
+  const vv = dot(v2, v2);
+  const uw = dot(u, w);
+  const vw = dot(v2, w);
+  const d = uu * vv - uv * uv;
+  const t = Math.max(0, Math.min(1, d > 1e-9 ? (uu * vw - uv * uw) / d : vv > 0 ? vw / vv : 0));
+  const s = Math.max(0, dot(sub2(add2(a, scale(v2, t)), origin), u) / uu);
+  const p = add2(origin, scale(u, s));
+  const q = add2(a, scale(v2, t));
+  return { gap: Math.hypot(...sub2(p, q)), along: s };
+}
+function add2(a, b) {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+}
+function scale(a, k) {
+  return [a[0] * k, a[1] * k, a[2] * k];
+}
+var DoorHeight = 2.2;
+var DoorReach = 0.8;
+function doorUnderRay(origin, dir, doors, wallAt) {
+  let best;
+  for (const door of doors) {
+    const top = [door.position[0], door.position[1], door.position[2] + DoorHeight];
+    const r = rayToSegment(origin, dir, door.position, top);
+    if (r.gap > DoorReach || r.along <= 0) continue;
+    if (wallAt !== void 0 && r.along > wallAt + 0.75) continue;
+    const better = !best || r.along < best.along - 0.5 || Math.abs(r.along - best.along) <= 0.5 && r.gap < best.gap;
+    if (better) best = { door, ...r };
+  }
+  return best?.door;
+}
+function editId(label, edits) {
+  const base = (label.match(/([a-z0-9_]+)\.(ent|mesh)\b/i)?.[1] ?? label).toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "edit";
+  const taken = new Set(edits.map((e) => e.id));
+  let id = `remove_${base}`;
+  for (let n = 2; taken.has(id); n++) id = `remove_${base}_${n}`;
+  return id;
+}
+function editFor(edits, node) {
+  return edits.find((e) => e.node.sectorHash.toLowerCase() === node.sectorHash.toLowerCase() && e.node.entry === node.entry);
+}
+function editsDiff(before, after) {
+  const key = (e) => `${e.action}|${registryId(e.node).toLowerCase()}`;
+  const was = new Set(before.map(key));
+  const now = new Set(after.map(key));
+  return { hide: after.filter((e) => !was.has(key(e))), show: before.filter((e) => !now.has(key(e))) };
+}
+function readableEdits(edits) {
+  if (!Array.isArray(edits)) return [];
+  return edits.filter((e) => !!e && typeof e === "object" && e.action === "remove" && typeof e.node?.sectorHash === "string" && Number.isInteger(e.node?.entry));
+}
+
+// src/scene.ts
 function readSceneFile(file) {
   const data = JSON.parse(fs7.readFileSync(file, "utf8"));
-  if (!knownFormat(data)) throw new Error(`not a format 1 or 2 scene`);
+  if (!knownFormat(data)) throw new Error(`not a format 1, 2 or 3 scene`);
   return data;
+}
+function forReader(data) {
+  const { worldEdits: _edits, ...rest } = data;
+  return { ...rest, format: rest.objects.some((o) => o.kind === "npc") ? 2 : 1 };
 }
 var Scene = class {
   /** The file the scene is saved to after every change; another scene opened (B3-2) changes it. */
@@ -1272,6 +1369,8 @@ var Scene = class {
   game;
   objects = [];
   groups = [];
+  /** D1: the game's own objects this scene removes. */
+  worldEdits = [];
   /** Where an unreadable scene file was moved, so the next save does not overwrite it. */
   setAside;
   load() {
@@ -1283,7 +1382,7 @@ var Scene = class {
     }
     try {
       const data = JSON.parse(text);
-      if (!knownFormat(data)) throw new Error(`not a format 1 or 2 scene`);
+      if (!knownFormat(data)) throw new Error(`not a format 1, 2 or 3 scene`);
       this.take(data);
       return true;
     } catch (err) {
@@ -1306,15 +1405,17 @@ var Scene = class {
     this.objects = data.objects.map((o) => ({ ...o }));
     this.groups = Array.isArray(data.groups) ? data.groups.map((g) => ({ id: g.id, name: g.name, parent: g.parent ?? null })) : [];
     for (const o of this.objects) if (o.group && !this.groups.some((g) => g.id === o.group)) delete o.group;
+    this.worldEdits = readableEdits(data.worldEdits).map((e) => JSON.parse(JSON.stringify(e)));
   }
   /** The scene as its file keeps it. */
   data() {
     return {
-      format: this.objects.some((o) => o.kind === "npc") ? 2 : 1,
+      format: this.worldEdits.length ? 3 : this.objects.some((o) => o.kind === "npc") ? 2 : 1,
       name: this.name,
       ...this.game ? { game: this.game } : {},
       groups: this.groups,
-      objects: this.objects.map(({ entityId: _live, ...rest }) => rest)
+      objects: this.objects.map(({ entityId: _live, ...rest }) => rest),
+      ...this.worldEdits.length ? { worldEdits: this.worldEdits } : {}
     };
   }
   /** Called after each save, for the service's scene-changed event. */
@@ -1346,16 +1447,19 @@ var Scene = class {
   }
   /** A copy of the scene as it is now, for Undo. */
   state() {
-    return JSON.parse(JSON.stringify({ objects: this.objects.map(({ entityId: _live, ...rest }) => rest), groups: this.groups }));
+    return JSON.parse(JSON.stringify({ objects: this.objects.map(({ entityId: _live, ...rest }) => rest), groups: this.groups, worldEdits: this.worldEdits }));
   }
   /**
    * Puts the scene back to `s`, keeping the previews of objects that are still there (by id). Returns
    * what the mod has to do: spawn objects that came back, spawn again those whose file, appearance or
-   * scale changed, move those that moved, and remove the previews of objects that are gone.
+   * scale changed, move those that moved, and remove the previews of objects that are gone; and the
+   * world edits to apply (`hide`) and to take back (`show`).
    */
   restore(s) {
     const before = new Map(this.objects.map((o) => [o.id, o]));
-    const out = { spawn: [], respawn: [], move: [], gone: [] };
+    const edits = editsDiff(this.worldEdits, s.worldEdits ?? []);
+    this.worldEdits = JSON.parse(JSON.stringify(s.worldEdits ?? []));
+    const out = { spawn: [], respawn: [], move: [], gone: [], ...edits };
     this.objects = s.objects.map((saved) => {
       const o = JSON.parse(JSON.stringify(saved));
       const was = before.get(o.id);
@@ -1380,6 +1484,7 @@ var Scene = class {
   forgetPreviews() {
     for (const o of this.objects) delete o.entityId;
   }
+  /** Clear scene: its objects and groups go. Its world edits stay: they are not objects, and Restore takes each back. */
   clear() {
     this.objects = [];
     this.groups = [];
@@ -1387,7 +1492,7 @@ var Scene = class {
   }
 };
 function knownFormat(data) {
-  return (data.format === 1 || data.format === 2) && Array.isArray(data.objects);
+  return (data.format === 1 || data.format === 2 || data.format === 3) && Array.isArray(data.objects);
 }
 function yawToQuaternion(yawDegrees) {
   const half = yawDegrees * Math.PI / 360;
@@ -1541,7 +1646,8 @@ var state = {
   results: [],
   query: { text: "", kind: "all", from: "all" },
   sources: { mods: { archives: sources.archiveCount, assets: sources.modAssets }, project: null },
-  scene: { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: [] },
+  scene: { name: scene.name, objects: scene.objects, groups: scene.groups, worldEdits: scene.worldEdits, file: scene.file, needs: [] },
+  worldObjects: { kinds: settings.worldKinds ?? DefaultKinds, status: "idle", things: [] },
   library: { root: libraryRoot, suggested: suggestedRoot, shelves: [], on: [], bakes: [], models: [], modelPlaces: [] },
   bake: { project: null, checks: [], stale: false, list: [] },
   selected: [],
@@ -1551,7 +1657,7 @@ var state = {
 };
 function publish() {
   const at = whereIs(scene.file, placeRoots());
-  state.scene = { name: scene.name, objects: scene.objects, groups: scene.groups, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra), place: at?.place, folder: at?.folder };
+  state.scene = { name: scene.name, objects: scene.objects, groups: scene.groups, worldEdits: scene.worldEdits, file: scene.file, needs: sceneNeeds(scene.objects.map((o) => o.resource), index.extra), place: at?.place, folder: at?.folder };
   state.library.root = libraryRoot;
   state.library.on = [...onScenes.keys()];
   state.selected = state.selected.filter((id) => scene.get(id));
@@ -1870,6 +1976,7 @@ async function checkWorld() {
     return;
   }
   if (state.world === "ready" && before !== "ready") {
+    void startRegistry().then(() => applyEdits());
     lookAtBakes();
     void inTurn("Show scenes that are on", () => reloadOn());
     previewsBackSoon();
@@ -2037,6 +2144,8 @@ async function travel(from, to, word) {
   if (!s) return say(`Nothing to ${word.toLowerCase()}.`, "info");
   to.push({ ...scene.state(), selected: [...state.selected] });
   const ch = scene.restore(s);
+  for (const e of ch.show) await showEdit(e);
+  for (const e of ch.hide) await hideEdit(e);
   for (const o of ch.gone) await removePreview(o);
   for (const o of ch.respawn) await respawn(o);
   for (const o of ch.move) {
@@ -2050,7 +2159,9 @@ async function travel(from, to, word) {
   const what = [
     moved ? `${moved} moved back` : "",
     ch.spawn.length ? `${ch.spawn.length} back${missing.length ? ` (${missing.join("; ")})` : ""}` : "",
-    ch.gone.length ? `${ch.gone.length} taken out` : ""
+    ch.gone.length ? `${ch.gone.length} taken out` : "",
+    ch.hide.length ? `${ch.hide.length} removed from the world again` : "",
+    ch.show.length ? `${ch.show.length} back in the world` : ""
   ].filter(Boolean);
   state.message = { text: `${word}${what.length ? `: ${what.join(", ")}` : ""}.`, tone: "ok" };
   console.log(state.message.text);
@@ -2363,7 +2474,331 @@ async function builderStop() {
   if (wasOn) console.log("Builder mode off");
   for (const id of state.selected) await highlight(scene.get(id), false);
   outlinesOff = true;
+  if (state.worldObjects.picked) await outlineThing(state.worldObjects.picked.key, 0);
+  if (hovered) await hoverThing(null);
   publish();
+}
+var NearRadius = 30;
+var NearFresh = 4e3;
+var WorldOutline = 2;
+var HoverOutline = 3;
+var liveThings = /* @__PURE__ */ new Map();
+var nearAt = 0;
+var hovered;
+var pendingHides = /* @__PURE__ */ new Map();
+var hideTimer;
+var onEdits = /* @__PURE__ */ new Map();
+var pathNames = /* @__PURE__ */ new Map();
+var pickSeq = 0;
+async function pathOf(hash) {
+  if (!hash) return "";
+  const known = pathNames.get(hash);
+  if (known !== void 0) return known;
+  let name = "";
+  if (bridge?.running) {
+    try {
+      name = (await bridge.call("hash.resolve", { hash }))?.path ?? "";
+    } catch {
+    }
+  }
+  pathNames.set(hash, name);
+  return name;
+}
+async function startRegistry() {
+  const wo = state.worldObjects;
+  if (typeof world2.nodeRegistry !== "function" || typeof world2.setVisible !== "function") {
+    wo.status = "unavailable";
+    wo.note = "Picking and removing the game's own objects needs REDnode 0.67.3 or later.";
+    return false;
+  }
+  try {
+    const s = await world2.nodeRegistry();
+    wo.registry = { sectors: s.sectors, nodes: s.setups };
+    if (wo.status === "unavailable") wo.status = "idle";
+    wo.note = state.world === "ready" && !s.sectors ? "REDnode's world node registry started after this save loaded, so it knows no part of the world yet: load the save again, or fast travel, and doors can be removed." : !s.canHide ? "REDnode's world node registry cannot hide nodes in this game version, so removals cannot show in the game." : void 0;
+    return true;
+  } catch (err) {
+    if (state.world !== "ready") {
+      console.log(`REDnode's world node registry waits for the game: ${err.message}`);
+      return false;
+    }
+    wo.status = "unavailable";
+    wo.note = `REDnode's world node registry did not start: ${err.message}`;
+    console.log(wo.note);
+    return false;
+  }
+}
+async function doorStateOf(entity) {
+  try {
+    const ps = await entity.GetDevicePS();
+    if (!ps) return void 0;
+    const ask = (p) => p.then((v2) => typeof v2 === "boolean" ? v2 : void 0).catch(() => void 0);
+    const [open, locked, sealed] = await Promise.all([ask(ps.IsOpen()), ask(ps.IsLocked()), ask(ps.IsSealed())]);
+    const setup = await ps.$get("doorProperties").catch(() => null);
+    const initial = typeof setup?.initialDoorState === "string" ? setup.initialDoorState : void 0;
+    const closesItself = typeof setup?.automaticallyClosesItself === "boolean" ? setup.automaticallyClosesItself : void 0;
+    return { open, locked, sealed, initial, closesItself };
+  } catch {
+    return void 0;
+  }
+}
+async function lookNear() {
+  const wo = state.worldObjects;
+  if (state.world !== "ready" || typeof world2.near !== "function") return wo.things;
+  wo.status = "looking";
+  publish();
+  const kinds = new Set(wo.kinds);
+  const things = [];
+  liveThings.clear();
+  try {
+    for (const e of await world2.near({ radius: NearRadius })) {
+      const what = kindOfClass(e.type);
+      if (!what || !kinds.has(what)) continue;
+      liveThings.set(e.id.hash, e.entity);
+      let template = "";
+      try {
+        template = await pathOf((await world2.files(e.entity)).template);
+      } catch {
+      }
+      const p = await e.entity.GetWorldPosition();
+      const word = what === "fakeDoor" ? "Painted-on door" : e.type;
+      const label = [word, template ? path10.basename(template) : "", e.appearance ? `(${e.appearance})` : ""].filter(Boolean).join(" ");
+      things.push({
+        key: e.id.hash,
+        what,
+        className: e.type,
+        label,
+        resource: template || void 0,
+        appearance: e.appearance || void 0,
+        position: [p.X, p.Y, p.Z],
+        distance: e.distance,
+        door: what === "door" ? await doorStateOf(e.entity) : void 0,
+        removedBy: scene.worldEdits.find((x) => sameId(x.node.globalId, e.id.hash))?.id
+      });
+    }
+  } catch (err) {
+    console.log(`Doors near V: ${err.message}`);
+  }
+  nearAt = Date.now();
+  wo.things = things;
+  wo.status = "ready";
+  return things;
+}
+async function outlineThing(key, colour) {
+  try {
+    if (key.includes(":")) {
+      if (typeof world2.highlight === "function") await world2.highlight(key, colour ? { outline: colour, fill: 1 } : null);
+      return;
+    }
+    const entity = liveThings.get(key) ?? await world2.entity(key);
+    if (!entity) return;
+    const event = await api.$new("entRenderHighlightEvent", { seeThroughWalls: false, opacity: colour ? 1 : 0, outlineIndex: colour, fillIndex: 0 });
+    await entity.QueueEvent(event);
+  } catch (err) {
+    console.log(`Outline ${key}: ${err.message}`);
+  }
+}
+async function clearPicked() {
+  const p = state.worldObjects.picked;
+  if (!p) return;
+  state.worldObjects.picked = void 0;
+  await outlineThing(p.key, 0);
+}
+function refOfNode(n, sector) {
+  const id = idText(n.nodeId);
+  return { sector, sectorHash: n.sector, entry: n.instance, node: n.index, type: n.kind, ...id ? { globalId: id } : {} };
+}
+async function findNode(p, seq) {
+  if (typeof world2.pick !== "function" || typeof world2.node !== "function") {
+    p.note = "Finding its node needs REDnode 0.67.3 or later.";
+    return;
+  }
+  try {
+    let node;
+    const hits = [];
+    if (p.what === "mesh") {
+      node = await world2.node(p.key) ?? void 0;
+    } else {
+      const [x, y, z] = p.position;
+      const r = await world2.pick({ from: { x, y, z: z + 3 }, dir: { x: 0, y: 0, z: -1 }, max: 6, limit: 40, all: true, physics: false, order: "nearest", helpers: true });
+      hits.push(...r.hits);
+      node = r.hits.find((n) => sameId(n.nodeId, p.key) || sameId(n.entity, p.key));
+    }
+    if (seq !== pickSeq) return;
+    if (!node) {
+      p.note = state.worldObjects.registry?.sectors ? "Its node was not found in REDnode's world node registry, so it cannot be removed yet. Move away and back, or load the save again." : "REDnode's world node registry knows no part of the world yet: load the save again, or fast travel, then pick it again.";
+      return;
+    }
+    const found = node;
+    const sector = await pathOf(found.sector);
+    p.node = refOfNode(found, sector);
+    const proxies = found.proxyId ? hits.filter((h) => h.kind === "worldEntityProxyMeshNode" && sameId(h.nodeId, found.proxyId)) : [];
+    if (proxies.length) p.proxies = await Promise.all(proxies.map(async (h) => refOfNode(h, await pathOf(h.sector))));
+    p.note = void 0;
+    if (bridge?.running && sector) {
+      try {
+        const r = await bridge.call("sector.nodes", { path: sector });
+        const ref = (r.items ?? []).find((i) => i.index === found.instance)?.ref;
+        if (ref) p.ref = ref;
+      } catch (err) {
+        console.log(`${p.label}: its sector record was not read (${err.message})`);
+      }
+    }
+    if (seq !== pickSeq) return;
+    p.warnings = [...questWarnings(p.ref, sector), .../Cooked|Instanced|Foliage/.test(found.kind) ? ["This node holds several meshes as one: removing it removes all of them."] : []];
+  } catch (err) {
+    p.note = `Its node was not found: ${err.message}`;
+  }
+}
+async function pickThing(t) {
+  const seq = ++pickSeq;
+  await clearPicked();
+  if (state.selected.length) await select([]);
+  const p = { ...t, warnings: [], note: "Looking for its node..." };
+  state.worldObjects.picked = p;
+  await outlineThing(t.key, WorldOutline);
+  publish();
+  await findNode(p, seq);
+  if (seq === pickSeq) publish();
+}
+async function pickMesh(n) {
+  const resource = await pathOf(n.resource);
+  await pickThing({
+    key: n.id,
+    what: "mesh",
+    className: n.kind,
+    label: `${n.kind.replace(/^world|Node$/g, "")} ${resource ? path10.basename(resource) : n.id}`,
+    resource: resource || void 0,
+    appearance: n.appearance ?? void 0,
+    position: n.position,
+    removedBy: editFor(scene.worldEdits, { sectorHash: n.sector, entry: n.instance })?.id
+  });
+}
+async function worldPick(origin, dir) {
+  const kinds = state.worldObjects.kinds;
+  if (state.world !== "ready" || !kinds.length || state.worldObjects.status === "unavailable") {
+    await clearPicked();
+    return publish();
+  }
+  if (kinds.includes("door") || kinds.includes("fakeDoor")) {
+    if (Date.now() - nearAt > NearFresh) await lookNear();
+    const { hit } = await raycast(origin, add(origin, mul(dir, 80)));
+    const door = doorUnderRay(origin, dir, state.worldObjects.things.filter((t) => t.what !== "mesh"), hit ? Math.hypot(...sub(hit, origin)) : void 0);
+    if (door) return pickThing(door);
+  }
+  if (kinds.includes("mesh") && typeof world2.pick === "function") {
+    try {
+      const r = await world2.pick({ from: toPoint(origin), dir: toPoint(dir), max: 80, limit: 4, kinds: MeshNodeKinds });
+      const n = r.hits.find((h) => h.holdsHit) ?? (r.physicsHit ? void 0 : r.hits[0]);
+      if (n) return pickMesh(n);
+    } catch (err) {
+      console.log(`Mesh pick: ${err.message}`);
+    }
+  }
+  await clearPicked();
+  publish();
+}
+async function hoverThing(key) {
+  const picked = state.worldObjects.picked?.key;
+  if (hovered && hovered !== key) await outlineThing(hovered, hovered === picked ? WorldOutline : 0);
+  hovered = key ?? void 0;
+  if (key && key !== picked) await outlineThing(key, HoverOutline);
+}
+async function hideEdit(e) {
+  if (typeof world2.setVisible !== "function" || state.world !== "ready") return false;
+  const id = registryId(e.node);
+  let done = false;
+  try {
+    done = await world2.setVisible(id, false);
+  } catch (err) {
+    console.log(`Remove ${e.id}: ${err.message}`);
+  }
+  if (done) pendingHides.delete(id);
+  else {
+    pendingHides.set(id, e);
+    hideAgainSoon();
+  }
+  return done;
+}
+async function showEdit(e) {
+  const id = registryId(e.node);
+  pendingHides.delete(id);
+  const others = [...scene.worldEdits, ...[...onEdits.values()].flat()];
+  if (others.some((x) => registryId(x.node).toLowerCase() === id.toLowerCase())) return;
+  if (typeof world2.setVisible !== "function") return;
+  try {
+    await world2.setVisible(id, true);
+  } catch (err) {
+    console.log(`Restore ${e.id}: ${err.message}`);
+  }
+}
+function hideAgainSoon() {
+  if (hideTimer) return;
+  hideTimer = setTimeout(() => {
+    hideTimer = void 0;
+    if (!pendingHides.size || state.world !== "ready") return;
+    void (async () => {
+      for (const e of [...pendingHides.values()]) await hideEdit(e);
+      if (pendingHides.size) console.log(`${pendingHides.size} removal${pendingHides.size === 1 ? "" : "s"} wait for their part of the world to load`);
+    })();
+  }, 1e4);
+}
+async function applyEdits() {
+  if (state.world !== "ready") return;
+  const all = [...scene.worldEdits, ...[...onEdits.values()].flat()];
+  if (!all.length) return;
+  let done = 0;
+  for (const e of all) if (await hideEdit(e)) done++;
+  console.log(`World edits: ${done} of ${all.length} removal${all.length === 1 ? "" : "s"} in the game${done < all.length ? "; the rest when their part of the world loads" : ""}`);
+}
+async function removePicked() {
+  const p = state.worldObjects.picked;
+  if (!scene.file) return say(NoScene, "warn");
+  if (!p) return say("Pick a door first: with Edit on, click one, or pick it on the World tab.", "warn");
+  if (!p.node) {
+    await findNode(p, pickSeq);
+    if (!p.node) return say(`${p.label}: ${p.note ?? "its node was not found"}`, "warn");
+  }
+  const already = editFor(scene.worldEdits, p.node);
+  if (already) return say(`${p.label} is removed already (${already.id}). Restore on the Scene tab brings it back.`, "info");
+  step();
+  const edit = {
+    id: editId(p.label, scene.worldEdits),
+    action: "remove",
+    what: p.what,
+    label: p.label,
+    node: p.node,
+    fingerprint: { ...p.resource ? { resource: p.resource } : {}, ...p.appearance ? { appearance: p.appearance } : {}, position: p.position },
+    ...p.proxies?.length ? { proxies: p.proxies } : {},
+    ...p.ref ? { ref: p.ref } : {}
+  };
+  scene.worldEdits.push(edit);
+  scene.save();
+  await outlineThing(p.key, 0);
+  const hidden = await hideEdit(edit);
+  p.removedBy = edit.id;
+  for (const t of state.worldObjects.things) if (t.key === p.key) t.removedBy = edit.id;
+  say(
+    hidden ? `Removed ${p.label} from the world. It stays gone while this scene is open in EDGEbuilder; Restore on the Scene tab, or Undo, brings it back.` : `${p.label} is in the scene's removals, but the game did not hide it yet (the log says why); it is tried again while you play.`,
+    hidden ? "ok" : "warn"
+  );
+}
+async function restoreEdit(id) {
+  const e = scene.worldEdits.find((x) => x.id === id);
+  if (!e) return publish();
+  step();
+  scene.worldEdits = scene.worldEdits.filter((x) => x !== e);
+  scene.save();
+  await showEdit(e);
+  for (const t of state.worldObjects.things) if (t.removedBy === id) t.removedBy = void 0;
+  if (state.worldObjects.picked?.removedBy === id) state.worldObjects.picked.removedBy = void 0;
+  say(`Restored ${e.label}: it is back in the world. Undo removes it again.`, "ok");
+}
+function setKinds(kinds) {
+  const known = kinds.filter((k) => k in KindLabels);
+  state.worldObjects.kinds = known;
+  saveSettings({ worldKinds: known });
+  if (state.worldObjects.picked && !known.includes(state.worldObjects.picked.what)) void clearPicked();
 }
 function runSearch() {
   state.results = index.entries.length || index.extra.length ? index.search(state.query.text, state.query.kind, ResultLimit, state.query.from) : [];
@@ -2426,6 +2861,7 @@ async function drop(assetPath, appearance, at) {
 }
 async function select(ids) {
   ids = ids.filter((id, i) => scene.get(id) && ids.indexOf(id) === i);
+  if (ids.length) await clearPicked();
   const off = state.selected.filter((id) => !ids.includes(id));
   const on = outlinesOff ? ids : ids.filter((id) => !state.selected.includes(id));
   state.selected = ids;
@@ -2656,12 +3092,17 @@ function writeSession() {
 var sameFile = (a, b) => path10.resolve(a).toLowerCase() === path10.resolve(b).toLowerCase();
 async function switchTo(data, file) {
   for (const o of scene.objects) await removePreview(o);
+  const leaving = scene.worldEdits;
+  scene.worldEdits = [];
+  for (const e of leaving) await showEdit(e);
+  await clearPicked();
   state.selected = [];
   state.duplicated = void 0;
   past.length = 0;
   future.length = 0;
   scene.take(data, file);
   writeSession();
+  await applyEdits();
 }
 var NoScene = "No scene is open: open one or make one on the Library tab.";
 async function closeScene() {
@@ -2760,9 +3201,15 @@ function saveNow() {
 }
 async function loadOn(file) {
   if (typeof world2.load !== "function") throw new Error("Showing other scenes needs REDnode 0.40.1 or later");
-  const r = await world2.load(readSceneFile(file), { name: file, wait: false, alwaysSpawned: true });
+  const data = readSceneFile(file);
+  const r = await world2.load(forReader(data), { name: file, wait: false, alwaysSpawned: true });
   for (const s of r.skipped) console.log(`${path10.basename(file)}: ${s.object} not shown: ${s.why}`);
   onScenes.set(file, r.spawned.length);
+  const edits = readableEdits(data.worldEdits);
+  if (edits.length) {
+    onEdits.set(file, edits);
+    for (const e of edits) await hideEdit(e);
+  } else onEdits.delete(file);
   return r.spawned.length;
 }
 async function sceneOn(file) {
@@ -2783,6 +3230,9 @@ async function sceneOff(file) {
   onScenes.delete(known);
   writeSession();
   console.log(`No longer showing ${path10.basename(known)}`);
+  const edits = onEdits.get(known) ?? [];
+  onEdits.delete(known);
+  for (const e of edits) await showEdit(e);
   if (typeof world2.unload === "function") await world2.unload(known).catch((err) => console.log(`Unload ${known}: ${err.message}`));
   publish();
 }
@@ -2922,6 +3372,37 @@ channel.on((m) => {
         break;
       case "select":
         await inTurn("Select", () => select(m.ids));
+        break;
+      case "world.pick":
+        await worldPick(m.origin, m.dir);
+        break;
+      case "world.select": {
+        const t = state.worldObjects.things.find((x) => x.key === m.key);
+        if (t) await pickThing(t);
+        break;
+      }
+      case "world.hover":
+        await hoverThing(m.key);
+        break;
+      case "world.clear":
+        await clearPicked();
+        publish();
+        break;
+      case "world.refresh":
+        if (!state.worldObjects.registry?.sectors) await startRegistry();
+        await lookNear();
+        publish();
+        break;
+      case "world.kinds":
+        setKinds(m.kinds);
+        await lookNear();
+        publish();
+        break;
+      case "world.remove":
+        await inTurn("Remove from world", () => removePicked());
+        break;
+      case "world.restore":
+        await inTurn("Restore", () => restoreEdit(m.id));
         break;
       case "delete":
         await inTurn("Delete", () => remove(m.ids));
@@ -3136,6 +3617,11 @@ async function lookAtCollision() {
   }
 }
 function lookAtBakes() {
+  lookAtBakesOnly();
+  const n = scene.worldEdits.length;
+  if (n) state.bake.checks.push({ tone: "info", text: `This scene removes ${n} of the game's own objects. Removals are not baked yet (that comes next, D1b): they show while the scene is open in EDGEbuilder.` });
+}
+function lookAtBakesOnly() {
   const target = bakeProject();
   const slug = slugOf(scene.name);
   const list2 = bakesIn(target);
@@ -3461,7 +3947,7 @@ async function importModel(m) {
     return say(`Import is not available: ${err.message}`, "error");
   }
   const target = project;
-  const version = `EDGEbuilder ${"0.11.1"}`;
+  const version = `EDGEbuilder ${"0.12.0"}`;
   const call = (method, params) => stopAsked ? Promise.reject(new Error(ImportStopped)) : b.call(method, params);
   const began = Date.now();
   const step2 = (text) => {
@@ -3550,7 +4036,7 @@ game.onState((s) => {
   if (!s.connected) {
     scene.forgetPreviews();
     state.selected = [];
-  }
+  } else void startRegistry();
   void checkWorld();
 });
 game.on("PlayerPuppet.OnGameAttached", () => {
@@ -3569,7 +4055,11 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   void setSolo(false);
   scene.forgetPreviews();
   state.selected = [];
+  liveThings.clear();
+  state.worldObjects.things = [];
+  state.worldObjects.picked = void 0;
   void checkWorld().then(() => {
+    setTimeout(() => void startRegistry().then(() => applyEdits()), PreviewsBackDelay);
     void inTurn("Show scenes that are on", () => reloadOn());
     previewsBackSoon();
   });
@@ -3607,7 +4097,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.11.1"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.12.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs9.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {
@@ -3624,6 +4114,7 @@ if (index.loadNewest()) {
   runSearch();
 }
 publish();
+void startRegistry();
 void checkWorld();
 void startBridge();
 watchMods();

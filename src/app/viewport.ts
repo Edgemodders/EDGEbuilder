@@ -48,8 +48,11 @@ const HOT = "#ffffff";
 const UNIT_BOX = { min: [-0.5, -0.5, 0] as V3, max: [0.5, 0.5, 1] as V3 };
 
 export interface ViewportHooks {
-  /** A click on this object, or on nothing. `toggle`: Ctrl was held; `single`: Alt (one object, not its group). */
-  pick(id: string | undefined, opts: { toggle: boolean; single: boolean }): void;
+  /**
+   * A click on this object, or on nothing. `toggle`: Ctrl was held; `single`: Alt (one object, not its group).
+   * On nothing, `ray` is the line through the click, for the game's own objects (D1).
+   */
+  pick(id: string | undefined, opts: { toggle: boolean; single: boolean }, ray?: { o: V3; d: V3 }): void;
   /** A box (Shift+drag) took these objects. `add`: Ctrl was held. */
   pickBox(ids: string[], opts: { add: boolean; single: boolean }): void;
   /** The objects' new transforms, one undo step; `merge`: the move that places a duplicate. */
@@ -559,7 +562,8 @@ export class Viewport {
     const ctx = this.ctx;
     ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
     const centre = this.canvas.width / 2;
-    const windowLeft = this.canvas.width - 24 - 544;
+    // EDGEbuilder's window: 624 px wide (seven tabs since D1a), 24 px from the right edge (index.html).
+    const windowLeft = this.canvas.width - 24 - 624;
     const max = 2 * (windowLeft - 24 - centre) - 24;
     const lines: string[] = [];
     for (const part of parts.filter(Boolean)) {
@@ -890,7 +894,7 @@ export class Viewport {
       }
     }
     const mods = held(e);
-    this.hooks.pick(best?.id, { toggle: mods.ctrl, single: mods.alt });
+    this.hooks.pick(best?.id, { toggle: mods.ctrl, single: mods.alt }, best ? undefined : { o: ray.o, d: ray.d });
   }
 
   // ---- drags and keys ------------------------------------------------------------------------------

@@ -81,6 +81,74 @@ export interface SceneObject {
   entityId?: string;
 }
 
+// ---- world edits (D1) ----
+
+/** The kinds of the game's own objects the picker knows, in its list of kinds (doors first, D1). */
+export type WorldKind = "door" | "fakeDoor" | "mesh";
+
+/**
+ * A node of the game's sectors, as a world edit names it. ArchiveXL counts a sector's node data
+ * entries, and a deletion names an entry (D0): `entry` is that, `node` the node it places.
+ */
+export interface WorldNodeRef {
+  /** The sector's depot path, when REDbridge named it; empty until then. */
+  sector: string;
+  /** The sector's path hash, `0x...`, as REDnode's registry gives it. */
+  sectorHash: string;
+  entry: number;
+  node: number;
+  /** The node's class, such as `worldEntityNode`. */
+  type: string;
+  /** Its global node id (decimal), when it has one; for a door, its entity's id (D0, D1). */
+  globalId?: string;
+}
+
+/** One change a scene makes to the game's own world (scene format 3). D1: removals. */
+export interface WorldEdit {
+  id: string;
+  action: "remove";
+  what: WorldKind;
+  /** What the panel and the Scene tab call it, such as `Door single_door.ent (doors_single_kitsch_g)`. */
+  label: string;
+  node: WorldNodeRef;
+  /** What finds the node again after a game patch renumbers it: its file, appearance and place. */
+  fingerprint: { resource?: string; appearance?: string; position: [number, number, number] };
+  /** An entity's proxy meshes seen in the game (D0: deleting the entity leaves its proxy). The bake finds them too. */
+  proxies?: WorldNodeRef[];
+  /** The node's reference, when it has one: a quest can address a node that has one. */
+  ref?: string;
+}
+
+/** A door near V, or a mesh picked, as the World tab lists it. */
+export interface WorldThing {
+  /** The entity's id for a door, the registry's node id for a mesh. */
+  key: string;
+  what: WorldKind;
+  /** The game class, such as `Door` or `FakeDoor`, or the node class for a mesh. */
+  className: string;
+  label: string;
+  /** The entity template or mesh, when known. */
+  resource?: string;
+  appearance?: string;
+  position: [number, number, number];
+  /** Metres from V, for the list. */
+  distance?: number;
+  /** A door's state from its device: open, locked, sealed and how it starts. */
+  door?: { open?: boolean; locked?: boolean; sealed?: boolean; initial?: string; closesItself?: boolean };
+  /** The edit that removes it, when one does. */
+  removedBy?: string;
+}
+
+/** The thing picked in the world, with its node once found and what to warn about. */
+export interface WorldPicked extends WorldThing {
+  node?: WorldNodeRef;
+  proxies?: WorldNodeRef[];
+  ref?: string;
+  warnings: string[];
+  /** Still looking for its node or its reference, or why it has none. */
+  note?: string;
+}
+
 // ---- scenes and the Library (B3-2) ----
 
 /** Where a scene file is: a Library folder, the open REDcode project's source/scenes, or This PC (EDGEbuilder's data folder). */
@@ -213,7 +281,20 @@ export interface Snapshot {
   /** The asset the page last looked at, with what the bridge said about it. */
   looked?: { path: string; info?: AssetInfo };
   /** needs: the mods and the project whose files the scene uses; the game needs them too once baked. */
-  scene: { name: string; objects: SceneObject[]; groups: SceneGroup[]; file?: string; needs: string[]; place?: Place; folder?: string };
+  scene: { name: string; objects: SceneObject[]; groups: SceneGroup[]; worldEdits: WorldEdit[]; file?: string; needs: string[]; place?: Place; folder?: string };
+  /**
+   * D1: the World tab. The kinds the picker takes; the doors near V; the thing picked in the world;
+   * the world node registry's count (REDnode 0.67.3 and later), which knows only sectors that loaded
+   * after it started.
+   */
+  worldObjects: {
+    kinds: WorldKind[];
+    status: "idle" | "looking" | "ready" | "unavailable";
+    things: WorldThing[];
+    picked?: WorldPicked;
+    registry?: { sectors: number; nodes: number };
+    note?: string;
+  };
   /**
    * B3-2: the Library root (absent until the player sets one) and the folder offered for it; the
    * three places with their folders and scenes; the scenes switched on (shown, not edited), by file.
@@ -347,6 +428,21 @@ export type PageMessage =
   | { type: "library.folder"; folder: string; name: string }
   /** Look at the folders again (a file changed outside EDGEbuilder). */
   | { type: "library.refresh" }
+  /** D1: a click that hit none of the scene's objects: the game's door (or mesh) along this line, if any. */
+  | { type: "world.pick"; origin: [number, number, number]; dir: [number, number, number] }
+  /** The World tab's row: pick it; hover outlines it (null: the outline goes). */
+  | { type: "world.select"; key: string }
+  | { type: "world.hover"; key: string | null }
+  /** Nothing picked in the world any more. */
+  | { type: "world.clear" }
+  /** Look for the doors near V again. */
+  | { type: "world.refresh" }
+  /** The kinds the picker takes. */
+  | { type: "world.kinds"; kinds: WorldKind[] }
+  /** Remove the picked thing from the world: hidden now, kept in the scene. One undo step. */
+  | { type: "world.remove" }
+  /** Take a world edit out of the scene: what it removed is back. One undo step. */
+  | { type: "world.restore"; id: string }
   | { type: "undo" }
   /** Stop placing the running change's previews; changes waiting still run. */
   | { type: "stop" }

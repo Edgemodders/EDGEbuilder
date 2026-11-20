@@ -485,6 +485,67 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   console.log("arrange: ok");
 }
 
+// World edits (D1): which door a click means, the scene's removals, format 3, and REDnode's copy.
+{
+  const m = core;
+  assert.equal(m.kindOfClass("Door"), "door");
+  assert.equal(m.kindOfClass("Window"), "door", "shutter windows are doors");
+  assert.equal(m.kindOfClass("FakeDoor"), "fakeDoor");
+  assert.equal(m.kindOfClass("VendingMachine"), undefined);
+  assert.ok(m.sameId("6132383399567759307", "0x551a9a360dbd17cb"), "a door's id in decimal and hex");
+  assert.ok(!m.sameId("0", "0"), "0 is no id");
+  assert.equal(m.idText("0x551a9a360dbd17cb"), "6132383399567759307");
+
+  // A ray along x at 1 m high, and doors at x = 5 (on the line), x = 5 but 2 m aside, and x = 20 behind a wall at 10 m.
+  const o = [0, 0, 1];
+  const dir = [1, 0, 0];
+  const near = { key: "a", position: [5, 0.3, 0] };
+  const aside = { key: "b", position: [5, 2, 0] };
+  const far = { key: "c", position: [20, 0, 0] };
+  const seg = m.rayToSegment(o, dir, [5, 0.3, 0], [5, 0.3, 2.2]);
+  assert.ok(Math.abs(seg.gap - 0.3) < 1e-9 && Math.abs(seg.along - 5) < 1e-9, `the gap and the distance along: ${JSON.stringify(seg)}`);
+  assert.equal(m.doorUnderRay(o, dir, [aside, near, far], undefined)?.key, "a", "the door on the line");
+  assert.equal(m.doorUnderRay(o, dir, [aside], undefined), undefined, "2 m aside is no pick");
+  assert.equal(m.doorUnderRay(o, dir, [far], 10), undefined, "a door behind a wall is no pick");
+  assert.equal(m.doorUnderRay(o, dir, [far], 19.6)?.key, "c", "a door in the wall's opening");
+  assert.equal(m.doorUnderRay(o, [-1, 0, 0], [near], undefined), undefined, "a door behind the camera");
+
+  assert.deepEqual(m.questWarnings("$/03_night_city/c_watson/little_china/.../{q001_door_v_flat}_prefab4EOA7RA/#q001_door_v_flat", "base\\worlds\\03_night_city\\_compiled\\default\\exterior_-22_19_1_0.streamingsector").length, 1, "V's door: a quest's");
+  assert.equal(m.questWarnings("$/03_night_city/c_watson/lift_door_2", "base\\worlds\\03_night_city\\_compiled\\default\\quest_acd280b2b73c4d5b.streamingsector").length, 1, "a quest sector");
+  assert.equal(m.questWarnings(undefined, "base\\worlds\\03_night_city\\_compiled\\default\\interior_-22_20_1_1.streamingsector").length, 0);
+
+  const door = { id: "x", action: "remove", what: "door", label: "Door single_door.ent (doors_single_kitsch_g_frameless)", node: { sector: "base\\worlds\\03_night_city\\_compiled\\default\\exterior_-22_19_1_0.streamingsector", sectorHash: "0x3c9117867951bc5a", entry: 288, node: 271, type: "worldEntityNode", globalId: "6132383399567759307" }, fingerprint: { position: [-1388.56, 1271.94, 123.07] } };
+  assert.equal(m.registryId(door.node), "0x3c9117867951bc5a:288", "the registry's id: the sector hash and the entry");
+  assert.equal(m.editId(door.label, []), "remove_single_door");
+  assert.equal(m.editId(door.label, [{ ...door, id: "remove_single_door" }]), "remove_single_door_2");
+  assert.equal(m.editFor([door], { sectorHash: "0x3C9117867951BC5A", entry: 288 }), door, "found again by sector and entry");
+  const lift = { ...door, id: "y", node: { ...door.node, sectorHash: "0xf497a66f9954b74b", entry: 175 } };
+  const diff = m.editsDiff([door], [lift]);
+  assert.deepEqual([diff.hide.map((e) => e.id), diff.show.map((e) => e.id)], [["y"], ["x"]]);
+  assert.equal(m.readableEdits([door, { action: "move" }, null]).length, 1, "only removals with a node");
+
+  const scene = new Scene(path.join(tmp, "scenes", "doors.scene.json"));
+  const crate = scene.add("mesh", "base\\c.mesh", { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
+  assert.equal(scene.data().format, 1, "no edits: format 1 as before");
+  const before = scene.state();
+  scene.worldEdits.push(door);
+  scene.save();
+  const file = readSceneFile(scene.file);
+  assert.equal(file.format, 3, "a removal makes it format 3");
+  assert.equal(file.worldEdits.length, 1);
+  const copy = m.forReader(file);
+  assert.equal(copy.format, 1, "REDnode's reader gets format 1 or 2");
+  assert.equal(copy.worldEdits, undefined, "without the edits");
+  assert.deepEqual(copy.objects.map((x) => x.id), [crate.id]);
+  const again = new Scene(scene.file);
+  assert.ok(again.load());
+  assert.equal(again.worldEdits[0].node.entry, 288, "edits come back from the file");
+  const undo = scene.restore(before);
+  assert.deepEqual([undo.show.map((e) => e.id), undo.hide.length, scene.worldEdits.length], [["x"], 0, 0], "Undo shows the door again");
+  assert.equal(scene.data().format, 1);
+  console.log("world edits: ok");
+}
+
 // The viewport's geometry against a simulated game camera, for both ways ProjectPoint might answer.
 {
   const m = core;

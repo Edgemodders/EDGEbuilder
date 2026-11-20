@@ -1,25 +1,29 @@
 // The scene: the objects placed so far, in EDGEbuilder's scene format 1 (format 2 when it holds a
-// person, B3c), saved after every change.
+// person, B3c; format 3 when it changes the game's own world, D1), saved after every change.
 // The preview entities in the game are not the truth; this file is. See docs/scene.md.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { freshId, pruneGroups } from "./arrange";
-import type { SceneGroup, SceneObject, SceneTransform } from "./protocol";
+import type { SceneGroup, SceneObject, SceneTransform, WorldEdit } from "./protocol";
+import { editsDiff, readableEdits } from "./worldedits";
 
 export interface SceneFile {
-  /** 2 only when the scene holds a person (the `npc` kind, B3c); 1 otherwise, as before. */
-  format: 1 | 2;
+  /** 3 when the scene changes the game's own world (`worldEdits`, D1); 2 when it holds a person (the `npc` kind, B3c); 1 otherwise, as before. */
+  format: 1 | 2 | 3;
   name: string;
   game?: string;
   groups: SceneGroup[];
   objects: Omit<SceneObject, "entityId">[];
+  /** Format 3: what the scene does to the game's own objects (D1: removals). */
+  worldEdits?: WorldEdit[];
 }
 
 /** The scene at one moment, without previews: what Undo goes back to. */
 export interface SceneState {
   objects: Omit<SceneObject, "entityId">[];
   groups: SceneGroup[];
+  worldEdits: WorldEdit[];
   /** What was selected then, for Undo to select again when nothing it changes is still there to show. */
   selected?: string[];
 }
@@ -27,8 +31,17 @@ export interface SceneState {
 /** Reads a scene file, or throws why it is not one EDGEbuilder can open. */
 export function readSceneFile(file: string): SceneFile {
   const data = JSON.parse(fs.readFileSync(file, "utf8")) as SceneFile;
-  if (!knownFormat(data)) throw new Error(`not a format 1 or 2 scene`);
+  if (!knownFormat(data)) throw new Error(`not a format 1, 2 or 3 scene`);
   return data;
+}
+
+/**
+ * The scene as REDnode's own reader takes it (world.load reads formats 1 and 2): without its world
+ * edits, which EDGEbuilder applies itself. Its objects are unchanged.
+ */
+export function forReader(data: SceneFile): SceneFile {
+  const { worldEdits: _edits, ...rest } = data;
+  return { ...rest, format: rest.objects.some((o) => o.kind === "npc") ? 2 : 1 };
 }
 
 export class Scene {
@@ -37,6 +50,8 @@ export class Scene {
   game: string | undefined;
   objects: SceneObject[] = [];
   groups: SceneGroup[] = [];
+  /** D1: the game's own objects this scene removes. */
+  worldEdits: WorldEdit[] = [];
 
   /** The file the scene is saved to after every change; another scene opened (B3-2) changes it. */
   constructor(public file: string) {}
@@ -53,7 +68,7 @@ export class Scene {
     }
     try {
       const data = JSON.parse(text) as SceneFile;
-      if (!knownFormat(data)) throw new Error(`not a format 1 or 2 scene`);
+      if (!knownFormat(data)) throw new Error(`not a format 1, 2 or 3 scene`);
       this.take(data);
       return true;
     } catch (err) {
@@ -80,16 +95,18 @@ export class Scene {
     this.groups = Array.isArray(data.groups) ? data.groups.map((g) => ({ id: g.id, name: g.name, parent: g.parent ?? null })) : [];
     // An object in a group the file does not have stands on its own.
     for (const o of this.objects) if (o.group && !this.groups.some((g) => g.id === o.group)) delete o.group;
+    this.worldEdits = readableEdits(data.worldEdits).map((e) => JSON.parse(JSON.stringify(e)));
   }
 
   /** The scene as its file keeps it. */
   data(): SceneFile {
     return {
-      format: this.objects.some((o) => o.kind === "npc") ? 2 : 1,
+      format: this.worldEdits.length ? 3 : this.objects.some((o) => o.kind === "npc") ? 2 : 1,
       name: this.name,
       ...(this.game ? { game: this.game } : {}),
       groups: this.groups,
       objects: this.objects.map(({ entityId: _live, ...rest }) => rest),
+      ...(this.worldEdits.length ? { worldEdits: this.worldEdits } : {}),
     };
   }
 
@@ -126,17 +143,20 @@ export class Scene {
 
   /** A copy of the scene as it is now, for Undo. */
   state(): SceneState {
-    return JSON.parse(JSON.stringify({ objects: this.objects.map(({ entityId: _live, ...rest }) => rest), groups: this.groups }));
+    return JSON.parse(JSON.stringify({ objects: this.objects.map(({ entityId: _live, ...rest }) => rest), groups: this.groups, worldEdits: this.worldEdits }));
   }
 
   /**
    * Puts the scene back to `s`, keeping the previews of objects that are still there (by id). Returns
    * what the mod has to do: spawn objects that came back, spawn again those whose file, appearance or
-   * scale changed, move those that moved, and remove the previews of objects that are gone.
+   * scale changed, move those that moved, and remove the previews of objects that are gone; and the
+   * world edits to apply (`hide`) and to take back (`show`).
    */
-  restore(s: SceneState): { spawn: SceneObject[]; respawn: SceneObject[]; move: SceneObject[]; gone: SceneObject[] } {
+  restore(s: SceneState): { spawn: SceneObject[]; respawn: SceneObject[]; move: SceneObject[]; gone: SceneObject[]; hide: WorldEdit[]; show: WorldEdit[] } {
     const before = new Map(this.objects.map((o) => [o.id, o]));
-    const out = { spawn: [] as SceneObject[], respawn: [] as SceneObject[], move: [] as SceneObject[], gone: [] as SceneObject[] };
+    const edits = editsDiff(this.worldEdits, s.worldEdits ?? []);
+    this.worldEdits = JSON.parse(JSON.stringify(s.worldEdits ?? []));
+    const out = { spawn: [] as SceneObject[], respawn: [] as SceneObject[], move: [] as SceneObject[], gone: [] as SceneObject[], ...edits };
     this.objects = s.objects.map((saved) => {
       const o: SceneObject = JSON.parse(JSON.stringify(saved));
       const was = before.get(o.id);
@@ -165,6 +185,7 @@ export class Scene {
     for (const o of this.objects) delete o.entityId;
   }
 
+  /** Clear scene: its objects and groups go. Its world edits stay: they are not objects, and Restore takes each back. */
   clear(): void {
     this.objects = [];
     this.groups = [];
@@ -172,9 +193,9 @@ export class Scene {
   }
 }
 
-/** Format 1, or format 2 (format 1 plus the `npc` kind, docs/scene.md), with an objects list. */
+/** Format 1, 2 (format 1 plus the `npc` kind) or 3 (plus `worldEdits`), docs/scene.md, with an objects list. */
 function knownFormat(data: SceneFile): boolean {
-  return (data.format === 1 || data.format === 2) && Array.isArray(data.objects);
+  return (data.format === 1 || data.format === 2 || data.format === 3) && Array.isArray(data.objects);
 }
 
 /** A quaternion for a turn around the vertical axis, in degrees. */

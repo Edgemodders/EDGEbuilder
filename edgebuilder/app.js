@@ -688,7 +688,7 @@ var Viewport = class {
     const ctx = this.ctx;
     ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
     const centre = this.canvas.width / 2;
-    const windowLeft = this.canvas.width - 24 - 544;
+    const windowLeft = this.canvas.width - 24 - 624;
     const max = 2 * (windowLeft - 24 - centre) - 24;
     const lines = [];
     for (const part of parts.filter(Boolean)) {
@@ -992,7 +992,7 @@ var Viewport = class {
       }
     }
     const mods = held(e);
-    this.hooks.pick(best?.id, { toggle: mods.ctrl, single: mods.alt });
+    this.hooks.pick(best?.id, { toggle: mods.ctrl, single: mods.alt }, best ? void 0 : { o: ray.o, d: ray.d });
   }
   // ---- drags and keys ------------------------------------------------------------------------------
   /**
@@ -1327,6 +1327,8 @@ ${looked.path}`;
   $("redo").title = `Ctrl+Y (${s.history.redo} step${s.history.redo === 1 ? "" : "s"})`;
   viewport.setScene(s.scene.objects, s.selected);
   renderDrawer(s);
+  renderWorld(s);
+  renderEdits(s);
   viewport.setCamera(s.camera?.entityId);
   if (lastCopy === void 0) lastCopy = s.duplicated?.seq ?? 0;
   if (s.duplicated && s.duplicated.seq !== lastCopy) {
@@ -1948,6 +1950,7 @@ $("mainTabs").addEventListener("change", (e) => {
   if (label === "Library") post({ type: "library.refresh" });
   else leaveSaveAs();
   if (label === "Bake") post({ type: "bake.refresh" });
+  if (label === "World") post({ type: "world.refresh" });
 });
 $("shelves").addEventListener(
   "click",
@@ -2220,17 +2223,150 @@ $("drawerList").addEventListener(
   },
   true
 );
+var KindToggles = [
+  ["kindDoor", "door"],
+  ["kindFakeDoor", "fakeDoor"],
+  ["kindMesh", "mesh"]
+];
+var worldClickAt = 0;
+var lastPickedKey;
+var worldHtml = "";
+var editsHtml = "";
+var hoverKey = null;
+var WorldTab = 3;
+function doorText(d) {
+  if (!d) return "";
+  return [d.open === void 0 ? "" : d.open ? "open" : "closed", d.locked ? "locked" : "", d.sealed ? "sealed" : ""].filter(Boolean).join(", ");
+}
+function renderWorld(s) {
+  const wo = s.worldObjects;
+  for (const [id, k] of KindToggles) $(id).checked = wo.kinds.includes(k);
+  const n = wo.things.length;
+  const what = s.world !== "ready" ? "Load a save: the doors near V are listed here." : wo.status === "looking" ? "Looking for the doors near V..." : !wo.kinds.length ? "Switch a kind on to pick the game's own objects." : `${n} near V, within 30 m${n ? ", nearest first" : ""}. With Edit on, a click on one in the world picks it.`;
+  $("worldInfo").textContent = [wo.note ?? "", what].filter(Boolean).join("\n");
+  const picked2 = wo.picked;
+  const rows = wo.things.map((t) => {
+    const end = [t.removedBy ? '<span class="tag warn">removed</span>' : "", esc(doorText(t.door)), t.distance !== void 0 ? `${t.distance.toFixed(1)} m` : ""].filter(Boolean).join(" ");
+    return `<rn-item value="${esc(t.key)}" title="${esc([t.resource, t.appearance].filter(Boolean).join("\n"))}"${picked2?.key === t.key ? " selected" : ""}>${esc(t.label)}<span slot="end">${end}</span></rn-item>`;
+  }).join("");
+  if (rows !== worldHtml) $("worldList").innerHTML = worldHtml = rows;
+  if (picked2?.key !== lastPickedKey) {
+    lastPickedKey = picked2?.key;
+    if (picked2 && performance.now() - worldClickAt < 5e3) mainTabs().select?.(WorldTab);
+  }
+  if (!picked2) {
+    $("worldPicked").textContent = "Nothing picked. With Edit on, click a door, or pick one in the list.";
+    $("worldWarnings").hidden = true;
+    $("worldRemove").setAttribute("disabled", "");
+    $("worldRemove").hidden = false;
+    $("worldRestore").hidden = true;
+    $("worldGo").setAttribute("disabled", "");
+    return;
+  }
+  const node = picked2.node;
+  const d = picked2.door;
+  const where = node ? `${node.type}, entry ${node.entry} (node ${node.node}) in ${node.sector ? shortName(node.sector) : node.sectorHash}` : "";
+  $("worldPicked").textContent = [
+    picked2.label,
+    picked2.resource ?? "",
+    picked2.appearance ? `appearance ${picked2.appearance}` : "",
+    d ? [doorText(d), d.initial ? `starts ${d.initial.toLowerCase()}` : "", d.closesItself ? "closes by itself" : ""].filter(Boolean).join("; ") : "",
+    `at ${picked2.position.map((v2) => v2.toFixed(2)).join(", ")}`,
+    where || picked2.note || "",
+    picked2.ref ? `reference ${picked2.ref}` : "",
+    picked2.proxies?.length ? `and its proxy mesh: ${picked2.proxies.map((p) => `entry ${p.entry} in ${p.sector ? shortName(p.sector) : p.sectorHash}`).join(", ")}` : "",
+    picked2.removedBy ? `Removed by this scene (${picked2.removedBy}).` : ""
+  ].filter(Boolean).join("\n");
+  $("worldWarnings").textContent = picked2.warnings.join("\n");
+  $("worldWarnings").hidden = !picked2.warnings.length;
+  const removed = !!picked2.removedBy;
+  $("worldRemove").hidden = removed;
+  $("worldRemove").toggleAttribute("disabled", removed || !s.scene.file || wo.status === "unavailable" || !node && !!picked2.note && !picked2.note.startsWith("Looking"));
+  $("worldRemove").title = !s.scene.file ? "Open a scene first: a removal is kept in the open scene" : "Delete. Hidden now, kept in the scene; Restore or Undo brings it back";
+  $("worldRestore").hidden = !removed;
+  $("worldGo").toggleAttribute("disabled", s.world !== "ready");
+}
+function renderEdits(s) {
+  const edits = s.scene.worldEdits;
+  $("editsTitle").hidden = $("worldEdits").hidden = !edits.length;
+  $("editsTitle").textContent = `World edits: this scene removes ${edits.length} of the game's own objects while it is open`;
+  const html = edits.map((e) => `<rn-item value="${esc(e.id)}" title="${esc(`${e.node.sector || e.node.sectorHash}, entry ${e.node.entry}${e.ref ? `
+${e.ref}` : ""}`)}">${esc(e.label)}<span slot="end"><button data-restore="${esc(e.id)}" title="Take it out of the scene: it is back in the world">Restore</button></span></rn-item>`).join("");
+  if (html !== editsHtml) $("worldEdits").innerHTML = editsHtml = html;
+}
+function flyToThing(t) {
+  if (!state || state.world !== "ready" || state.settings.editorCamera === false) return;
+  const edit = $("edit");
+  if (!edit.checked) {
+    edit.checked = true;
+    viewport.setEdit(true);
+  }
+  const box = { id: t.key, kind: "entity", transform: { position: t.position, rotation: [0, 0, 0, 1], scale: [1, 1, 1] }, bounds: { min: [-0.8, -0.8, 0], max: [0.8, 0.8, 2.2] } };
+  viewport.flyTo(box);
+}
+for (const [id, k] of KindToggles) {
+  $(id).addEventListener("change", (e) => {
+    if (!state) return;
+    const on = !!e.detail.checked;
+    const kinds = new Set(state.worldObjects.kinds);
+    if (on) kinds.add(k);
+    else kinds.delete(k);
+    post({ type: "world.kinds", kinds: KindToggles.map(([, x]) => x).filter((x) => kinds.has(x)) });
+  });
+}
+$("worldRefresh").addEventListener("click", () => post({ type: "world.refresh" }));
+$("worldList").addEventListener("select", (e) => {
+  const key = e.detail.value;
+  const t = state?.worldObjects.things.find((x) => x.key === key);
+  if (!t) return;
+  post({ type: "world.select", key });
+  flyToThing(t);
+});
+$("worldList").addEventListener("mouseover", (e) => {
+  const key = e.target.closest?.("rn-item")?.getAttribute("value") ?? null;
+  if (key === hoverKey) return;
+  hoverKey = key;
+  post({ type: "world.hover", key });
+});
+$("worldList").addEventListener("mouseleave", () => {
+  if (hoverKey === null) return;
+  hoverKey = null;
+  post({ type: "world.hover", key: null });
+});
+$("worldRemove").addEventListener("click", () => post({ type: "world.remove" }));
+$("worldRestore").addEventListener("click", () => {
+  const id = state?.worldObjects.picked?.removedBy;
+  if (id) post({ type: "world.restore", id });
+});
+$("worldGo").addEventListener("click", () => {
+  const p = state?.worldObjects.picked;
+  if (p) flyToThing(p);
+});
+$("worldEdits").addEventListener(
+  "click",
+  (e) => {
+    const id = e.target.closest?.("[data-restore]")?.dataset.restore;
+    if (!id) return;
+    e.stopPropagation();
+    post({ type: "world.restore", id });
+  },
+  true
+);
 function status(text) {
   $("message").textContent = text;
   $("message").className = "message warn";
 }
 var showSceneTab = () => document.getElementById("mainTabs").select?.(1);
 var viewport = new Viewport($("view"), {
-  pick(id, opts) {
+  pick(id, opts, ray) {
     if (!state) return;
     const ids = pickSelection(id, state.selected, state.scene.objects, state.scene.groups, opts);
     post({ type: "select", ids });
     if (ids.length) showSceneTab();
+    else if (ray) {
+      worldClickAt = performance.now();
+      post({ type: "world.pick", origin: ray.o, dir: ray.d });
+    }
   },
   pickBox(found, opts) {
     if (!state) return;
@@ -2239,7 +2375,8 @@ var viewport = new Viewport($("view"), {
     if (ids.length) showSceneTab();
   },
   commit: (items, merge) => post({ type: "transform", items, merge }),
-  remove: (ids) => post({ type: "delete", ids }),
+  // Delete: the scene's selected objects, else the game's own object picked (Remove from world).
+  remove: (ids) => ids.length ? post({ type: "delete", ids }) : state?.worldObjects.picked && !state.worldObjects.picked.removedBy ? post({ type: "world.remove" }) : void 0,
   floor: (ids) => post({ type: "floor", ids }),
   undo: () => post({ type: "undo" }),
   log: (text) => post({ type: "log", text }),

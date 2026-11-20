@@ -10,6 +10,18 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**New**
+
+- A World tab lists the game's own doors near V, with their state (open, closed, locked). Hover outlines one, a click picks it and flies the camera there.
+- With Edit on, a click on a door in the world picks it. Switch Meshes on to pick any mesh the game placed, such as a painted-on door.
+- Remove from world (or Delete) takes a picked door out of the game's world while the scene is open, collision too. The Scene tab lists what the scene removes, each with Restore, and Undo works on it. Removals come back after a save loads and go when the scene closes. Baking them into the mod comes next.
+- A warning before removing a door a quest uses, such as V's own.
+
+**Changed**
+
+- Scenes that remove something from the game's world are saved as scene format 3 (https://edgemodders.github.io/EDGEbuilder/scene.html). Other scenes keep format 1 or 2.
+- The EDGEbuilder window is a little wider, so all seven tabs fit.
+
 ## 0.11.1 (2026-11-19)
 
 <!-- nexus
