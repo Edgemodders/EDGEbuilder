@@ -120,6 +120,8 @@
         </div>
         <div id="sceneCount" class="count"></div>
         <div id="needs" class="count"></div>
+        <div id="editsTitle" class="count" hidden></div>
+        <rn-list id="worldEdits" hidden></rn-list>
         <div class="row">
           <rn-button id="undo" variant="ghost" disabled title="Ctrl+Z">Undo</rn-button>
           <rn-button id="redo" variant="ghost" disabled title="Ctrl+Y">Redo</rn-button>
@@ -128,8 +130,6 @@
           <rn-button id="ungroup" variant="ghost" disabled title="Ctrl+Shift+G">Ungroup</rn-button>
         </div>
         <rn-list id="objects"></rn-list>
-        <div id="editsTitle" class="count" hidden></div>
-        <rn-list id="worldEdits" hidden></rn-list>
         <rn-panel id="selectedPanel" class="pinnable" title="Selected" data-pin-note="so its numbers and buttons stay in view">
           <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
           <pre id="selected">Nothing selected</pre>

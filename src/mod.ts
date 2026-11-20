@@ -1323,7 +1323,8 @@ async function outlineThing(key: string, colour: number): Promise<void> {
     const event = await api.$new("entRenderHighlightEvent", { seeThroughWalls: false, opacity: colour ? 1 : 0, outlineIndex: colour, fillIndex: 0 });
     await entity.QueueEvent(event);
   } catch (err) {
-    console.log(`Outline ${key}: ${(err as Error).message}`);
+    // A door from before a save loaded is gone: nothing to outline, nothing to say.
+    if (!/no longer exists/.test((err as Error).message)) console.log(`Outline ${key}: ${(err as Error).message}`);
   }
 }
 
@@ -1338,6 +1339,24 @@ async function clearPicked(): Promise<void> {
 function refOfNode(n: WorldNode, sector: string): WorldNodeRef {
   const id = idText(n.nodeId);
   return { sector, sectorHash: n.sector, entry: n.instance, node: n.index, type: n.kind, ...(id ? { globalId: id } : {}) };
+}
+
+/** What the registry has along a short line down through a place (entity nodes have a 1 m box there, S24). */
+async function nodesAt(position: [number, number, number]): Promise<WorldNode[]> {
+  if (typeof world.pick !== "function") return [];
+  const [x, y, z] = position;
+  return (await world.pick({ from: { x, y, z: z + 3 }, dir: { x: 0, y: 0, z: -1 }, max: 6, limit: 40, all: true, physics: false, order: "nearest", helpers: true })).hits;
+}
+
+/**
+ * An entity's proxy meshes among those nodes: by the entity node's proxy id when the registry gives one,
+ * else at the entity's own place (D0 found V's door's proxy at 0.00 m from it, in another sector).
+ */
+function proxiesAmong(hits: WorldNode[], owner: WorldNode | undefined, position: [number, number, number]): WorldNode[] {
+  const proxies = hits.filter((h) => h.kind === "worldEntityProxyMeshNode");
+  const byId = owner?.proxyId ? proxies.filter((h) => sameId(h.nodeId, owner.proxyId)) : [];
+  if (byId.length) return byId;
+  return proxies.filter((h) => Math.hypot(h.position[0] - position[0], h.position[1] - position[1], h.position[2] - position[2]) < 0.05);
 }
 
 /**
@@ -1356,10 +1375,8 @@ async function findNode(p: WorldPicked, seq: number): Promise<void> {
     if (p.what === "mesh") {
       node = (await world.node(p.key)) ?? undefined;
     } else {
-      const [x, y, z] = p.position;
-      const r = await world.pick({ from: { x, y, z: z + 3 }, dir: { x: 0, y: 0, z: -1 }, max: 6, limit: 40, all: true, physics: false, order: "nearest", helpers: true });
-      hits.push(...r.hits);
-      node = r.hits.find((n) => sameId(n.nodeId, p.key) || sameId(n.entity, p.key));
+      hits.push(...(await nodesAt(p.position)));
+      node = hits.find((n) => sameId(n.nodeId, p.key) || sameId(n.entity, p.key));
     }
     if (seq !== pickSeq) return;
     if (!node) {
@@ -1371,8 +1388,9 @@ async function findNode(p: WorldPicked, seq: number): Promise<void> {
     const found = node;
     const sector = await pathOf(found.sector);
     p.node = refOfNode(found, sector);
-    // Its proxy mesh, when the registry has it loaded: the bake removes it too (D0).
-    const proxies = found.proxyId ? hits.filter((h) => h.kind === "worldEntityProxyMeshNode" && sameId(h.nodeId, found.proxyId)) : [];
+    // Its proxy mesh, when the registry has it loaded. Hidden with it: a hidden entity does not come in
+    // after a save loads, and the game then shows its proxy in its place (D1a test, step 9). The bake removes it too (D0).
+    const proxies = p.what === "mesh" ? [] : proxiesAmong(hits, found, p.position);
     if (proxies.length) p.proxies = await Promise.all(proxies.map(async (h) => refOfNode(h, await pathOf(h.sector))));
     p.note = undefined;
     if (bridge?.running && sector) {
@@ -1452,17 +1470,52 @@ async function hoverThing(key: string | null): Promise<void> {
   if (key && key !== picked) await outlineThing(key, HoverOutline);
 }
 
-/** Hides what an edit removes. False when the game did not take it: it is tried again while the world is in. */
+/** How many times a removal saved without its entity's proxy looks for it (every 10 s while the world is in). */
+const ProxyLooks = 30;
+const proxyLooks = new Map<string, number>();
+
+/** A removal of an entity saved without its proxy (0.12.0): looks for it at the entity's place, and keeps it. */
+async function findProxies(e: WorldEdit): Promise<void> {
+  if (e.what === "mesh" || e.proxies?.length) return;
+  const id = registryId(e.node);
+  const tries = proxyLooks.get(id) ?? 0;
+  if (tries >= ProxyLooks) return;
+  proxyLooks.set(id, tries + 1);
+  try {
+    const hits = await nodesAt(e.fingerprint.position);
+    const owner = hits.find((h) => h.sector.toLowerCase() === e.node.sectorHash.toLowerCase() && h.instance === e.node.entry);
+    const found = proxiesAmong(hits, owner, e.fingerprint.position);
+    if (!found.length) return;
+    e.proxies = await Promise.all(found.map(async (h) => refOfNode(h, await pathOf(h.sector))));
+    if (scene.worldEdits.includes(e)) scene.save();
+    console.log(`${e.id}: its proxy mesh found (${e.proxies.map((x) => registryId(x)).join(", ")})`);
+  } catch (err) {
+    console.log(`${e.id}: looking for its proxy: ${(err as Error).message}`);
+  }
+}
+
+/** Hides one node; true when the game took it. */
+async function hideNode(id: string, what: string): Promise<boolean> {
+  try {
+    return await world.setVisible!(id, false);
+  } catch (err) {
+    console.log(`Remove ${what}: ${(err as Error).message}`);
+    return false;
+  }
+}
+
+/**
+ * Hides what an edit removes, and an entity's proxy mesh with it. False while the game has not taken all
+ * of it (a sector not in yet, a proxy not found yet): tried again while the world is in.
+ */
 async function hideEdit(e: WorldEdit): Promise<boolean> {
   if (typeof world.setVisible !== "function" || state.world !== "ready") return false;
   const id = registryId(e.node);
-  let done = false;
-  try {
-    done = await world.setVisible(id, false);
-  } catch (err) {
-    console.log(`Remove ${e.id}: ${(err as Error).message}`);
-  }
-  if (done) pendingHides.delete(id);
+  let done = await hideNode(id, e.id);
+  await findProxies(e);
+  for (const p of e.proxies ?? []) if (!(await hideNode(registryId(p), `the proxy of ${e.id}`))) done = false;
+  const proxyMissing = e.what !== "mesh" && !e.proxies?.length && (proxyLooks.get(id) ?? 0) < ProxyLooks;
+  if (done && !proxyMissing) pendingHides.delete(id);
   else {
     pendingHides.set(id, e);
     hideAgainSoon();
@@ -1477,10 +1530,12 @@ async function showEdit(e: WorldEdit): Promise<void> {
   const others = [...scene.worldEdits, ...[...onEdits.values()].flat()];
   if (others.some((x) => registryId(x.node).toLowerCase() === id.toLowerCase())) return;
   if (typeof world.setVisible !== "function") return;
-  try {
-    await world.setVisible(id, true);
-  } catch (err) {
-    console.log(`Restore ${e.id}: ${(err as Error).message}`);
+  for (const n of [e.node, ...(e.proxies ?? [])]) {
+    try {
+      await world.setVisible(registryId(n), true);
+    } catch (err) {
+      console.log(`Restore ${e.id}: ${(err as Error).message}`);
+    }
   }
 }
 
@@ -3056,11 +3111,21 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   scene.forgetPreviews();
   state.selected = [];
   liveThings.clear();
+  hovered = undefined;
   state.worldObjects.things = [];
   state.worldObjects.picked = undefined;
+  publish();
   void checkWorld().then(() => {
-    // The registry keeps running across loads; the removals are hidden again once V is in.
-    setTimeout(() => void startRegistry().then(() => applyEdits()), PreviewsBackDelay);
+    // The registry keeps running across loads; the removals are hidden again once V is in, and the
+    // World tab lists the doors around V's new place.
+    setTimeout(
+      () =>
+        void startRegistry()
+          .then(() => applyEdits())
+          .then(() => lookNear())
+          .then(() => publish()),
+      PreviewsBackDelay,
+    );
     // The scenes that are on went with the old session's entities: place them again.
     void inTurn("Show scenes that are on", () => reloadOn());
     previewsBackSoon();

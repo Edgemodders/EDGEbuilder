@@ -2595,7 +2595,7 @@ async function outlineThing(key, colour) {
     const event = await api.$new("entRenderHighlightEvent", { seeThroughWalls: false, opacity: colour ? 1 : 0, outlineIndex: colour, fillIndex: 0 });
     await entity.QueueEvent(event);
   } catch (err) {
-    console.log(`Outline ${key}: ${err.message}`);
+    if (!/no longer exists/.test(err.message)) console.log(`Outline ${key}: ${err.message}`);
   }
 }
 async function clearPicked() {
@@ -2608,6 +2608,17 @@ function refOfNode(n, sector) {
   const id = idText(n.nodeId);
   return { sector, sectorHash: n.sector, entry: n.instance, node: n.index, type: n.kind, ...id ? { globalId: id } : {} };
 }
+async function nodesAt(position) {
+  if (typeof world2.pick !== "function") return [];
+  const [x, y, z] = position;
+  return (await world2.pick({ from: { x, y, z: z + 3 }, dir: { x: 0, y: 0, z: -1 }, max: 6, limit: 40, all: true, physics: false, order: "nearest", helpers: true })).hits;
+}
+function proxiesAmong(hits, owner, position) {
+  const proxies = hits.filter((h) => h.kind === "worldEntityProxyMeshNode");
+  const byId = owner?.proxyId ? proxies.filter((h) => sameId(h.nodeId, owner.proxyId)) : [];
+  if (byId.length) return byId;
+  return proxies.filter((h) => Math.hypot(h.position[0] - position[0], h.position[1] - position[1], h.position[2] - position[2]) < 0.05);
+}
 async function findNode(p, seq) {
   if (typeof world2.pick !== "function" || typeof world2.node !== "function") {
     p.note = "Finding its node needs REDnode 0.67.3 or later.";
@@ -2619,10 +2630,8 @@ async function findNode(p, seq) {
     if (p.what === "mesh") {
       node = await world2.node(p.key) ?? void 0;
     } else {
-      const [x, y, z] = p.position;
-      const r = await world2.pick({ from: { x, y, z: z + 3 }, dir: { x: 0, y: 0, z: -1 }, max: 6, limit: 40, all: true, physics: false, order: "nearest", helpers: true });
-      hits.push(...r.hits);
-      node = r.hits.find((n) => sameId(n.nodeId, p.key) || sameId(n.entity, p.key));
+      hits.push(...await nodesAt(p.position));
+      node = hits.find((n) => sameId(n.nodeId, p.key) || sameId(n.entity, p.key));
     }
     if (seq !== pickSeq) return;
     if (!node) {
@@ -2632,7 +2641,7 @@ async function findNode(p, seq) {
     const found = node;
     const sector = await pathOf(found.sector);
     p.node = refOfNode(found, sector);
-    const proxies = found.proxyId ? hits.filter((h) => h.kind === "worldEntityProxyMeshNode" && sameId(h.nodeId, found.proxyId)) : [];
+    const proxies = p.what === "mesh" ? [] : proxiesAmong(hits, found, p.position);
     if (proxies.length) p.proxies = await Promise.all(proxies.map(async (h) => refOfNode(h, await pathOf(h.sector))));
     p.note = void 0;
     if (bridge?.running && sector) {
@@ -2704,16 +2713,42 @@ async function hoverThing(key) {
   hovered = key ?? void 0;
   if (key && key !== picked) await outlineThing(key, HoverOutline);
 }
+var ProxyLooks = 30;
+var proxyLooks = /* @__PURE__ */ new Map();
+async function findProxies(e) {
+  if (e.what === "mesh" || e.proxies?.length) return;
+  const id = registryId(e.node);
+  const tries = proxyLooks.get(id) ?? 0;
+  if (tries >= ProxyLooks) return;
+  proxyLooks.set(id, tries + 1);
+  try {
+    const hits = await nodesAt(e.fingerprint.position);
+    const owner = hits.find((h) => h.sector.toLowerCase() === e.node.sectorHash.toLowerCase() && h.instance === e.node.entry);
+    const found = proxiesAmong(hits, owner, e.fingerprint.position);
+    if (!found.length) return;
+    e.proxies = await Promise.all(found.map(async (h) => refOfNode(h, await pathOf(h.sector))));
+    if (scene.worldEdits.includes(e)) scene.save();
+    console.log(`${e.id}: its proxy mesh found (${e.proxies.map((x) => registryId(x)).join(", ")})`);
+  } catch (err) {
+    console.log(`${e.id}: looking for its proxy: ${err.message}`);
+  }
+}
+async function hideNode(id, what) {
+  try {
+    return await world2.setVisible(id, false);
+  } catch (err) {
+    console.log(`Remove ${what}: ${err.message}`);
+    return false;
+  }
+}
 async function hideEdit(e) {
   if (typeof world2.setVisible !== "function" || state.world !== "ready") return false;
   const id = registryId(e.node);
-  let done = false;
-  try {
-    done = await world2.setVisible(id, false);
-  } catch (err) {
-    console.log(`Remove ${e.id}: ${err.message}`);
-  }
-  if (done) pendingHides.delete(id);
+  let done = await hideNode(id, e.id);
+  await findProxies(e);
+  for (const p of e.proxies ?? []) if (!await hideNode(registryId(p), `the proxy of ${e.id}`)) done = false;
+  const proxyMissing = e.what !== "mesh" && !e.proxies?.length && (proxyLooks.get(id) ?? 0) < ProxyLooks;
+  if (done && !proxyMissing) pendingHides.delete(id);
   else {
     pendingHides.set(id, e);
     hideAgainSoon();
@@ -2726,10 +2761,12 @@ async function showEdit(e) {
   const others = [...scene.worldEdits, ...[...onEdits.values()].flat()];
   if (others.some((x) => registryId(x.node).toLowerCase() === id.toLowerCase())) return;
   if (typeof world2.setVisible !== "function") return;
-  try {
-    await world2.setVisible(id, true);
-  } catch (err) {
-    console.log(`Restore ${e.id}: ${err.message}`);
+  for (const n of [e.node, ...e.proxies ?? []]) {
+    try {
+      await world2.setVisible(registryId(n), true);
+    } catch (err) {
+      console.log(`Restore ${e.id}: ${err.message}`);
+    }
   }
 }
 function hideAgainSoon() {
@@ -3947,7 +3984,7 @@ async function importModel(m) {
     return say(`Import is not available: ${err.message}`, "error");
   }
   const target = project;
-  const version = `EDGEbuilder ${"0.12.0"}`;
+  const version = `EDGEbuilder ${"0.12.1"}`;
   const call = (method, params) => stopAsked ? Promise.reject(new Error(ImportStopped)) : b.call(method, params);
   const began = Date.now();
   const step2 = (text) => {
@@ -4056,10 +4093,15 @@ game.on("PlayerPuppet.OnGameAttached", () => {
   scene.forgetPreviews();
   state.selected = [];
   liveThings.clear();
+  hovered = void 0;
   state.worldObjects.things = [];
   state.worldObjects.picked = void 0;
+  publish();
   void checkWorld().then(() => {
-    setTimeout(() => void startRegistry().then(() => applyEdits()), PreviewsBackDelay);
+    setTimeout(
+      () => void startRegistry().then(() => applyEdits()).then(() => lookNear()).then(() => publish()),
+      PreviewsBackDelay
+    );
     void inTurn("Show scenes that are on", () => reloadOn());
     previewsBackSoon();
   });
@@ -4097,7 +4139,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.12.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.12.1"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs9.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

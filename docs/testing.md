@@ -890,3 +890,20 @@ Before: the game closed; Claude deploys EDGEbuilder 0.12.0 with EDGEdeck, with 0
 | R3 | Does a click pick the door aimed at, and nothing on a bare wall? |
 | R4 | Is a removed door gone with its collision, as in D0? |
 | R5 | Do removals hold after a fast travel, a save load and a restart of EDGEbuilder? |
+
+**First run (2026-11-19, the desktop, 0.12.0), stopped at step 10.** Steps 1 to 6 and 8: no problem reported (the log has the removal, Undo, Redo, Restore and the second removal). Found:
+
+| # | Found | In 0.12.1 |
+|---|---|---|
+| 7 | No Restore seen on the Scene tab; the World tab's Restore was used. The list was there, under the open scene's 8 objects and the pinned Selected panel | The World edits list sits above the objects, under the scene's counts |
+| 9 | After the load, **the door's proxy mesh stood in V's doorway**, solid. The removal was hidden again ("1 of 1 removal in the game"), but a hidden entity does not come in after a load, so the game shows its proxy, which the removal had not recorded: the lookup matched the registry's proxy id, which it does not give | A door's proxy is found at its place (as D0 saw it, 0.00 m) or by id, kept in the edit, hidden and shown with the door; a removal saved without one looks for it at the door's place (every 10 s, 30 times) and keeps it |
+| 10 | Close said no scene was open: that is what Close does (the log: "Closed EDGEfab F1 test"); the step did not say so | The step says so |
+| | After the load the World tab kept the old list, and hovering it tried to outline doors that were gone (log noise) | The list empties at a load and is read again once the removals are back |
+
+**Retest on 0.12.1:** steps 7, 9 and 10 as below, then 11 to 13. The scene from the first run (EDGEfab F1 test, now format 3 with V's door removed, no proxy recorded) is the one to open: it checks the lookup for removals saved without a proxy.
+
+| # | Do | Expected |
+|---|---|---|
+| 7 | Restore on the **Scene tab**: the World edits list under the scene's counts, above the objects | The door is back; the list is gone |
+| 9 | Remove V's door again; save; load that save | Within a few seconds of the load the doorway is open: no door, no stand-in. The log: "World edits: 1 of 1 removal in the game", and for the first run's removal "its proxy mesh found" |
+| 10 | Scene tab **Close** | "Closed ...", and the Scene tab says no scene is open; **V's door is back**. Then open the scene again from the Library tab: the door is gone again |
