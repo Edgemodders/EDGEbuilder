@@ -911,3 +911,28 @@ Before: the game closed; Claude deploys EDGEbuilder 0.12.0 with EDGEdeck, with 0
 **Retest (2026-11-19, the desktop, 0.12.1): passed.** All ten retest steps as written, in the EDGEfab F1 test scene (V's door removed by 0.12.0, no proxy recorded): the doorway open after the scene opened and after a save and load (no stand-in: the proxy was found by place and hidden), Restore and Undo, Close bringing the door back and Open removing it again, a painted-on door and a mesh removed and restored, the Bake tab's line, and EDGEbuilder off and on. **D1a passed in game on 0.12.1.**
 
 One finding, for D1b: after a save loads with the door removed, the door never comes in; showing its node again (EDGEbuilder switched off, so REDnode shows what it hid) brings back its **proxy mesh, not the working door**, until its area loads again. Before a load (step 2) Restore brings the working door, which is still in the game. The next build says so when EDGEbuilder brings a door back that is not in the game; for a package switched off, REDnode could ask the game to stream the entity in again when it shows its node.
+
+### D1b Bake removals (0.12.2)
+
+The second half of D1: the bake writes a scene's removals as ArchiveXL node deletions through REDbridge's `sector.build` (`removals`, [REDbridge #18](https://github.com/Edgemodders/REDbridge/issues/18), on REDbridge's main, not released yet), and REDbridge finds each entity's stand-in (proxy) mesh itself. Checked outside the game on 2026-11-19: V's door baked alone gives the `.xl` that D0 saw work in game (`exterior_-22_19_1_0` entry 288 of 853, and its proxy `exterior_-11_9_0_1` entry 254 of 2,021), in 3.1 s. Also in 0.12.2: F10 with Edit on pauses builder mode, and a door brought back as its stand-in says so.
+
+Before: the game closed; Claude deploys 0.12.2 and sets EDGEbuilder's **REDbridge path** (Settings) to REDbridge built from its main (`<REDbridge>\src\REDbridge\bin\Release\net10.0\REDbridge.exe`), since 0.15.0 knows no `removals`. A REDcode project open in VS Code (the Bake tab names it). ArchiveXL in the game (1.28.8).
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Start the game, load the save at V's flat, open EDGEbuilder. The pill says REDbridge 0.15.0 (the built one says so too). **Library** tab: make a new scene **D1b doors** in This PC | The new scene is open, empty |
+| 2 | World tab: pick **V's door** and **Remove from world**; then the **elevator door** next to it (`megabuilding_elevator_double_door.ent`) and **Remove from world** | Both gone; the Scene tab lists two world edits |
+| 3 | **Bake** tab | No error. A line: 2 of the game's own objects removed, written as ArchiveXL node deletions with their stand-ins; needs ArchiveXL |
+| 4 | **Bake** | "Baked D1b doors: 2 removals of the game's own objects (and 2 stand-ins) into <project>". The last bake lists only a `.xl` (no sector, no block) |
+| 5 | Pack and install the project (REDcode's Pack and Play, or EDGEdeck's install of the project); quit the game. Claude reads the `.xl` | Four deletions: the two doors and their two stand-ins |
+| 6 | Mod Manager: switch **EDGEbuilder off**. Start the game, load the save | Both doorways open, no stand-ins, with EDGEbuilder off. ArchiveXL's log: the four sectors patched |
+| 7 | Switch EDGEbuilder back on, open **D1b doors** | The doorways stay open; the log says the bake is in the game, so nothing is hidden live |
+| 8 | **F10 pause.** With Edit on (EDGEbuilder's camera), press F10 | The view goes back to V and the HUD comes back; WASD walks V with the view following |
+| 9 | Press F10 again | EDGEbuilder's camera, where it was before step 8, Edit still on, the selection kept |
+| 10 | **Stand-in message.** In D1b doors, remove a third door that is not baked (a shutter or another door from the World tab). Save, load that save, then press **Restore** on that edit | The message ends with "It shows as its stand-in until the area loads again", and the stand-in shows; fast travel away and back brings the working door |
+
+| # | Question |
+|---|---|
+| B1 | Does a bake of removals alone stay removed in game with EDGEbuilder off, stand-ins included? |
+| B2 | Does REDbridge find every stand-in itself (the elevator's too)? |
+| B3 | Does F10 pause and resume builder mode cleanly? |
