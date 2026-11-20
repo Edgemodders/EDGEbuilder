@@ -299,6 +299,12 @@ export interface Snapshot {
     mods: { archives: number; assets: number; reading?: string };
     /** The project REDcode has open, or null: none open, or REDcode's service is not there. */
     project: { name: string; dir: string; archive: string; assets: number } | null;
+    /**
+     * Every project open in REDcode's windows (REDcode 0.10.15 and later), the last-focused first, and the
+     * one the player picked by its folder (null: EDGEbuilder follows the window used last).
+     */
+    projects?: { name: string; dir: string }[];
+    picked?: string | null;
   };
   /** The asset the page last looked at, with what the bridge said about it. */
   looked?: { path: string; info?: AssetInfo };
@@ -500,6 +506,8 @@ export type PageMessage =
   | { type: "scene.peek"; file: string }
   | { type: "scene.goTo"; id: string }
   | { type: "scene.removeFrom"; file: string; id: string }
+  /** The project EDGEbuilder works with, by its folder; null follows the REDcode window used last. */
+  | { type: "project.pick"; dir: string | null }
   /** B4: bake the open scene into the open REDcode project. */
   | { type: "bake" }
   /** Look at the project's bakes and the game's again. */

@@ -1047,3 +1047,15 @@ Sector Tools' first stage ([World objects, "Sector Tools"](world-objects.md#sect
 | Q2 | Are the streamed-in marks right (sectors and entries)? |
 | Q3 | Do pick, outline, fly to, hide and Remove from world work on a sector's entries, doors and meshes alike? |
 | Q4 | Does REDcode reach EDGEbuilder through the service? |
+
+### Project picker (0.13.0)
+
+REDcode #32 (REDcode 0.10.15: `projects()` and `projects-changed`), asked for by the owner on 2026-11-19. Built on 2026-11-20; checked in REDnode's host with REDcode's package and two projects (the picker shows, a pick sticks, closing the picked project falls back). Needs REDcode 0.10.15 or later.
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Open one REDcode project in VS Code (trusted) | The Bake tab says "Into the REDcode project ..."; no picker |
+| 2 | Open a second project in another VS Code window | Within a few seconds a **Project:** row on the Bake tab and in the Import box (Library tab, a model picked): **Follow REDcode** and both projects; the one in the window used last is EDGEbuilder's |
+| 3 | Click the other VS Code window, then come back to the game | Following REDcode: the Bake tab follows the window used last |
+| 4 | Pick one project by name; then click the other VS Code window | It stays the picked one; Browse's Project source and Import use it too |
+| 5 | Close the picked project's window | Back to following REDcode; with one project left the row goes |

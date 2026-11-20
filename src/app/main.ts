@@ -737,6 +737,8 @@ function renderBake(s: Snapshot): void {
   const n = s.scene.objects.length;
   $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${holds(n, editCount(s).removals, false, editCount(s).doors)}` : "No scene open";
   $("bakeInto").textContent = b.project ? `Into the REDcode project ${b.project.name}` : "";
+  renderProjects("bakeProjects", s);
+  renderProjects("importProjects", s);
   $("bakeInto").title = b.project?.dir ?? "";
   const checks = b.checks.map((c) => `<div class="check ${c.tone}">${esc(c.text)}</div>`).join("");
   if ($("bakeChecks").innerHTML !== checks) $("bakeChecks").innerHTML = checks;
@@ -1593,6 +1595,32 @@ $("sectorList").addEventListener(
   },
   true,
 );
+
+// ---- the project picker (REDcode #32) ----------------------------------------------------------------
+//
+// With projects open in more than one REDcode window, a row of buttons on the Bake tab and in the Import
+// box: Follow REDcode (the window used last) or one project, which then stays EDGEbuilder's while it is open.
+
+const projectsHtml: Record<string, string> = {};
+
+function renderProjects(id: string, s: Snapshot): void {
+  const list = s.sources.projects ?? [];
+  $(id).hidden = list.length < 2;
+  if (list.length < 2) return;
+  const picked = s.sources.picked ?? null;
+  const button = (dir: string | null, label: string, tip: string) =>
+    `<rn-button data-dir="${esc(dir ?? "")}"${dir === picked || (dir && picked && sameFile(dir, picked)) ? "" : ' variant="ghost"'} title="${esc(tip)}">${esc(label)}</rn-button>`;
+  const html = [`<span class="count">Project:</span>`, button(null, "Follow REDcode", "The project in the VS Code window used last"), ...list.map((p) => button(p.dir, p.name, p.dir))].join("");
+  if (html !== projectsHtml[id]) $(id).innerHTML = projectsHtml[id] = html;
+}
+
+for (const id of ["bakeProjects", "importProjects"]) {
+  $(id).addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest?.("rn-button") as HTMLElement | null;
+    if (!b) return;
+    post({ type: "project.pick", dir: b.dataset.dir || null });
+  });
+}
 
 function status(text: string): void {
   $("message").textContent = text;

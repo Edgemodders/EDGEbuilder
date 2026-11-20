@@ -2019,6 +2019,24 @@ function setProject(next) {
   scanLibrary();
   scanProject();
 }
+var redcodeProjects = [];
+var focusedProject = null;
+var pickedDir = null;
+function applyProjects() {
+  const picked = pickedDir ? redcodeProjects.find((p) => sameFile(p.dir, pickedDir)) : void 0;
+  if (pickedDir && !picked && redcodeProjects.length) {
+    console.log(`The picked REDcode project (${pickedDir}) is no longer open: following the window used last`);
+    pickedDir = null;
+  }
+  state.sources.projects = redcodeProjects.length > 1 ? redcodeProjects.map((p) => ({ name: p.name, dir: p.dir })) : void 0;
+  state.sources.picked = pickedDir;
+  setProject(picked ?? focusedProject ?? redcodeProjects[0] ?? null);
+}
+function pickProject(dir) {
+  pickedDir = dir && redcodeProjects.some((p) => sameFile(p.dir, dir)) ? dir : null;
+  applyProjects();
+  say(pickedDir ? `Working with the REDcode project ${project?.name ?? dir}: bakes and imports go into it.` : "Following REDcode: the project in the VS Code window used last.", "ok");
+}
 var redcode;
 var redcodeRetry;
 var redcodeFailed = false;
@@ -2027,10 +2045,17 @@ async function connectRedcode() {
   clearTimeout(redcodeRetry);
   try {
     const handle = await service.connect("redcode");
-    handle.$on("project-changed", (p) => setProject(p));
+    handle.$on("project-changed", (p) => {
+      focusedProject = p;
+      applyProjects();
+    });
+    handle.$on("projects-changed", (list2) => {
+      redcodeProjects = Array.isArray(list2) ? list2 : [];
+      applyProjects();
+    });
     redcode = handle;
     redcodeFailed = false;
-    setProject(await redcode.project());
+    await readRedcodeProjects();
   } catch (err) {
     redcode = void 0;
     redcodeFailed = true;
@@ -2040,10 +2065,17 @@ async function connectRedcode() {
     publish();
   }
 }
+async function readRedcodeProjects() {
+  if (!redcode) return;
+  focusedProject = await redcode.project();
+  const list2 = await redcode.$call("projects").catch(() => null);
+  redcodeProjects = Array.isArray(list2) ? list2 : focusedProject ? [focusedProject] : [];
+  applyProjects();
+}
 async function askRedcodeAgain() {
   if (!redcode) return connectRedcode();
   try {
-    setProject(await redcode.project());
+    await readRedcodeProjects();
   } catch {
     redcode = void 0;
     await connectRedcode();
@@ -4062,6 +4094,9 @@ channel.on((m) => {
         break;
       case "world.remove":
         await inTurn("Remove from world", () => removePicked());
+        break;
+      case "project.pick":
+        pickProject(m.dir);
         break;
       case "sectors.find":
         await findSectors(m);

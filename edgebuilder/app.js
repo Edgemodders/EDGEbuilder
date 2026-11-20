@@ -1835,6 +1835,8 @@ function renderBake(s) {
   const n = s.scene.objects.length;
   $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${holds(n, editCount(s).removals, false, editCount(s).doors)}` : "No scene open";
   $("bakeInto").textContent = b.project ? `Into the REDcode project ${b.project.name}` : "";
+  renderProjects("bakeProjects", s);
+  renderProjects("importProjects", s);
   $("bakeInto").title = b.project?.dir ?? "";
   const checks = b.checks.map((c) => `<div class="check ${c.tone}">${esc(c.text)}</div>`).join("");
   if ($("bakeChecks").innerHTML !== checks) $("bakeChecks").innerHTML = checks;
@@ -2569,6 +2571,23 @@ $("sectorList").addEventListener(
   },
   true
 );
+var projectsHtml = {};
+function renderProjects(id, s) {
+  const list = s.sources.projects ?? [];
+  $(id).hidden = list.length < 2;
+  if (list.length < 2) return;
+  const picked2 = s.sources.picked ?? null;
+  const button = (dir, label, tip) => `<rn-button data-dir="${esc(dir ?? "")}"${dir === picked2 || dir && picked2 && sameFile(dir, picked2) ? "" : ' variant="ghost"'} title="${esc(tip)}">${esc(label)}</rn-button>`;
+  const html = [`<span class="count">Project:</span>`, button(null, "Follow REDcode", "The project in the VS Code window used last"), ...list.map((p) => button(p.dir, p.name, p.dir))].join("");
+  if (html !== projectsHtml[id]) $(id).innerHTML = projectsHtml[id] = html;
+}
+for (const id of ["bakeProjects", "importProjects"]) {
+  $(id).addEventListener("click", (e) => {
+    const b = e.target.closest?.("rn-button");
+    if (!b) return;
+    post({ type: "project.pick", dir: b.dataset.dir || null });
+  });
+}
 function status(text) {
   $("message").textContent = text;
   $("message").className = "message warn";

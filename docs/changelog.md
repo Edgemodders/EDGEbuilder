@@ -18,6 +18,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - World > Sectors: find the game's streaming sectors near V, near the camera, or by name or grid cell (such as `-22 19`), by kind and level. A click opens a sector in a drawer to the left with all its entries, marked when streamed in; a click picks one (Remove from world works on it), two clicks fly there, and the eye hides one until EDGEbuilder stops.
 - For REDcode's sector view: EDGEbuilder's service has `select`, `focus` and `scenesEditing` (https://github.com/Edgemodders/EDGEbuilder/issues/9).
 - The Bake tab warns when the open project replaces a sector the scene removes from, since ArchiveXL then refuses those removals.
+- With projects open in more than one REDcode window, the Bake tab and the Import box offer a choice: Follow REDcode (the window used last) or one project, which stays EDGEbuilder's while it is open. Needs REDcode 0.10.15 or later.
 
 **Changed**
 

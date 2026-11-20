@@ -30,6 +30,8 @@
   #sectorList { --rn-list-height: 730px; margin-top: 6px; }
   .streamed { color: var(--rn-ok, #5eff8f); }
   .act.on { color: var(--rn-warn, #ffcc4d); }
+  .projects { flex-wrap: wrap; align-items: center; }
+  .projects .count { margin-right: 4px; }
   .act { background: none; border: none; color: var(--rn-dim, #999); cursor: pointer; padding: 2px 4px; line-height: 0; }
   .act:hover { color: var(--rn-danger, #ff5e5e); }
   .act svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; }
@@ -187,6 +189,7 @@
               <rn-input id="importName" label="Name" title="The prop's file name in the project: lowercase, no spaces. Empty: from the file's name. The same name again replaces the prop"></rn-input>
               <rn-input id="importHeight" label="Height, m" title="For a model whose file has no real size (Tripo's models in parts). Empty: the size in the file"></rn-input>
             </div>
+            <div id="importProjects" class="row projects" hidden></div>
             <rn-tabs id="importCollision" title="How it stops V, bullets and cars"><rn-tab label="Solid" active></rn-tab><rn-tab label="Solid, a box"></rn-tab><rn-tab label="Not solid"></rn-tab></rn-tabs>
             <div class="row"><rn-button id="importGo" disabled title="Prepare it, put it into the open REDcode project, pack the project and swap it into the game; then it is picked on the Assets tab">Import</rn-button></div>
           </div>
@@ -262,6 +265,7 @@
       <rn-tab label="Bake">
         <div id="bakeWhat" class="path"></div>
         <div id="bakeInto" class="detail"></div>
+        <div id="bakeProjects" class="row projects" hidden></div>
         <div id="bakeChecks"></div>
         <div id="bakeState" class="detail"></div>
         <div class="row">

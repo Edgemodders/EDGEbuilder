@@ -408,8 +408,35 @@ function setProject(next: RedcodeProject | null): void {
   scanProject();
 }
 
+/**
+ * Every project open in REDcode's windows (REDcode 0.10.15 and later: projects(), projects-changed), the
+ * last-focused first; the one REDcode calls its project (the window used last); and the one the player
+ * picked on the Bake tab or the Import box, kept while it stays open. EDGEbuilder works with the picked
+ * one, else the last-focused.
+ */
+let redcodeProjects: RedcodeProject[] = [];
+let focusedProject: RedcodeProject | null = null;
+let pickedDir: string | null = null;
+
+function applyProjects(): void {
+  const picked = pickedDir ? redcodeProjects.find((p) => sameFile(p.dir, pickedDir!)) : undefined;
+  if (pickedDir && !picked && redcodeProjects.length) {
+    console.log(`The picked REDcode project (${pickedDir}) is no longer open: following the window used last`);
+    pickedDir = null;
+  }
+  state.sources.projects = redcodeProjects.length > 1 ? redcodeProjects.map((p) => ({ name: p.name, dir: p.dir })) : undefined;
+  state.sources.picked = pickedDir;
+  setProject(picked ?? focusedProject ?? redcodeProjects[0] ?? null);
+}
+
+function pickProject(dir: string | null): void {
+  pickedDir = dir && redcodeProjects.some((p) => sameFile(p.dir, dir)) ? dir : null;
+  applyProjects();
+  say(pickedDir ? `Working with the REDcode project ${project?.name ?? dir}: bakes and imports go into it.` : "Following REDcode: the project in the VS Code window used last.", "ok");
+}
+
 /** The project open in REDcode, through REDcode's REDnode service (REDcode 0.10.5 and later). Without it, mods only. */
-let redcode: { project(): Promise<RedcodeProject | null> } | undefined;
+let redcode: { project(): Promise<RedcodeProject | null>; $call(fn: string): Promise<unknown> } | undefined;
 let redcodeRetry: ReturnType<typeof setTimeout> | undefined;
 /** The last try to reach REDcode's service failed: its package is not in the game. */
 let redcodeFailed = false;
@@ -418,10 +445,17 @@ async function connectRedcode(): Promise<void> {
   clearTimeout(redcodeRetry);
   try {
     const handle = await service.connect<{ project(): RedcodeProject | null }>("redcode");
-    handle.$on("project-changed", (p: RedcodeProject | null) => setProject(p));
-    redcode = handle as unknown as { project(): Promise<RedcodeProject | null> };
+    handle.$on("project-changed", (p: RedcodeProject | null) => {
+      focusedProject = p;
+      applyProjects();
+    });
+    handle.$on("projects-changed", (list: RedcodeProject[] | null) => {
+      redcodeProjects = Array.isArray(list) ? list : [];
+      applyProjects();
+    });
+    redcode = handle as unknown as { project(): Promise<RedcodeProject | null>; $call(fn: string): Promise<unknown> };
     redcodeFailed = false;
-    setProject(await redcode.project());
+    await readRedcodeProjects();
   } catch (err) {
     redcode = undefined;
     redcodeFailed = true;
@@ -432,11 +466,20 @@ async function connectRedcode(): Promise<void> {
   }
 }
 
+/** REDcode's projects and its last-focused one. An older REDcode has no projects(): its one project. */
+async function readRedcodeProjects(): Promise<void> {
+  if (!redcode) return;
+  focusedProject = await redcode.project();
+  const list = await redcode.$call("projects").catch(() => null);
+  redcodeProjects = Array.isArray(list) ? (list as RedcodeProject[]) : focusedProject ? [focusedProject] : [];
+  applyProjects();
+}
+
 /** Refresh on the Bake and Library tabs: ask REDcode for its project again, now (B3c test on the laptop). */
 async function askRedcodeAgain(): Promise<void> {
   if (!redcode) return connectRedcode();
   try {
-    setProject(await redcode.project());
+    await readRedcodeProjects();
   } catch {
     redcode = undefined;
     await connectRedcode();
@@ -2940,6 +2983,9 @@ channel.on<PageMessage>((m) => {
         break;
       case "world.remove":
         await inTurn("Remove from world", () => removePicked());
+        break;
+      case "project.pick":
+        pickProject(m.dir);
         break;
       case "sectors.find":
         await findSectors(m);
