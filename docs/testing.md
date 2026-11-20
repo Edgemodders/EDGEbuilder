@@ -945,3 +945,16 @@ Before: the game closed; Claude deploys 0.12.2 and sets EDGEbuilder's **REDbridg
 | 10 | The third door came back working, not as its stand-in, so the message was not needed: the hide after the load came once the door was already in | The message stays for when it is needed |
 
 **D1b passed in game on 2026-11-19.** 0.12 is released once REDbridge releases #18 (its main has it; 0.15.0 does not).
+
+### 0.12.3 check (before the 0.12 release)
+
+REDbridge 0.16.0 is out (2026-11-20) with `sector.build`'s removals (#18, closed). 0.12.3 finds a bake of removals alone by its `.xl` and record, and the Bake tab stops a bake of removals with a REDbridge before 0.16.0. EDGEbuilder's REDbridge path is empty again: it uses the REDbridge REDnode shares.
+
+Before: REDbridge 0.16.0 fetched (EDGEdeck: **Get REDbridge** in VS Code, or **Update REDbridge** in REDnode's Mod Manager); the REDcode project EDGEbuilder_Doors_Test open in a trusted VS Code window.
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Start the game, load the save at V's flat, open EDGEbuilder | The REDbridge pill says **0.16.0** |
+| 2 | Library tab: open **D1b doors** | The doorways stay open. The log: "D1b doors's bake is in the game ..., which removes them; nothing to hide" |
+| 3 | **Bake** tab | Under Bakes in this project: **d1b_doors**, with the scene's bake in the game; no error |
+| 4 | **Bake** | "Baked D1b doors: 2 removals of the game's own objects (and 2 stand-ins) into EDGEbuilder_Doors_Test" |

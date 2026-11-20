@@ -2742,7 +2742,7 @@ async function bakeSceneInto(target: BakeProject, file: string, root?: string): 
   } catch (err) {
     const signature = /param|argument|signature|method/i.test((err as Error).message);
     // REDbridge 0.15.0 and before know no `removals` (#18).
-    if (removals.length && signature) throw new Error("baking removals needs a newer REDbridge than 0.15.0 (REDbridge #18): update it in EDGEdeck (Get REDbridge) once it is out");
+    if (removals.length && signature) throw new Error("baking removals needs REDbridge 0.16.0 or later: update it in EDGEdeck (Get REDbridge) or REDnode's Mod Manager");
     // REDbridge before 0.12.0 takes no `root`, and reads only the game's files.
     if (!root || !signature) throw err;
     built = await b.sectorBuild({ project: target.dir, scene: input });

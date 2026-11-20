@@ -554,6 +554,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   const onlyRemovals = m.checkBake({ file: "f", name: "Doors", objects: [], project, bridgeReady: true, needs: [], worldEdits: [door] });
   assert.ok(!onlyRemovals.some((x) => x.tone === "error"), "removals alone are something to bake");
   assert.ok(onlyRemovals.some((x) => x.tone === "info" && /ArchiveXL/.test(x.text)), "the bake says it needs ArchiveXL");
+  assert.ok(m.checkBake({ file: "f", name: "Doors", objects: [], project, bridgeReady: true, needs: [], worldEdits: [door], bridgeVersion: "0.15.0" }).some((x) => x.tone === "error" && /0.16.0/.test(x.text)), "REDbridge 0.15.0 cannot bake removals");
+  assert.ok(!m.checkBake({ file: "f", name: "Doors", objects: [], project, bridgeReady: true, needs: [], worldEdits: [door], bridgeVersion: "0.16.0" }).some((x) => x.tone === "error"), "0.16.0 can");
   assert.ok(m.checkBake({ file: "f", name: "Doors", objects: [], project, bridgeReady: true, needs: [] }).some((x) => x.tone === "error"), "nothing at all is still nothing");
   // A bake of removals alone: listed in its project and seen in the game by its .xl.
   const rp = path.join(tmp, "removals-project");

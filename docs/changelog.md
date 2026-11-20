@@ -16,7 +16,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - With Edit on, a click on a door in the world picks it. Switch Meshes on to pick any mesh the game placed, such as a painted-on door.
 - Remove from world (or Delete) takes a picked door out of the game's world while the scene is open, collision too. The Scene tab lists what the scene removes, each with Restore, and Undo works on it. Removals come back after a save loads and go when the scene closes. Baking them into the mod comes next.
 - A warning before removing a door a quest uses, such as V's own.
-- Bake writes what the scene removes into the mod, with each door's stand-in mesh, so the doors stay gone with EDGEbuilder off. A scene that only removes things bakes too. The baked mod needs ArchiveXL, and the bake needs a REDbridge newer than 0.15.0.
+- Bake writes what the scene removes into the mod, with each door's stand-in mesh, so the doors stay gone with EDGEbuilder off. A scene that only removes things bakes too. The baked mod needs ArchiveXL, and the bake needs REDbridge 0.16.0 or later.
 
 **Changed**
 
