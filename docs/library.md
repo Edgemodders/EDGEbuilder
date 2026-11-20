@@ -174,13 +174,37 @@ Opened 2026-10-29: [REDbridge #11](https://github.com/Edgemodders/REDbridge/issu
 |---|---|---|
 | **B3** (adds) | The Library root setting; scenes saved into and opened from Library folders; the in-game **Library** tab with folders; scenes on and off | A scene saved in a Library sub-folder reopens after a restart |
 | **B4** (adds) | Bakes into the Library from one or more scenes, `bake.json`; Include in project; the collide and baked-and-on flags | Two scenes baked into one Library bake, included in a project, stand in Night City with EDGEbuilder off |
-| **E0 Probe** | `sector.find` and `sector.nodes` in REDbridge; one sector drawn with REDcode's viewer from a script | How long a busy downtown sector takes the first time and after, and what it looks like |
+| **E0 Probe**, **passed 2026-11-19** ([results](#e0-results)) | `sector.find` and `sector.nodes` in REDbridge; one sector drawn with REDcode's viewer from a script | How long a busy downtown sector takes the first time and after, and what it looks like |
 | **E1 World map** | The extension; boxes, the level filter, hover and side panel, drill-down | Any sector found from the whole map in a few clicks |
 | **E2 Sector view** | Nodes drawn, the cache and progress bar, the flying camera | A downtown sector flown through |
 | **E3 Scenes outside the game** | Library scenes on the map and in the sector view; add, move, delete; Open in game | A scene edited with the game closed bakes the same as one edited in game (B7's test) |
 | **E4 Library view** | Folders, bakes, Include in project and Refresh from Library, stale bakes and rebake, from VS Code | A rebake after a game patch from the Library alone |
 
 E0 can run early, beside B2c or B3, since it touches only REDbridge and a script. E1 and later follow B4, when scenes save, load and bake. B4b's edits from the sector view follow B4b.
+
+### E0 results
+
+Run on 2026-11-19 on the dev PC (REDbridge 0.15.0, game 2.5, an RTX 4090), for [EDGEbuilder #8](https://github.com/Edgemodders/EDGEbuilder/issues/8), REDcode's sector view proposal. `scripts/e0-probe.mjs` finds sectors with `sector.find`, reads them with `sector.nodes`, and exports their unique meshes to GLB the way REDcode's mesh viewer does (`archive.extract` into a cache, then `project.export` with no materials, the most detailed LOD only); `probes/e0-view` draws a sector in Electron with three.js 0.170 from REDcode's checkout: each unique mesh loaded once and drawn as instances, copies beyond their streaming distance left out, entities and lights as markers, and two fixed flights measured. The cache (extracted game files) stays in `%LOCALAPPDATA%EDGEbuildere0-cache`, never in the repo.
+
+| Measured | City Center, level 0 | Busiest by copies: `exterior_-22_7_0_0` | Busiest by entries: `exterior_-23_-3_0_0` |
+|---|---|---|---|
+| Sectors, read | 577 (`sector.find` 3.2 s; `sector.nodes` on all 38 to 59 s) | read in 0.4 s | read in 2.1 s |
+| Entries, nodes | 744,332 copies of everything | 1,233 entries of 41 nodes | 3,659 entries of 564 nodes |
+| Unique meshes, copies | 6,522 in 605,801 | 105 in 8,986 | 347 in 3,616 (2 editor occluder planes do not export) |
+| Other things | | 202 | 1,703: 765 decals, 242 lights, 225 smart objects, 189 entities, 110 AI spots and more |
+| GLB export, first time | about 3 to 4 min, about 0.5 GB (estimated) | 2.1 s, 8.8 MB | 11.4 s, 29 MB |
+| GLB export, again | | 0.04 s (the cache) | 0.23 s |
+| Loaded into the page | | 0.2 s, 192 parts | 1.1 s, 709 parts |
+| Drawn, all copies | | 193 draw calls, 2.2 M triangles, 1,760 fps | 711 draw calls, 3.0 M triangles, 680 fps |
+| Drawn, by streaming distance | | the same | 45 to 68 draw calls, 1,050 to 1,150 fps |
+
+**Textures are the cost.** A sample of 20 meshes exported with materials and PNG textures took 16.3 s (0.8 s a mesh, 40 times the plain export) and 117 MB (about 6 MB a mesh), against 37 MB for all 452 plain meshes. At that rate the City Center would take about 1.5 hours and tens of gigabytes. A sector view draws meshes plain (coloured by mesh or material, as REDcode's viewer does) and fetches textures for one picked object at a time.
+
+**Level 0 is the near layer.** With copies left out beyond their streaming distance, only 17 of `exterior_-22_7_0_0`'s 8,986 copies remain seen from 80 m above: most things stream within a few dozen metres, and the game fills the distance with coarser levels and proxy meshes. A sector view seen from above needs the coarser levels' sectors (or proxies) too, or ignores the distances for an overview. On the street both sectors fly smoothly either way.
+
+**Instancing is what makes it cheap.** One instanced draw per GLB primitive, however many copies: 8,986 copies in about 190 draw calls. Places line up with the game's grid (sector -23, -3 at 64 m a cell starts at x -1472, y -192; the drawn box starts at x -1478, y -193) with the game's (x, y, z) as three.js's (x, z, -y).
+
+**Not drawn in E0:** entities (an `.ent` export per appearance would cost more), decals, lights and collision (markers or nothing). **Caveat:** an RTX 4090 says little about a modder's GPU; the frame rates want a run on a laptop before the package's budget is set.
 
 ## Open
 
