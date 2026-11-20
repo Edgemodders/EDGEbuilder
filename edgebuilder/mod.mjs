@@ -930,9 +930,9 @@ function describe(file, st) {
   try {
     const data = JSON.parse(fs5.readFileSync(file, "utf8"));
     if (typeof data.format !== "number" || !Array.isArray(data.objects)) throw new Error("not an EDGEbuilder scene");
-    out = { name: typeof data.name === "string" && data.name.trim() ? data.name : fallback, objects: data.objects.length };
+    out = { name: typeof data.name === "string" && data.name.trim() ? data.name : fallback, objects: data.objects.length, removals: Array.isArray(data.worldEdits) ? data.worldEdits.length : 0 };
   } catch (err) {
-    out = { name: fallback, objects: 0, error: err.message };
+    out = { name: fallback, objects: 0, removals: 0, error: err.message };
   }
   seen.set(file, { size: st.size, mtime: st.mtimeMs, ...out });
   return out;
@@ -3790,7 +3790,7 @@ async function bakeSceneInto(target, file, root) {
     file,
     hash: bakeHash(src.objects, src.worldEdits),
     objects: built.nodes,
-    ...built.removed?.length ? { removals: built.removed.length } : {},
+    ...built.removed?.length ? { removals: built.removed.filter((r) => !r.proxyOf).length, standIns: built.removed.filter((r) => r.proxyOf).length } : {},
     date: (/* @__PURE__ */ new Date()).toISOString(),
     bridge: state.bridge.version,
     box: built.streamingBox ?? void 0,
@@ -4049,7 +4049,7 @@ async function importModel(m) {
     return say(`Import is not available: ${err.message}`, "error");
   }
   const target = project;
-  const version = `EDGEbuilder ${"0.12.3"}`;
+  const version = `EDGEbuilder ${"0.12.4"}`;
   const call = (method, params) => stopAsked ? Promise.reject(new Error(ImportStopped)) : b.call(method, params);
   const began = Date.now();
   const step2 = (text) => {
@@ -4209,7 +4209,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.12.3"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.12.4"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs9.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

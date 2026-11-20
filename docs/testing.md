@@ -958,3 +958,5 @@ Before: REDbridge 0.16.0 fetched (EDGEdeck: **Get REDbridge** in VS Code, or **U
 | 2 | Library tab: open **D1b doors** | The doorways stay open. The log: "D1b doors's bake is in the game ..., which removes them; nothing to hide" |
 | 3 | **Bake** tab | Under Bakes in this project: **d1b_doors**, with the scene's bake in the game; no error |
 | 4 | **Bake** | "Baked D1b doors: 2 removals of the game's own objects (and 2 stand-ins) into EDGEbuilder_Doors_Test" |
+
+**0.12.3 check (2026-11-20, the desktop, REDbridge 0.16.0): passed**, all four steps as written. Found: a scene or bake of removals alone read "0 objects" on the Bake tab and in the Library, as if it did nothing. **0.12.4** says what each adds and removes, in the owner's wording: "0 added, 2 removed" (the Scene tab, the Bake tab, the Picked panel), "+0 −2" in the Library's rows and the project's bakes, and a bake "(and their 2 stand-ins)". Look at those three tabs with D1b doors open before the release.

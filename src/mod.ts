@@ -2756,7 +2756,7 @@ async function bakeSceneInto(target: BakeProject, file: string, root?: string): 
     file,
     hash: bakeHash(src.objects, src.worldEdits),
     objects: built.nodes,
-    ...(built.removed?.length ? { removals: built.removed.length } : {}),
+    ...(built.removed?.length ? { removals: built.removed.filter((r) => !r.proxyOf).length, standIns: built.removed.filter((r) => r.proxyOf).length } : {}),
     date: new Date().toISOString(),
     bridge: state.bridge.version,
     box: built.streamingBox ?? undefined,

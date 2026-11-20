@@ -154,7 +154,7 @@ function render(s: Snapshot): void {
   // Scene.
   $("objects").innerHTML = sceneRows(s);
   const groupCount = s.scene.groups.length;
-  $("sceneCount").textContent = `${s.scene.objects.length} object${s.scene.objects.length === 1 ? "" : "s"}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
+  $("sceneCount").textContent = `${holds(s.scene.objects.length, s.scene.worldEdits.length)}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
   $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
   const sel = s.scene.objects.filter((o) => s.selected.includes(o.id));
   if (dropAsked && sel.length && sel.every((o) => !knownIds.has(o.id))) {
@@ -215,6 +215,15 @@ function render(s: Snapshot): void {
     $("message").className = `message ${s.message.tone}`;
     if (s.message.tone === "error" && typeof RednodeUI !== "undefined") RednodeUI.notify(s.message.text, { title: "EDGEbuilder", type: "error" });
   }
+}
+
+/**
+ * What a scene or bake does to the world, both numbers always, so one that only removes the game's own
+ * objects never reads as doing nothing (the owner's wording, 2026-11-20): `0 added, 2 removed`; short,
+ * for list rows, `+0 −2`.
+ */
+function holds(objects: number, removals = 0, short = false): string {
+  return short ? `+${objects} −${removals}` : `${objects} added, ${removals} removed`;
 }
 
 /** The count in the kind's own word, so an empty list says why: `0 entities found`, `1 mesh found for "katana"`. The tab says where. */
@@ -642,7 +651,7 @@ function libraryRows(s: Snapshot): string {
       for (const sc of sh.scenes.filter((x) => x.folder === folder)) {
         const open = sameFile(sc.file, s.scene.file ?? "");
         const tags = `${open ? '<span class="tag">open</span>' : ""}${isOn(sc.file) ? '<span class="tag">shown</span>' : ""}`;
-        const end = sc.error ? "cannot be read" : `${open ? s.scene.objects.length : sc.objects} obj · ${when(sc.changed)}`;
+        const end = sc.error ? "cannot be read" : `${open ? holds(s.scene.objects.length, s.scene.worldEdits.length, true) : holds(sc.objects, sc.removals, true)} · ${when(sc.changed)}`;
         rows.push(
           `<rn-item value="f:${esc(sc.file)}" title="${esc(sc.error ? `${sc.file}\n${sc.error}` : sc.file)}"${isPicked({ kind: "scene", file: sc.file }) ? " selected" : ""}${pad(depth)}><span class="fold"></span>${esc(sc.name)}${tags}<span slot="end">${esc(end)}</span></rn-item>`,
         );
@@ -705,19 +714,25 @@ function propSlugOf(name: string): string {
 }
 
 let bakeHtml = "";
+
+/** What a bake holds: its objects, the game's objects it removes, and the stand-ins removed with them. */
+function bakeHolds(r: { objects?: number; removals?: number; standIns?: number }, short = false): string {
+  const text = holds(r.objects ?? 0, r.removals ?? 0, short);
+  return r.standIns && !short ? `${text} (and ${r.standIns === 1 ? "its stand-in" : `their ${r.standIns} stand-ins`})` : text;
+}
 let bakeConfirm: string | undefined;
 
 function renderBake(s: Snapshot): void {
   const b = s.bake;
   const n = s.scene.objects.length;
-  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${n} object${n === 1 ? "" : "s"}` : "No scene open";
+  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${holds(n, s.scene.worldEdits.length)}` : "No scene open";
   $("bakeInto").textContent = b.project ? `Into the REDcode project ${b.project.name}` : "";
   $("bakeInto").title = b.project?.dir ?? "";
   const checks = b.checks.map((c) => `<div class="check ${c.tone}">${esc(c.text)}</div>`).join("");
   if ($("bakeChecks").innerHTML !== checks) $("bakeChecks").innerHTML = checks;
   const when = (iso?: string) => (iso ? new Date(iso).toLocaleString() : "");
   const lines: string[] = [];
-  if (b.current) lines.push(`Baked ${when(b.current.date)}${b.current.objects === undefined ? "" : `, ${b.current.objects} object${b.current.objects === 1 ? "" : "s"}`}.${b.stale ? " The scene changed since: bake again to bring it in." : ""}`);
+  if (b.current) lines.push(`Baked ${when(b.current.date)}${b.current.objects === undefined ? "" : `, ${bakeHolds(b.current)}`}.${b.stale ? " The scene changed since: bake again to bring it in." : ""}`);
   if (b.current?.library) lines.push(`This bake came from the Library's ${b.current.library.name} (version ${b.current.library.version}). Bake here makes it the project's own; to keep it the Library's, bake it on the Library tab and update it here.`);
   if (b.inGame) lines.push(`Its bake is in the game (${b.inGame}), so its previews stay off and nothing stands twice. Rebuild previews on the Scene tab brings them back to edit it.`);
   $("bakeState").textContent = lines.join("\n");
@@ -730,7 +745,7 @@ function renderBake(s: Snapshot): void {
       const end =
         bakeConfirm === r.slug
           ? `<span slot="end" class="confirm">Take it out?<button data-act="yes" data-id="${esc(r.slug)}">Yes</button><button data-act="no">No</button></span>`
-          : `<span slot="end">${r.library?.latest && r.library.dir ? `<button class="update" data-act="update" data-id="${esc(r.library.dir)}" title="The Library's ${esc(r.library.name)} is at version ${r.library.latest}; this project has version ${r.library.version}. Copies the new version in">Update to v${r.library.latest}</button>` : ""}<span class="grouptag">${r.library ? `from ${esc(r.library.name)} v${r.library.version} · ` : ""}${r.objects === undefined ? "" : `${r.objects} object${r.objects === 1 ? "" : "s"}`}</span><button class="act" data-act="trash" data-id="${esc(r.slug)}" title="Take this bake out of the project. Its scene stays">${TrashIcon}</button></span>`;
+          : `<span slot="end">${r.library?.latest && r.library.dir ? `<button class="update" data-act="update" data-id="${esc(r.library.dir)}" title="The Library's ${esc(r.library.name)} is at version ${r.library.latest}; this project has version ${r.library.version}. Copies the new version in">Update to v${r.library.latest}</button>` : ""}<span class="grouptag">${r.library ? `from ${esc(r.library.name)} v${r.library.version} · ` : ""}${r.objects === undefined ? "" : bakeHolds(r, true)}</span><button class="act" data-act="trash" data-id="${esc(r.slug)}" title="Take this bake out of the project. Its scene stays">${TrashIcon}</button></span>`;
       return `<rn-item value="${esc(r.slug)}" title="${esc([r.file, when(r.date)].filter(Boolean).join("\n"))}">${esc(r.name)}${end}</rn-item>`;
     })
     .join("");
@@ -845,7 +860,7 @@ function renderLibrary(s: Snapshot): void {
   const open = !!sc && sameFile(sc.file, s.scene.file ?? "");
   const on = !!sc && s.library.on.some((f) => sameFile(f, sc.file));
   if (sc)
-    $("pickedText").textContent = `${sc.name}${open ? " (open)" : on ? " (shown in the world)" : ""}\n${whereLabel(s, sc.place, sc.folder)}\n${sc.error ? `Cannot be read: ${sc.error}` : `${open ? s.scene.objects.length : sc.objects} objects, changed ${when(sc.changed)}`}\n${sc.file}`;
+    $("pickedText").textContent = `${sc.name}${open ? " (open)" : on ? " (shown in the world)" : ""}\n${whereLabel(s, sc.place, sc.folder)}\n${sc.error ? `Cannot be read: ${sc.error}` : `${open ? holds(s.scene.objects.length, s.scene.worldEdits.length) : holds(sc.objects, sc.removals)}, changed ${when(sc.changed)}`}\n${sc.file}`;
   else if (picked?.kind === "folder") $("pickedText").textContent = `Folder: ${whereLabel(s, picked.place, picked.folder)}`;
   else if (lb) $("pickedText").textContent = bakeText(s, lb);
   else if (picked?.kind === "model") void 0;

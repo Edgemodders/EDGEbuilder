@@ -169,6 +169,8 @@ export interface SceneEntry {
   folder: string;
   name: string;
   objects: number;
+  /** D1: the game's own objects it removes (format 3's worldEdits). */
+  removals?: number;
   /** When the file last changed, ms since 1970. */
   changed: number;
   /** Set when the file is not a scene EDGEbuilder can read. */
@@ -231,8 +233,9 @@ export interface BakeRecord {
   box?: { min: number[]; max: number[] };
   /** The mods and the project its objects need. */
   needs?: string[];
-  /** D1b: how many of the game's own entries it deletes, stand-ins included. */
+  /** D1b: how many of the game's own objects it removes, and the stand-in meshes removed with them. */
   removals?: number;
+  standIns?: number;
   /**
    * B4-3: the Library bake it came from, by Include in project. `latest` and `dir`: the version the
    * Library has now and where, when that is newer.

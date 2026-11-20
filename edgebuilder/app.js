@@ -1322,7 +1322,7 @@ ${looked.path}`;
   }
   $("objects").innerHTML = sceneRows(s);
   const groupCount = s.scene.groups.length;
-  $("sceneCount").textContent = `${s.scene.objects.length} object${s.scene.objects.length === 1 ? "" : "s"}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
+  $("sceneCount").textContent = `${holds(s.scene.objects.length, s.scene.worldEdits.length)}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
   $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
   const sel = s.scene.objects.filter((o) => s.selected.includes(o.id));
   if (dropAsked && sel.length && sel.every((o) => !knownIds.has(o.id))) {
@@ -1373,6 +1373,9 @@ ${looked.path}`;
     $("message").className = `message ${s.message.tone}`;
     if (s.message.tone === "error" && typeof RednodeUI !== "undefined") RednodeUI.notify(s.message.text, { title: "EDGEbuilder", type: "error" });
   }
+}
+function holds(objects, removals = 0, short = false) {
+  return short ? `+${objects} \u2212${removals}` : `${objects} added, ${removals} removed`;
 }
 function foundText(s) {
   const n = s.results.length;
@@ -1741,7 +1744,7 @@ function libraryRows(s) {
       for (const sc of sh.scenes.filter((x) => x.folder === folder)) {
         const open = sameFile(sc.file, s.scene.file ?? "");
         const tags = `${open ? '<span class="tag">open</span>' : ""}${isOn(sc.file) ? '<span class="tag">shown</span>' : ""}`;
-        const end = sc.error ? "cannot be read" : `${open ? s.scene.objects.length : sc.objects} obj \xB7 ${when(sc.changed)}`;
+        const end = sc.error ? "cannot be read" : `${open ? holds(s.scene.objects.length, s.scene.worldEdits.length, true) : holds(sc.objects, sc.removals, true)} \xB7 ${when(sc.changed)}`;
         rows.push(
           `<rn-item value="f:${esc(sc.file)}" title="${esc(sc.error ? `${sc.file}
 ${sc.error}` : sc.file)}"${isPicked({ kind: "scene", file: sc.file }) ? " selected" : ""}${pad(depth)}><span class="fold"></span>${esc(sc.name)}${tags}<span slot="end">${esc(end)}</span></rn-item>`
@@ -1802,18 +1805,22 @@ function propSlugOf(name) {
   return base.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) || "prop";
 }
 var bakeHtml = "";
+function bakeHolds(r, short = false) {
+  const text = holds(r.objects ?? 0, r.removals ?? 0, short);
+  return r.standIns && !short ? `${text} (and ${r.standIns === 1 ? "its stand-in" : `their ${r.standIns} stand-ins`})` : text;
+}
 var bakeConfirm;
 function renderBake(s) {
   const b = s.bake;
   const n = s.scene.objects.length;
-  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${n} object${n === 1 ? "" : "s"}` : "No scene open";
+  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${holds(n, s.scene.worldEdits.length)}` : "No scene open";
   $("bakeInto").textContent = b.project ? `Into the REDcode project ${b.project.name}` : "";
   $("bakeInto").title = b.project?.dir ?? "";
   const checks = b.checks.map((c) => `<div class="check ${c.tone}">${esc(c.text)}</div>`).join("");
   if ($("bakeChecks").innerHTML !== checks) $("bakeChecks").innerHTML = checks;
   const when2 = (iso) => iso ? new Date(iso).toLocaleString() : "";
   const lines = [];
-  if (b.current) lines.push(`Baked ${when2(b.current.date)}${b.current.objects === void 0 ? "" : `, ${b.current.objects} object${b.current.objects === 1 ? "" : "s"}`}.${b.stale ? " The scene changed since: bake again to bring it in." : ""}`);
+  if (b.current) lines.push(`Baked ${when2(b.current.date)}${b.current.objects === void 0 ? "" : `, ${bakeHolds(b.current)}`}.${b.stale ? " The scene changed since: bake again to bring it in." : ""}`);
   if (b.current?.library) lines.push(`This bake came from the Library's ${b.current.library.name} (version ${b.current.library.version}). Bake here makes it the project's own; to keep it the Library's, bake it on the Library tab and update it here.`);
   if (b.inGame) lines.push(`Its bake is in the game (${b.inGame}), so its previews stay off and nothing stands twice. Rebuild previews on the Scene tab brings them back to edit it.`);
   $("bakeState").textContent = lines.join("\n");
@@ -1822,7 +1829,7 @@ function renderBake(s) {
   $("bakeDone").toggleAttribute("hidden", !last);
   if (last) $("bakeFiles").textContent = [...last.files, ...last.warnings].join("\n");
   const html = b.list.map((r) => {
-    const end = bakeConfirm === r.slug ? `<span slot="end" class="confirm">Take it out?<button data-act="yes" data-id="${esc(r.slug)}">Yes</button><button data-act="no">No</button></span>` : `<span slot="end">${r.library?.latest && r.library.dir ? `<button class="update" data-act="update" data-id="${esc(r.library.dir)}" title="The Library's ${esc(r.library.name)} is at version ${r.library.latest}; this project has version ${r.library.version}. Copies the new version in">Update to v${r.library.latest}</button>` : ""}<span class="grouptag">${r.library ? `from ${esc(r.library.name)} v${r.library.version} \xB7 ` : ""}${r.objects === void 0 ? "" : `${r.objects} object${r.objects === 1 ? "" : "s"}`}</span><button class="act" data-act="trash" data-id="${esc(r.slug)}" title="Take this bake out of the project. Its scene stays">${TrashIcon}</button></span>`;
+    const end = bakeConfirm === r.slug ? `<span slot="end" class="confirm">Take it out?<button data-act="yes" data-id="${esc(r.slug)}">Yes</button><button data-act="no">No</button></span>` : `<span slot="end">${r.library?.latest && r.library.dir ? `<button class="update" data-act="update" data-id="${esc(r.library.dir)}" title="The Library's ${esc(r.library.name)} is at version ${r.library.latest}; this project has version ${r.library.version}. Copies the new version in">Update to v${r.library.latest}</button>` : ""}<span class="grouptag">${r.library ? `from ${esc(r.library.name)} v${r.library.version} \xB7 ` : ""}${r.objects === void 0 ? "" : bakeHolds(r, true)}</span><button class="act" data-act="trash" data-id="${esc(r.slug)}" title="Take this bake out of the project. Its scene stays">${TrashIcon}</button></span>`;
     return `<rn-item value="${esc(r.slug)}" title="${esc([r.file, when2(r.date)].filter(Boolean).join("\n"))}">${esc(r.name)}${end}</rn-item>`;
   }).join("");
   if (html !== bakeHtml) $("bakeList").innerHTML = bakeHtml = html;
@@ -1920,7 +1927,7 @@ function renderLibrary(s) {
   if (sc)
     $("pickedText").textContent = `${sc.name}${open ? " (open)" : on ? " (shown in the world)" : ""}
 ${whereLabel(s, sc.place, sc.folder)}
-${sc.error ? `Cannot be read: ${sc.error}` : `${open ? s.scene.objects.length : sc.objects} objects, changed ${when(sc.changed)}`}
+${sc.error ? `Cannot be read: ${sc.error}` : `${open ? holds(s.scene.objects.length, s.scene.worldEdits.length) : holds(sc.objects, sc.removals)}, changed ${when(sc.changed)}`}
 ${sc.file}`;
   else if (picked?.kind === "folder") $("pickedText").textContent = `Folder: ${whereLabel(s, picked.place, picked.folder)}`;
   else if (lb) $("pickedText").textContent = bakeText(s, lb);
