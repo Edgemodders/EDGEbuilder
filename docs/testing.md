@@ -972,9 +972,9 @@ Before: the game closed; Claude deploys the draft zip with EDGEdeck. EDGEbuilder
 | # | Do | Expected |
 |---|---|---|
 | 1 | Start the game. Before loading a save: F10, Mod Manager, switch **Remove Doors** on and pin it | Its window: two switches, Look again, Show all, and the three sections |
-| 2 | Load the save at V's flat | Within a few seconds, **Doors near V** lists doors with their distance and state |
-| 3 | **Show all** on, then off | On: every listed door outlined (white, colour 5); off: no outlines |
-| 4 | **Pick** a door (V's secret room door, or a far elevator door) | A **red** outline on it (colour 3); **Picked** names it |
+| 2 | Load the save at V's flat. Look at a door and press **Scan Doors** | **Doors near V** lists the doors, numbered, with their distance and state; the one V looks at says **◀ LOOKING AT** and is picked: a red outline and a red pin "PICKED" over it |
+| 3 | **Show all** on, then off | On: every listed door outlined (white, colour 5) and pinned with its number; off: only the picked one stays marked |
+| 4 | **Pick** another door (V's secret room door, or a far elevator door) | A **red** outline on it (colour 3) and the red pin moves to it; **Picked** names it |
 | 5 | **Remove** | The door goes; with Edit nothing, walk V through the doorway. It is listed under **Removed doors** |
 | 6 | Pick a painted-on door and **Remove** it | It goes |
 | 7 | Save, load that save | Within a few seconds both are gone again, with no stand-in in the doorway |
@@ -988,3 +988,5 @@ Before: the game closed; Claude deploys the draft zip with EDGEdeck. EDGEbuilder
 | RD1 | Is outline colour 3 red and 5 white, as REDnode's VATS spike found? |
 | RD2 | Do removals hold after a load, a window close and the app off and on? |
 | RD3 | Is the window clear enough for a player without the wiki? |
+
+**First run (2026-11-19, 0.1.0 draft): stopped at step 4.** No red outline on a picked door (the app drew it without see-through, where the D0 probe, whose outline the owner saw in normal play, drew it see-through), and the owner asked for an indicator on the door V looks at and for **Look again** to read **Scan Doors**. The next draft: the outline see-through as the probe's; pins from REDnode's overlay as well (each listed door's number with Show all, the picked one red "PICKED"), so a door is marked even where the game draws no outline; **Scan Doors** finds the door V's camera looks at, marks it **◀ LOOKING AT** and picks it when none is picked. Steps 2 to 4 above say so.

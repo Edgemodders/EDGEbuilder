@@ -16,6 +16,13 @@ const MaxRows = 14;
 /** The game's highlight colours: 3 is red (REDnode's VATS spike), 5 white. */
 const Red = 3;
 const White = 5;
+/** Pins, drawn by REDnode's overlay, so a door is marked even where the game draws no outline on it. */
+const Cyan = '#19f3ff';
+const RedPin = '#ff4d6d';
+const PinStyle = { scale: 'fit', pinHeight: 2.6, titleSize: 16, textSize: 12 };
+/** A door counts as looked at when the camera's line passes within this many metres of it. */
+const LookReach = 0.9;
+const DoorHeight = 2.2;
 const Kinds = {
   door: { label: 'Doors', classes: new Set(['Door', 'BunkerDoor', 'MovableWallScreen', 'Window']) },
   painted: { label: 'Painted-on doors', classes: new Set(['FakeDoor']) },
@@ -50,6 +57,8 @@ const saveRemoved = () => writeJson(removedFile, removed);
 
 let doors = []; // the doors near V, from the last look
 let picked; // the entity id of the door picked in the list
+let lookedAt; // the entity id of the door V looked at when the doors were scanned
+let pins = []; // this app's pin ids
 let note = '';
 let busy = false;
 const pending = new Set(); // removed doors whose part of the world is not loaded: hidden when it is
@@ -129,16 +138,79 @@ async function look() {
 
 async function outline(entity, colour) {
   try {
-    const event = await api.$new('entRenderHighlightEvent', { seeThroughWalls: false, opacity: colour ? 1 : 0, outlineIndex: colour, fillIndex: 0 });
+    const event = await api.$new('entRenderHighlightEvent', { seeThroughWalls: true, opacity: colour ? 1 : 0, outlineIndex: colour, fillIndex: 0 });
     await entity.QueueEvent(event);
   } catch {
     // Gone since the look (a load): nothing to outline.
   }
 }
 
-/** Outlines: the picked door red, the rest white with Show all on, none otherwise. */
+/** Pins over the doors: the picked one red ("PICKED"), and with Show all on each listed door's number. */
+async function updatePins() {
+  if (typeof world.pin !== 'function') return;
+  for (const id of pins) await world.unpin(id).catch(() => false);
+  pins = [];
+  for (const [i, d] of doors.entries()) {
+    const isPicked = d.id === picked;
+    if (!isPicked && !settings.showAll) continue;
+    const [x, y, z] = d.position;
+    try {
+      pins.push(
+        await world.pin({
+          at: { hash: d.id, x, y, z },
+          title: isPicked ? `${i + 1} PICKED` : `${i + 1}`,
+          text: d.id === lookedAt ? 'looking at' : nameOf(d.type, ''),
+          style: { ...PinStyle, color: isPicked ? RedPin : Cyan },
+        }),
+      );
+    } catch {
+      // No pins in this REDnode: the outline alone.
+    }
+  }
+}
+
+/** Marks: the picked door red, the rest white with Show all on, none otherwise; outlines and pins. */
 async function outlines() {
   for (const d of doors) await outline(d.entity, d.id === picked ? Red : settings.showAll ? White : 0);
+  await updatePins();
+}
+
+/** The door V's camera looks at: the first whose line from its foot up comes within LookReach of the view. */
+async function doorLookedAt() {
+  try {
+    const player = await api.GetPlayer(game.instance);
+    const cam = player ? await player.GetFPPCameraComponent() : null;
+    const m = cam ? await cam.GetLocalToWorld() : null;
+    if (!m) return undefined;
+    const o = [m.W.X, m.W.Y, m.W.Z];
+    const len = Math.hypot(m.Y.X, m.Y.Y, m.Y.Z) || 1;
+    const f = [m.Y.X / len, m.Y.Y / len, m.Y.Z / len];
+    let best;
+    for (const d of doors) {
+      const r = rayToSegment(o, f, d.position, [d.position[0], d.position[1], d.position[2] + DoorHeight]);
+      if (r.gap > LookReach || r.along <= 0) continue;
+      if (!best || r.along < best.along) best = { id: d.id, along: r.along };
+    }
+    return best?.id;
+  } catch {
+    return undefined;
+  }
+}
+
+/** How close a ray (origin, unit direction) comes to a segment, and how far along the ray. */
+function rayToSegment(o, u, a, b) {
+  const sub = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+  const dot = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  const v = sub(b, a);
+  const w = sub(o, a);
+  const uv = dot(u, v);
+  const vv = dot(v, v);
+  const d = dot(u, u) * vv - uv * uv;
+  const t = Math.max(0, Math.min(1, d > 1e-9 ? (dot(u, u) * dot(v, w) - uv * dot(u, w)) / d : vv > 0 ? dot(v, w) / vv : 0));
+  const q = [a[0] + v[0] * t, a[1] + v[1] * t, a[2] + v[2] * t];
+  const s = Math.max(0, dot(sub(q, o), u));
+  const p = [o[0] + u[0] * s, o[1] + u[1] * s, o[2] + u[2] * s];
+  return { gap: Math.hypot(...sub(p, q)), along: s };
 }
 
 /** A door's node and its stand-ins: the registry along a short line down through its place. */
@@ -151,7 +223,7 @@ async function nodeOf(door) {
   return { node, proxies };
 }
 
-const isRemoved = (door) => removed.some((r) => sameId(r.entity, door.id));
+const isRemoved = (door) => !!door && removed.some((r) => sameId(r.entity, door.id));
 const nameOf = (type, appearance) => `${Words[type] ?? type}${appearance ? ` (${appearance})` : ''}`;
 
 async function hide(id, visible) {
@@ -202,10 +274,13 @@ async function run(what, fn) {
 }
 
 const refresh = () =>
-  run('Look again', async () => {
+  run('Scan Doors', async () => {
     if (!note) await startRegistry();
     await look();
     if (picked && !doors.some((d) => d.id === picked)) picked = undefined;
+    lookedAt = await doorLookedAt();
+    // The door in front of V is the one usually meant: picked at once, unless one is picked already.
+    if (lookedAt && !picked && !isRemoved(doors.find((d) => d.id === lookedAt))) picked = lookedAt;
     await outlines();
   });
 
@@ -238,6 +313,7 @@ const remove = (door) =>
     for (const p of entry.proxies) await hide(p, false);
     note = `Removed: ${entry.label}. It stays removed while Remove Doors is on, in every save.`;
     picked = undefined;
+    await updatePins();
   });
 
 const bringBack = (r) =>
@@ -286,10 +362,11 @@ function setShowAll(on) {
 // ---- the window ---------------------------------------------------------------------------------
 
 function doorRows() {
-  if (!doors.length) return [ui.text(`No doors within ${Radius} m of V. Walk closer, then Look again.`, { tone: 'dim' })];
-  return doors.map((d) => {
+  if (!doors.length) return [ui.text(`No doors within ${Radius} m of V. Walk closer, then Scan Doors.`, { tone: 'dim' })];
+  return doors.map((d, i) => {
     const gone = isRemoved(d);
-    const text = `${d.distance.toFixed(1)} m  ${nameOf(d.type, d.appearance)}${d.state ? `, ${d.state}` : ''}${gone ? ', removed' : ''}`;
+    const looking = d.id === lookedAt ? '  ◀ LOOKING AT' : '';
+    const text = `${i + 1}.  ${d.distance.toFixed(1)} m  ${nameOf(d.type, d.appearance)}${d.state ? `, ${d.state}` : ''}${gone ? ', removed' : ''}${looking}`;
     return ui.row(
       ui.text(text, { tone: d.id === picked ? 'accent' : gone ? 'dim' : 'normal' }),
       ui.button(d.id === picked ? 'Picked' : 'Pick', () => pick(d), { variant: d.id === picked ? 'primary' : 'ghost', disabled: gone }),
@@ -299,7 +376,7 @@ function doorRows() {
 
 function pickedRows() {
   const d = doors.find((x) => x.id === picked);
-  if (!d) return [ui.text('Pick a door in the list: it gets a red outline in the game.', { tone: 'dim' })];
+  if (!d) return [ui.text('Look at a door and press Scan Doors, or pick one in the list: it gets a red pin and outline in the game.', { tone: 'dim' })];
   return [
     ui.text(`${nameOf(d.type, d.appearance)}${d.state ? `, ${d.state}` : ''}, ${d.distance.toFixed(1)} m from V`, { tone: 'accent' }),
     ui.row(ui.button('Remove', () => remove(d), { variant: 'danger' })),
@@ -335,7 +412,7 @@ function render() {
         ui.toggle(Kinds.door.label, (on) => setKind('door', on), { checked: settings.door }),
         ui.toggle(Kinds.painted.label, (on) => setKind('painted', on), { checked: settings.painted }),
       ),
-      ui.row(ui.button('Look again', refresh), ui.toggle('Show all', setShowAll, { checked: settings.showAll })),
+      ui.row(ui.button('Scan Doors', refresh), ui.toggle('Show all', setShowAll, { checked: settings.showAll })),
       ui.heading('Doors near V'),
       ...doorRows(),
       ui.heading('Picked'),
@@ -361,6 +438,7 @@ game.onState((s) => {
 game.on('PlayerPuppet.OnGameAttached', () => {
   doors = [];
   picked = undefined;
+  lookedAt = undefined;
   render();
   setTimeout(() => void startRegistry().then(applyAll).then(refresh), 3000);
 });
