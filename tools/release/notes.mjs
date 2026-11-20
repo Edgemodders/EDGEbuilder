@@ -4,6 +4,7 @@
 //   node tools/release/notes.mjs [version]              markdown for the GitHub release, with the install lines
 //   node tools/release/notes.mjs [version] --nexus      plain lines for Nexus's changelog field
 //   --out <file>                                        writes the notes to a file (UTF-8)
+//   --pack <id>                                         an app pack's (packs/<id>): its changelog, version and install line
 //
 // The version defaults to the package's, in edgebuilder/rednode-app.json.
 import { readFileSync, writeFileSync } from "node:fs";
@@ -14,15 +15,19 @@ const args = process.argv.slice(2);
 const nexus = args.includes("--nexus");
 const outAt = args.indexOf("--out");
 const out = outAt >= 0 ? args.splice(outAt, 2)[1] : null;
-const version = args.find((a) => !a.startsWith("--")) ?? JSON.parse(readFileSync(root + "edgebuilder/rednode-app.json", "utf8")).version;
-const lines = readFileSync(root + "docs/changelog.md", "utf8").split(/\r?\n/);
-const Docs = "https://edgemodders.github.io/EDGEbuilder/";
+const packAt = args.indexOf("--pack");
+const packId = packAt >= 0 ? args.splice(packAt, 2)[1] : null;
+const pack = packId ? JSON.parse(readFileSync(`${root}packs/${packId}/pack.json`, "utf8")) : null;
+const version = args.find((a) => !a.startsWith("--")) ?? (pack ? pack.version : JSON.parse(readFileSync(root + "edgebuilder/rednode-app.json", "utf8")).version);
+const changelogFile = pack ? `packs/${packId}/changelog.md` : "docs/changelog.md";
+const lines = readFileSync(root + changelogFile, "utf8").split(/\r?\n/);
+const Docs = pack ? `https://github.com/Edgemodders/EDGEbuilder/blob/main/packs/${packId}/` : "https://edgemodders.github.io/EDGEbuilder/";
 
 // "## 0.1.0" or "## 0.1.0 (2026-10-26)"
 const heading = new RegExp(`^## ${version.replace(/\./g, "\\.")}(\\s|,|$)`);
 const start = lines.findIndex((line) => heading.test(line));
 if (start < 0) {
-  console.error(`docs/changelog.md has no section for ${version}: rename Unreleased to "## ${version} (date)" first`);
+  console.error(`${changelogFile} has no section for ${version}: rename Unreleased to "## ${version} (date)" first`);
   process.exit(1);
 }
 let end = lines.findIndex((line, i) => i > start && line.startsWith("## "));
@@ -67,7 +72,7 @@ if (nexus && open >= 0) {
     console.error(`docs/changelog.md: the Nexus summary for ${version}:\n- ${wrong.join("\n- ")}`);
     process.exit(1);
   }
-  write([...summary, `Full changelog: ${Docs}changelog.html`].join("\n"));
+  write([...summary, `Full changelog: ${pack ? `${Docs}changelog.md` : `${Docs}changelog.html`}`].join("\n"));
 } else if (nexus) {
   // No summary: Nexus's changelog takes one plain line per change: no markdown, links as "text (url)".
   const plain = (text) => text
@@ -83,6 +88,10 @@ if (nexus && open >= 0) {
     else if (line.trim()) result.push(plain(line.trim()));
   }
   write(result.join("\n"));
+} else if (pack) {
+  write(`${github.join("\n").trim()}
+
+**Install:** \`${pack.name.replace(/\s+/g, "")}-${version}.zip\` below, the same file as on Nexus Mods, is laid out like the game folder: add it in EDGEdeck or Vortex and deploy with the game closed, or extract it into the game folder. Then switch **${pack.name}** on in REDnode's Mod Manager, before loading a save. Needs REDnode ${pack.rednode.replace(">=", "")} or later and Codeware, on game 2.5.${pack.guide ? `\n\nGuide: ${pack.guide}` : ""}`);
 } else {
   write(`${github.join("\n").trim()}
 

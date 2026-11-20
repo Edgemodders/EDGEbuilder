@@ -26,6 +26,14 @@
 #                                               node ../EDGErepo/tools/nexus/nexus.mjs release on the
 #                                               dev PC with the release's zip: it skips what is
 #                                               already done (nexus/README.md).
+#   "Release Remove Doors" ticked               also makes Remove Doors' own GitHub release
+#                                               (tag remove-doors-v<version>, from
+#                                               packs/remove-doors/pack.json) with its zip
+#                                               (tools/release/pack-zip.mjs), and with "Update Nexus
+#                                               Mods" uploads it to its Nexus page (mod 39060). It
+#                                               works with or without "Make a release": either can
+#                                               go out alone. Every run builds Remove Doors' zip too
+#                                               (a draft when not released), into the artifact.
 #
 # Release gate: make a release only after every in-game test of the builds since the last release
 # has passed (docs/testing.md). Untested or failed means no release.
@@ -39,7 +47,11 @@ on:
         type: boolean
         default: false
       nexus:
-        description: Update Nexus Mods (with Make a release) - upload the zip, its changelog and the page's description
+        description: Update Nexus Mods (with Make a release or Release Remove Doors) - upload the zip, its changelog and the page's description
+        type: boolean
+        default: false
+      removeDoors:
+        description: Release Remove Doors (its own tag remove-doors-v<version>). Only after its in-game test has passed
         type: boolean
         default: false
 
@@ -76,13 +88,16 @@ jobs:
             echo "::error::edgebuilder/rednode-app.json says ${version}, package.json says ${npm_version}. Raise both."
             exit 1
           fi
-          if [ "${{ inputs.nexus }}" = "true" ] && [ "${{ inputs.release }}" != "true" ]; then
-            echo "::error::Update Nexus Mods needs Make a release ticked too."
+          if [ "${{ inputs.nexus }}" = "true" ] && [ "${{ inputs.release }}" != "true" ] && [ "${{ inputs.removeDoors }}" != "true" ]; then
+            echo "::error::Update Nexus Mods needs Make a release or Release Remove Doors ticked too."
             exit 1
           fi
+          rd_version=$(node -p "require('./packs/remove-doors/pack.json').version")
           {
             echo "VERSION=${version}"
             echo "ZIP=${GITHUB_WORKSPACE}/dist/EDGEbuilder-${version}.zip"
+            echo "RD_VERSION=${rd_version}"
+            echo "RD_ZIP=${GITHUB_WORKSPACE}/dist/RemoveDoors-${rd_version}.zip"
           } >> "$GITHUB_ENV"
 
       - name: The version is not released yet
@@ -99,6 +114,22 @@ jobs:
             exit 1
           fi
 
+      - name: Remove Doors' version is not released yet
+        if: inputs.removeDoors
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Release Remove Doors from main, not ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/remove-doors-v${RD_VERSION}" --silent 2>/dev/null; then
+            echo "::error::Remove Doors ${RD_VERSION} is already released. Raise \"version\" in packs/remove-doors/pack.json and its app's rednode-app.json."
+            exit 1
+          fi
+          node tools/release/notes.mjs --pack remove-doors --out "${RUNNER_TEMP}/rd-notes.md"
+          node tools/release/notes.mjs --pack remove-doors --nexus --out "${RUNNER_TEMP}/rd-nexus-notes.txt"
+
       - name: The README says this release
         if: inputs.release
         run: node tools/release/readme-check.mjs --version "${VERSION}"
@@ -112,7 +143,7 @@ jobs:
       # The Nexus tool, shared by the Edgemodders repos at this tag (REDnode's docs/edgerepo.md). Outside
       # the workspace, so nothing packs it.
       - name: The Nexus tool
-        if: inputs.release && inputs.nexus
+        if: (inputs.release || inputs.removeDoors) && inputs.nexus
         run: git -c advice.detachedHead=false clone --quiet --depth 1 --branch v1 https://github.com/Edgemodders/EDGErepo "$RUNNER_TEMP/EDGErepo"
 
       # Before anything is built or published: Nexus takes this release, and its description has no
@@ -125,6 +156,14 @@ jobs:
           node tools/check-bbcode.mjs nexus/description.bbcode
           node "$RUNNER_TEMP/EDGErepo/tools/nexus/nexus.mjs" check --version "${VERSION}"
 
+      - name: Nexus Mods can take Remove Doors
+        if: inputs.removeDoors && inputs.nexus
+        env:
+          NEXUS_KEY: ${{ secrets.NEXUS_KEY }}
+        run: |
+          node tools/check-bbcode.mjs packs/remove-doors/nexus/description.bbcode
+          node "$RUNNER_TEMP/EDGErepo/tools/nexus/nexus.mjs" check packs/remove-doors/nexus --version "${RD_VERSION}"
+
       - name: Install dependencies
         run: npm ci
 
@@ -132,10 +171,18 @@ jobs:
         id: package
         run: npm run package
 
+      # A release build when it is released (its changelog checked), a draft otherwise.
+      - name: Remove Doors' zip
+        id: removedoors
+        run: |
+          if [ "${{ inputs.removeDoors }}" = "true" ]; then node tools/release/pack-zip.mjs remove-doors; else node tools/release/pack-zip.mjs remove-doors --draft; fi
+
       - uses: actions/upload-artifact@v7
         with:
           name: edgebuilder-build
-          path: dist/EDGEbuilder-*.zip
+          path: |
+            dist/EDGEbuilder-*.zip
+            dist/RemoveDoors-*.zip
           if-no-files-found: error
 
       - name: GitHub release
@@ -152,3 +199,18 @@ jobs:
         env:
           NEXUS_KEY: ${{ secrets.NEXUS_KEY }}
         run: node "$RUNNER_TEMP/EDGErepo/tools/nexus/nexus.mjs" release --version "${VERSION}" --zip "${ZIP}" --notes "${RUNNER_TEMP}/nexus-notes.txt"
+
+      # Its own release, never marked the repository's latest: that stays EDGEbuilder's.
+      - name: GitHub release (Remove Doors)
+        id: rdgithub
+        if: ${{ inputs.removeDoors && !cancelled() && steps.removedoors.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "remove-doors-v${RD_VERSION}" "${RD_ZIP}" --target "${GITHUB_SHA}" --title "Remove Doors ${RD_VERSION}" --notes-file "${RUNNER_TEMP}/rd-notes.md" --latest=false
+
+      - name: Nexus Mods (Remove Doors)
+        if: ${{ inputs.removeDoors && inputs.nexus && !cancelled() && steps.rdgithub.outcome == 'success' }}
+        env:
+          NEXUS_KEY: ${{ secrets.NEXUS_KEY }}
+        run: node "$RUNNER_TEMP/EDGErepo/tools/nexus/nexus.mjs" release packs/remove-doors/nexus --version "${RD_VERSION}" --zip "${RD_ZIP}" --notes "${RUNNER_TEMP}/rd-nexus-notes.txt"

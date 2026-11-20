@@ -1,0 +1,17 @@
+{
+  "page": 39060,
+  "upload": {
+    "name": "Remove Doors",
+    "category": "main",
+    "primary": true,
+    "modManager": true,
+    "archivePrevious": true,
+    "description": "Remove Doors {version}: remove the game's doors near V from the world, and bring them back. Needs REDnode 0.67.3 or later and Codeware, on game 2.5."
+  },
+  "mod": "14315126036628",
+  "pulled": {
+    "sha256": "e88e9f9149515b2c8b8b2d5c00bc829cf0233541f0d737c25f86055af384ab8a",
+    "at": "2026-11-20T02:55:11.037Z",
+    "version": "1.0"
+  }
+}

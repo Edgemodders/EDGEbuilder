@@ -1,0 +1,13 @@
+{
+  "id": "remove-doors",
+  "name": "Remove Doors",
+  "version": "0.1.0",
+  "author": "Edgemodders",
+  "description": "Lists the game's doors near V, outlines them, and removes the one you pick from the world, with the stand-in the game shows in its place, so the doorway is open. Removed doors stay removed in every save while the app is on; Bring back, or switching the app off, returns them. Needs no REDbridge.",
+  "main": "mod.mjs",
+  "open": false,
+  "requires": {
+    "rednode": ">=0.67.3",
+    "codeware": ">=1.14"
+  }
+}

@@ -962,3 +962,29 @@ Before: REDbridge 0.16.0 fetched (EDGEdeck: **Get REDbridge** in VS Code, or **U
 **0.12.3 check (2026-11-20, the desktop, REDbridge 0.16.0): passed**, all four steps as written. Found: a scene or bake of removals alone read "0 objects" on the Bake tab and in the Library, as if it did nothing. **0.12.4** says what each adds and removes, in the owner's wording: "0 added, 2 removed" (the Scene tab, the Bake tab, the Picked panel), "+0 −2" in the Library's rows and the project's bakes, and a bake "(and their 2 stand-ins)". Look at those three tabs with D1b doors open before the release.
 
 **0.12.4 look (2026-11-20): passed** ("0 added, 2 removed", "+0 −2" and the bake's line as expected). Found: a tooltip with a long path (the Bake tab's bakes, the Library's rows) ran out of its box: REDnode's kit draws title tooltips in a 280 px box (`#rn-tip`) that never breaks a word, and a path has no spaces. **0.12.5** lets them break anywhere (`#rn-tip { overflow-wrap: anywhere }` in the page); checked in REDnode's host: a scene path wraps inside the box. Hover a bake and a Library row before the release.
+
+### Remove Doors 0.1.0 (a small REDnode app)
+
+Agreed with the owner on 2026-11-19: a small REDnode app of its own, `packs/remove-doors/`, shipped beside EDGEbuilder with its own version, changelog, zip (`tools/release/pack-zip.mjs`, `RemoveDoors-<version>.zip`) and Nexus page ([39060](https://www.nexusmods.com/cyberpunk2077/mods/39060)), released with the workflow's **Release Remove Doors** box. It lists the doors near V, outlines them, and removes the picked one with its stand-in through REDnode's world node registry (no REDbridge, no project, no files in the game); removed doors are kept in its data folder (`removed.json`) and hidden again after every load, each checked to be still that door (its kind and place) so a game patch never hides something else. Its window is built from Node with REDnode's `ui`. Checked in REDnode's host without the game: the window and its sections (the picture in the scratchpad). `pack.json` says `"unreleased"` until this test passes.
+
+Before: the game closed; Claude deploys the draft zip with EDGEdeck. EDGEbuilder's D1b doors bake is still in the game, so V's door and the elevator door beside it are gone: use other doors (V's secret room door, the far elevator doors, shutters, painted-on doors).
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Start the game. Before loading a save: F10, Mod Manager, switch **Remove Doors** on and pin it | Its window: two switches, Look again, Show all, and the three sections |
+| 2 | Load the save at V's flat | Within a few seconds, **Doors near V** lists doors with their distance and state |
+| 3 | **Show all** on, then off | On: every listed door outlined (white, colour 5); off: no outlines |
+| 4 | **Pick** a door (V's secret room door, or a far elevator door) | A **red** outline on it (colour 3); **Picked** names it |
+| 5 | **Remove** | The door goes; with Edit nothing, walk V through the doorway. It is listed under **Removed doors** |
+| 6 | Pick a painted-on door and **Remove** it | It goes |
+| 7 | Save, load that save | Within a few seconds both are gone again, with no stand-in in the doorway |
+| 8 | **Bring back** the first | The message says it shows as its stand-in until the area loads again; fast travel away and back: the working door |
+| 9 | Close the window with its X, then open it again from the launcher | The removed painted-on door is still listed and still gone |
+| 10 | Mod Manager: switch Remove Doors **off**, then **on** | Off: the painted-on door is back. On: gone again within a few seconds |
+| 11 | **Bring all back** | Every door back; the list is empty |
+
+| # | Question |
+|---|---|
+| RD1 | Is outline colour 3 red and 5 white, as REDnode's VATS spike found? |
+| RD2 | Do removals hold after a load, a window close and the app off and on? |
+| RD3 | Is the window clear enough for a player without the wiki? |
