@@ -5,6 +5,7 @@
   "rednode": ">=0.67.3",
   "summary": "A small REDnode app: the game's doors near V in a list, outlined in the game; pick one and remove it from the world, with its stand-in, and bring it back any time. Kept in every save while the app is on.",
   "guide": "https://edgemodders.ai/wiki/edgebuilder/remove-doors.html",
-  "apps": ["remove-doors"],
-  "unreleased": true
+  "apps": [
+    "remove-doors"
+  ]
 }
