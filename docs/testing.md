@@ -994,3 +994,31 @@ Before: the game closed; Claude deploys the draft zip with EDGEdeck. EDGEbuilder
 **Second run (2026-11-19):** the first run's missing outline was a stand-in the owner looked at (no outline reaches a stand-in); with see-through the outline came out **white**, not red. The owner asked for an eye icon after Pick in place of the LOOKING AT text, and a **Jump** button before Pick (V to the door, when there is a floor), since a painted-on door was out of reach. The next draft: the outline not see-through again (red, colour 3, as REDnode's VATS spike saw it), the eye, Jump (1.4 m in front, V's side first, the floor found by a raycast down from 1.5 m above to 3 m below, facing the door), the window 560 px wide.
 
 **Third run (2026-11-19, the 0.1.0 draft with Jump and the eye): passed, all eleven steps** (the owner: "Everything worked"). Scan Doors marks the door V looks at with an eye and picks it; Remove, Jump to a painted-on door out of reach, a save and load, Bring back, closing and reopening the window, the app off and on, and Bring all back all as written (RD2, RD3). **RD1: a door's outline is white whatever colour is sent** (3 and 5 both drew white, see-through or not); only REDnode's pin shows the colour, red on the picked door. So the picked door is told apart by its red "PICKED" pin, and with Show all on every door's outline is white.
+
+### D2 Open, close, lock (0.13.0)
+
+The last part of Doors first ([World objects, "D2 plan"](world-objects.md#doors-first-d0-to-d2)): a picked door's actions in the panel, kept in the scene as `door` world edits ([scene format 3](scene.md#format-3-draft-world-edits)) and set by EDGEbuilder in the running game, since a bake cannot set them (D5). Built on 2026-11-20; checked with the smoke test, not yet in REDnode's host or the game.
+
+Before: the game closed; Claude deploys EDGEbuilder 0.13.0 with EDGEdeck (0.12.5 off). A save at V's flat in Megabuilding H10, and a scene open (a new one, so other tests' removals are not in the way). V's door must not be removed by the scene.
+
+| # | Do | Expected | Answers |
+|---|---|---|---|
+| 1 | Load the save. **World** tab: pick V's door | **Picked in the world** has **Open**, **Close**, **Lock** beside Remove from world. A painted-on door, picked, has none of them | T1 |
+| 2 | **Open** | Within a second or two the door opens. "kept open while this scene is open". The row says **kept**; the Scene tab lists the door under World edits as "open", with Restore; the scene's count ends "1 door set" | T1 |
+| 3 | Stand by the door for 30 s | It stays open: it no longer closes by itself | T2 |
+| 4 | **Lock** | The button says **Unlock**; the Scene tab says "open, locked" | T1 |
+| 5 | **Close**. Edit off, and try to open the door as V | It closes; V cannot open it (locked) | T1 |
+| 6 | Ctrl+Z, then Ctrl+Y | Undo: the door opens again ("1 door set back"). Redo: closed again | T4 |
+| 7 | **Restore** on the Scene tab | The door is back as it was before step 2: closed, unlocked, and it closes by itself again. The list is empty | T4 |
+| 8 | **Open** again. Save, then load that save | After the load the door is open, and stays open | T3 |
+| 9 | Fast travel to another district and back | Still open | T3 |
+| 10 | Scene tab **Close**. Then open the scene again from the Library tab | Closed: the door goes back as it was (closed). Opened: it opens again | T4 |
+| 11 | The **Bake** tab | A line: a door's state is kept while the scene is open, and the bake leaves it out. With no objects and no removals: "nothing to bake yet" | |
+| 12 | Pick the elevator door and **Lock** it. Edit off: call the elevator | It does not open. Then **Restore** on the Scene tab: it works again | T1 |
+
+| # | Question |
+|---|---|
+| T1 | Do Open, Close, Lock and Unlock in the panel move the door, as D0's probe did? |
+| T2 | Does a door kept open stop closing by itself (its setup switched off), or does EDGEbuilder have to open it again? |
+| T3 | Is the kept state there after a save loads and after a fast travel? |
+| T4 | Do Restore, Undo and closing the scene put the door back as it was, closing by itself too? |

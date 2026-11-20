@@ -30,7 +30,7 @@ export { applyChange, collisionKey, boxOf, centreOf, copyOf, duplicate, makeGrou
 export { NpcList, PersonBounds, isRecord, npcEntry } from "./npcs";
 export { AssetIndex, IndexPrefixes, kindOf } from "./index";
 export { Scene, forReader, quaternionToYaw, readSceneFile, yawToQuaternion } from "./scene";
-export { DefaultKinds, DoorClasses, KindLabels, doorUnderRay, editFor, editId, editsDiff, idText, kindOfClass, questWarnings, rayToSegment, readableEdits, registryId, sameId } from "./worldedits";
+export { DefaultKinds, DoorClasses, KindLabels, doorActions, doorAfter, doorStateText, doorUnderRay, editCounts, editFor, editId, editsDiff, idText, kindOfClass, questWarnings, rayToSegment, readableEdits, registryId, sameId } from "./worldedits";
 export { cleanFolderName, fileNameOf, folderIn, freeFileName, libraryConfigFile, readLibraryRoot, refOf, scanShelf, slugOf, whereIs, writeLibraryRoot } from "./scenes";
 export { ModSources, NeedsNewerBridge, modArchives, sceneNeeds } from "./sources";
 export { PropEnding, checkModelPath, deskDir, propName, propSlug, scanModels } from "./models";

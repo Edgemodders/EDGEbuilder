@@ -117,7 +117,7 @@ Drafted on 2026-11-19 for D1, the Doors slice ([World objects, "Doors first"](wo
 | Field | Meaning |
 |---|---|
 | `id` | Unique in the scene |
-| `action` | `remove` (D1). Later edits (move, rescale, an appearance, a door's state in D2) get their own actions |
+| `action` | `remove` (D1) or `door` (D2: a door's state, below). Later edits (move, rescale, an appearance) get their own actions |
 | `what` | The picker's kind: `door`, `fakeDoor` or `mesh` |
 | `label` | What the Scene tab shows |
 | `node.sector`, `node.sectorHash` | The sector's depot path (empty if REDbridge did not name it) and its path hash, as REDnode's world node registry gives it |
@@ -127,5 +127,24 @@ Drafted on 2026-11-19 for D1, the Doors slice ([World objects, "Doors first"](wo
 | `fingerprint` | The file, appearance and place, to find the node again if a game patch renumbers the sector |
 | `proxies` | An entity's proxy meshes seen in the game (`worldEntityProxyMeshNode`s whose `ownerGlobalId` is the entity): the bake removes them too, and finds them itself when absent |
 | `ref` | The node's reference, when it has one: a quest can address a node that has one |
+| `door` | `door` only: the state the scene keeps, `open` and `locked`, each `true`, `false` or absent (as the game has it) |
+| `before` | `door` only: how the door was when the scene first set it (`open`, `locked`, `closesItself`), which Restore puts back |
+
+**A door's state (D2, EDGEbuilder 0.13.0).** A `door` edit keeps an interactive door open, closed, locked or unlocked while the scene is open or on. It names the door's `worldEntityNode` as a removal does, and has no `proxies`:
+
+```json
+{
+  "id": "door_single_door",
+  "action": "door",
+  "what": "door",
+  "label": "Door single_door.ent (doors_single_kitsch_g_frameless)",
+  "node": { "sector": "...", "sectorHash": "0x3c9117867951bc5a", "entry": 288, "node": 271, "type": "worldEntityNode", "globalId": "6132383399567759307" },
+  "fingerprint": { "position": [-1388.56, 1271.94, 123.07] },
+  "door": { "open": true },
+  "before": { "open": false, "locked": false, "closesItself": true }
+}
+```
+
+A bake cannot set a door's state (D0's D5: ArchiveXL's node mutations do not reach a node's instance data), so the bake leaves `door` edits out and EDGEbuilder sets them in the running game: when the scene opens, after a save loads, and when the door comes into the world again. A door kept open does not close itself while it is kept (its setup's `automaticallyClosesItself` is switched off). The door's state is the door's own, so it is also in the player's save.
 
 **Who reads it.** EDGEbuilder hides each removal live through REDnode's world node registry (`world.setVisible`) while the scene is open or on, and the bake (D1b) writes them as ArchiveXL node deletions through REDbridge's `sector.build`. REDnode's own reader (`world.load`) takes formats 1 and 2, so EDGEbuilder hands it a format 2 copy without `worldEdits` for the scenes that are on; other packages loading a format 3 scene through REDnode need its reader to take format 3 ([REDnode #51](https://github.com/Edgemodders/REDnode/issues/51)).

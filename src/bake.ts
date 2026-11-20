@@ -66,9 +66,10 @@ function atLeast(version: string | undefined, min: number[]): boolean {
  */
 export function bakeRemovals(edits: WorldEdit[] = []): { removals: { sector: string; index: number; kind: string; hash?: string }[]; unnamed: WorldEdit[] } {
   const named = edits.filter((e) => e.action === "remove" && e.node.sector);
+  const removalsAsked = edits.filter((e) => e.action === "remove");
   return {
     removals: named.map((e) => ({ sector: e.node.sector, index: e.node.entry, kind: e.node.type, ...(e.node.globalId ? { hash: e.node.globalId } : {}) })),
-    unnamed: edits.filter((e) => !named.includes(e)),
+    unnamed: removalsAsked.filter((e) => !named.includes(e)),
   };
 }
 
@@ -77,7 +78,8 @@ export function bakeHash(objects: SceneObject[], edits: WorldEdit[] = []): strin
     .filter((o) => Bakeable.has(o.kind))
     .map((o) => [o.id, o.kind, o.resource ?? "", o.appearance ?? "", o.transform, o.streaming ?? null, o.ref ?? "", o.props ?? null, ...(o.kind === "mesh" && o.solid ? ["solid"] : [])]);
   // A scene without removals hashes as before, so its bake does not look stale after the update.
-  const removals = edits.map((e) => [e.action, e.node.sector.toLowerCase(), e.node.entry, e.node.type]);
+  // Only removals are baked; a door's state is not (D5), so it never makes a bake stale.
+  const removals = edits.filter((e) => e.action === "remove").map((e) => [e.action, e.node.sector.toLowerCase(), e.node.entry, e.node.type]);
   return createHash("sha256").update(JSON.stringify(removals.length ? [parts, removals] : parts)).digest("hex").slice(0, 16);
 }
 
@@ -143,6 +145,8 @@ export function checkBake(input: {
   if (seenFar.length && !atLeast(input.bridgeVersion, [0, 12, 1])) say("warn", `REDbridge ${input.bridgeVersion} does not pass Seen from on to the game's own hide distance: ${seenFar.length === 1 ? "a mesh with Seen from shows" : `${seenFar.length} meshes with Seen from show`} only as far as the game allows for ${seenFar.length === 1 ? "its" : "their"} size (about 60 m for a crate). Update it to 0.12.1 or later (EDGEdeck: Get REDbridge).`);
   if (unnamed.length) say("warn", `Left out, since the sector ${unnamed.length === 1 ? "it is in has" : "they are in have"} no name (REDbridge was not running when ${unnamed.length === 1 ? "it was" : "they were"} removed): ${unnamed.map((e) => e.label).join(", ")}. Restore and remove ${unnamed.length === 1 ? "it" : "them"} again.`);
   if (removals.length && input.bridgeVersion && !atLeast(input.bridgeVersion, [0, 16, 0])) say("error", `REDbridge ${input.bridgeVersion} cannot bake removals: it needs 0.16.0 or later. Update it in EDGEdeck (Get REDbridge) or REDnode's Mod Manager.`);
+  const doorStates = (input.worldEdits ?? []).filter((e) => e.action === "door").length;
+  if (doorStates) say("info", `${doorStates === 1 ? "A door's state is" : `${doorStates} doors' states are`} kept while the scene is open in EDGEbuilder. A bake can't set a door's state, so the bake leaves ${doorStates === 1 ? "it" : "them"} out.`);
   if (removals.length) say("info", `${removals.length === 1 ? "1 of the game's own objects is" : `${removals.length} of the game's own objects are`} removed: the bake writes ${removals.length === 1 ? "it" : "them"} as ArchiveXL node deletions, with ${removals.length === 1 ? "its" : "their"} stand-in meshes, so the baked mod needs ArchiveXL. Finding the stand-ins can take half a minute the first time.`);
   if (plain) say("info", `${plain} mesh${plain === 1 ? " is" : "es are"} set not solid: V walks through ${plain === 1 ? "it" : "them"}. The Solid switch on the Scene tab changes that.`);
   if (solid.length) say("info", `${solid.length} mesh${solid.length === 1 ? "" : "es"} will stop V, bullets and cars. Entities keep their own collision.`);

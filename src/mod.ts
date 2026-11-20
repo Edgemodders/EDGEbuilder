@@ -41,14 +41,14 @@ import {
   type BakeProject,
 } from "./bake";
 import { Scene, forReader, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
-import { DefaultKinds, KindLabels, MeshNodeKinds, doorUnderRay, editFor, editId, idText, kindOfClass, questWarnings, readableEdits, registryId, sameId } from "./worldedits";
+import { DefaultKinds, KindLabels, MeshNodeKinds, doorActions, doorAfter, doorStateText, doorUnderRay, editFor, editId, idText, kindOfClass, questWarnings, readableEdits, registryId, sameId } from "./worldedits";
 import { movePreview, sameTransform } from "./move";
 import { checkModelPath, deskDir, scanModels } from "./models";
 import { isTextureLine, loadFab, type BridgeCall, type FabCore, type FabPrepared } from "./fab";
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, upright, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
-import { AnyLook, type AssetEntry, type AssetFrom, type AssetInfo, type AssetKind, type BakeRecord, type LibraryBake, type PageMessage, type Place, type PlaceRoot, type SceneObject, type SceneTransform, type Snapshot, type WorldEdit, type WorldKind, type WorldNodeRef, type WorldPicked, type WorldThing } from "./protocol";
+import { AnyLook, type AssetEntry, type AssetFrom, type AssetInfo, type AssetKind, type BakeRecord, type LibraryBake, type PageMessage, type Place, type PlaceRoot, type SceneObject, type SceneTransform, type Snapshot, type DoorState, type WorldEdit, type WorldKind, type WorldNodeRef, type WorldPicked, type WorldThing } from "./protocol";
 
 /** A base-game entity template that is a bare entity: no components, no appearances. The editor camera is this with a camera component attached. */
 const EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
@@ -752,9 +752,9 @@ async function travel(from: SceneState[], to: SceneState[], word: "Undo" | "Redo
   if (!s) return say(`Nothing to ${word.toLowerCase()}.`, "info");
   to.push({ ...scene.state(), selected: [...state.selected] });
   const ch = scene.restore(s);
-  let standIns = 0;
-  for (const e of ch.show) if (!(await showEdit(e))) standIns++;
-  for (const e of ch.hide) await hideEdit(e);
+  const standIns = await changeEdits(ch.show, ch.hide);
+  const count = (edits: WorldEdit[], action: WorldEdit["action"]) => edits.filter((e) => e.action === action).length;
+  const doorsChanged = new Set([...ch.show, ...ch.hide].filter((e) => e.action === "door").map((e) => registryId(e.node))).size;
   for (const o of ch.gone) await removePreview(o);
   for (const o of ch.respawn) await respawn(o);
   for (const o of ch.move) {
@@ -769,8 +769,9 @@ async function travel(from: SceneState[], to: SceneState[], word: "Undo" | "Redo
     moved ? `${moved} moved back` : "",
     ch.spawn.length ? `${ch.spawn.length} back${missing.length ? ` (${missing.join("; ")})` : ""}` : "",
     ch.gone.length ? `${ch.gone.length} taken out` : "",
-    ch.hide.length ? `${ch.hide.length} removed from the world again` : "",
-    ch.show.length ? `${ch.show.length} back in the world` : "",
+    count(ch.hide, "remove") ? `${count(ch.hide, "remove")} removed from the world again` : "",
+    count(ch.show, "remove") ? `${count(ch.show, "remove")} back in the world` : "",
+    doorsChanged ? `${doorsChanged} door${doorsChanged === 1 ? "" : "s"} ${word === "Undo" ? "set back" : "set again"}` : "",
   ].filter(Boolean);
   state.message = { text: `${word}${what.length ? `: ${what.join(", ")}` : ""}.${standInNote(standIns)}`, tone: "ok" };
   console.log(state.message.text);
@@ -1341,7 +1342,8 @@ async function lookNear(): Promise<WorldThing[]> {
         position: [p.X, p.Y, p.Z],
         distance: e.distance,
         door: what === "door" ? await doorStateOf(e.entity) : undefined,
-        removedBy: scene.worldEdits.find((x) => sameId(x.node.globalId, e.id.hash))?.id,
+        removedBy: scene.worldEdits.find((x) => x.action === "remove" && sameId(x.node.globalId, e.id.hash))?.id,
+        stateBy: scene.worldEdits.find((x) => x.action === "door" && sameId(x.node.globalId, e.id.hash))?.id,
       });
     }
   } catch (err) {
@@ -1574,7 +1576,7 @@ async function showEdit(e: WorldEdit): Promise<boolean> {
   const id = registryId(e.node);
   pendingHides.delete(id);
   const others = [...scene.worldEdits, ...[...onEdits.values()].flat()];
-  if (others.some((x) => registryId(x.node).toLowerCase() === id.toLowerCase())) return true;
+  if (others.some((x) => x.action === "remove" && registryId(x.node).toLowerCase() === id.toLowerCase())) return true;
   if (typeof world.setVisible !== "function") return true;
   for (const n of [e.node, ...(e.proxies ?? [])]) {
     try {
@@ -1609,11 +1611,15 @@ function hideAgainSoon(): void {
 /** The open scene's removals, and those of the scenes that are on, in the game again (a save loaded, a scene opened). */
 async function applyEdits(): Promise<void> {
   if (state.world !== "ready") return;
-  if (state.bake.inGame && scene.worldEdits.length) {
+  // Door states are never baked (D5): they are kept whether the scene's bake is in the game or not.
+  doorsIn.clear();
+  await keepDoors();
+  const removals = (edits: WorldEdit[]) => edits.filter((e) => e.action === "remove");
+  if (state.bake.inGame && removals(scene.worldEdits).length) {
     console.log(`World edits: ${scene.name}'s bake is in the game (${state.bake.inGame}), which removes them; nothing to hide`);
-    for (const e of scene.worldEdits) pendingHides.delete(registryId(e.node));
+    for (const e of removals(scene.worldEdits)) pendingHides.delete(registryId(e.node));
   }
-  const all = [...(state.bake.inGame ? [] : scene.worldEdits), ...[...onEdits.values()].flat()];
+  const all = removals([...(state.bake.inGame ? [] : scene.worldEdits), ...[...onEdits.values()].flat()]);
   if (!all.length) return;
   let done = 0;
   for (const e of all) if (await hideEdit(e)) done++;
@@ -1663,10 +1669,231 @@ async function restoreEdit(id: string): Promise<void> {
   step();
   scene.worldEdits = scene.worldEdits.filter((x) => x !== e);
   scene.save();
-  const working = await showEdit(e);
-  for (const t of state.worldObjects.things) if (t.removedBy === id) t.removedBy = undefined;
-  if (state.worldObjects.picked?.removedBy === id) state.worldObjects.picked.removedBy = undefined;
+  const working = await unapplyEdit(e);
+  for (const t of [...state.worldObjects.things, ...(state.worldObjects.picked ? [state.worldObjects.picked] : [])]) {
+    if (t.removedBy === id) t.removedBy = undefined;
+    if (t.stateBy === id) t.stateBy = undefined;
+  }
+  if (e.action === "door") {
+    void refreshPickedDoor();
+    return say(`${e.label} is no longer kept ${doorStateText(e.door)}${e.before ? `: it is back as it was (${doorStateText(e.before)})` : ""}. Undo keeps it again.`, "ok");
+  }
   say(`Restored ${e.label}: it is back in the world. Undo removes it again.${standInNote(working ? 0 : 1)}`, working ? "ok" : "info");
+}
+
+// ---- door states (D2) ----------------------------------------------------------------------------
+// A scene can keep a door open, closed, locked or unlocked. A bake cannot set a door's state (D5), so
+// EDGEbuilder sets it in the running game: when the scene opens or a save loads, and each time the door
+// comes into the world again. In between the player is free to use the door, except that a door kept
+// open does not close itself (its setup's `automaticallyClosesItself` is switched off while it is kept).
+// The state is the door's own, kept in the player's save (D4); Restore and Undo put back how it was.
+
+/** How often the doors a scene keeps are looked at, in ms: whether each is in the world, newly or still. */
+const DoorWatch = 4000;
+let doorTimer: ReturnType<typeof setInterval> | undefined;
+/** The door edits whose door was in the world at the last look, and has its state already. */
+const doorsIn = new Set<string>();
+/** Doors kept open whose closing by itself could not be switched off: opened again when they close. */
+const autoCloses = new Set<string>();
+
+function doorEdits(): WorldEdit[] {
+  return [...scene.worldEdits, ...[...onEdits.values()].flat()].filter((e) => e.action === "door");
+}
+
+async function doorEntity(e: Pick<WorldEdit, "node">): Promise<GameRef | null> {
+  if (!e.node.globalId || state.world !== "ready") return null;
+  return world.entity(e.node.globalId).catch(() => null);
+}
+
+/** Switches a door's closing by itself on or off; true when its setup says so afterwards. */
+async function setClosesItself(entity: GameRef, value: boolean): Promise<boolean> {
+  try {
+    const ps = (await entity.GetDevicePS()) as GameRef | null;
+    const setup = (await ps?.$get("doorProperties")) as Record<string, unknown> | null | undefined;
+    if (!ps || !setup || typeof setup !== "object") return false;
+    if (setup.automaticallyClosesItself === value) return true;
+    await ps.$set("doorProperties", { ...setup, automaticallyClosesItself: value });
+    const back = (await ps.$get("doorProperties")) as Record<string, unknown> | null;
+    return back?.automaticallyClosesItself === value;
+  } catch (err) {
+    console.log(`A door's closing by itself was not changed: ${(err as Error).message}`);
+    return false;
+  }
+}
+
+/** Runs the door's own actions (as its terminals and quickhacks do) that bring it from `now` to `want`. */
+async function runDoorActions(entity: GameRef, now: DoorState, want: DoorState): Promise<number> {
+  const acts = doorActions(now, want);
+  if (!acts.length) return 0;
+  const ps = (await entity.GetDevicePS()) as GameRef;
+  const persistency = (await api.GameInstance.GetPersistencySystem(game.instance)) as GameRef;
+  for (const a of acts) await persistency.QueuePSDeviceEvent(await (ps[a] as () => Promise<unknown>)());
+  return acts.length;
+}
+
+/** Puts a door in the state its edit keeps. False when the door is not in the world, or has no state. */
+async function enforceDoor(e: WorldEdit, entity?: GameRef | null): Promise<boolean> {
+  if (!e.door) return false;
+  const door = entity ?? (await doorEntity(e));
+  if (!door) return false;
+  const now = await doorStateOf(door);
+  if (!now) return false;
+  const id = registryId(e.node).toLowerCase();
+  try {
+    if (e.door.open === true && now.closesItself !== false) {
+      if (await setClosesItself(door, false)) autoCloses.delete(id);
+      else autoCloses.add(id);
+    }
+    const n = await runDoorActions(door, now, e.door);
+    if (n) console.log(`${e.id}: ${doorStateText(now)} → ${doorStateText({ ...now, ...e.door })}`);
+    return true;
+  } catch (err) {
+    console.log(`${e.id}: its state was not set: ${(err as Error).message}`);
+    return false;
+  }
+}
+
+/** Puts a door back as it was before its edit, unless another scene that is open or on keeps it too. */
+async function revertDoor(e: WorldEdit): Promise<boolean> {
+  const id = registryId(e.node).toLowerCase();
+  doorsIn.delete(id);
+  autoCloses.delete(id);
+  if (doorEdits().some((x) => registryId(x.node).toLowerCase() === id)) return true;
+  const door = await doorEntity(e);
+  if (!door) {
+    if (state.world === "ready") console.log(`${e.id}: its door is not in the world, so it stays as the save has it`);
+    return true;
+  }
+  const now = await doorStateOf(door);
+  if (!now || !e.before) return true;
+  if (e.before.closesItself !== undefined) await setClosesItself(door, e.before.closesItself);
+  try {
+    await runDoorActions(door, now, { open: e.door?.open === undefined ? undefined : e.before.open, locked: e.door?.locked === undefined ? undefined : e.before.locked });
+  } catch (err) {
+    console.log(`${e.id}: it was not put back: ${(err as Error).message}`);
+  }
+  return true;
+}
+
+/** One look at the doors the scenes keep: a door that came into the world gets its state. */
+async function keepDoors(): Promise<void> {
+  const edits = doorEdits();
+  if (!edits.length || state.world !== "ready") {
+    if (!edits.length && doorTimer) {
+      clearInterval(doorTimer);
+      doorTimer = undefined;
+    }
+    if (!edits.length) doorsIn.clear();
+    return;
+  }
+  if (!doorTimer) doorTimer = setInterval(() => void keepDoors(), DoorWatch);
+  for (const e of edits) {
+    const id = registryId(e.node).toLowerCase();
+    const door = await doorEntity(e);
+    if (!door) {
+      doorsIn.delete(id);
+      continue;
+    }
+    if (!doorsIn.has(id)) {
+      if (await enforceDoor(e, door)) doorsIn.add(id);
+    } else if (autoCloses.has(id)) {
+      // It closes itself and that could not be switched off: open it again.
+      await enforceDoor(e, door);
+    }
+  }
+}
+
+/** Applies an edit in the game: a removal hidden, a door's state set. */
+async function applyEdit(e: WorldEdit): Promise<boolean> {
+  if (e.action !== "door") return hideEdit(e);
+  const done = await enforceDoor(e);
+  if (done) doorsIn.add(registryId(e.node).toLowerCase());
+  void keepDoors();
+  return done;
+}
+
+/** Takes an edit back in the game. False only for a door brought back as its stand-in. */
+async function unapplyEdit(e: WorldEdit): Promise<boolean> {
+  const done = e.action === "door" ? await revertDoor(e) : await showEdit(e);
+  void keepDoors();
+  return done;
+}
+
+/** Edits taken back and applied (Undo, Redo): a door whose kept state only changed is not put back first. Returns how many doors came back as stand-ins. */
+async function changeEdits(back: WorldEdit[], on: WorldEdit[]): Promise<number> {
+  const staying = new Set(on.filter((e) => e.action === "door").map((e) => registryId(e.node).toLowerCase()));
+  let standIns = 0;
+  for (const e of back) {
+    if (e.action === "door" && staying.has(registryId(e.node).toLowerCase())) continue;
+    if (!(await unapplyEdit(e))) standIns++;
+  }
+  for (const e of on) await applyEdit(e);
+  return standIns;
+}
+
+/** The picked door's state read again, a moment after its actions ran (the game moves it within 1.5 s, D4). */
+async function refreshPickedDoor(): Promise<void> {
+  const p = state.worldObjects.picked;
+  if (!p || p.what !== "door") return;
+  await new Promise((r) => setTimeout(r, 1500));
+  if (state.worldObjects.picked !== p) return;
+  const entity = liveThings.get(p.key) ?? (await world.entity(p.key).catch(() => null));
+  if (!entity) return;
+  p.door = await doorStateOf(entity);
+  for (const t of state.worldObjects.things) if (t.key === p.key) t.door = p.door;
+  publish();
+}
+
+/** Open, Close, Lock, Unlock on the picked door: done now, and kept in the scene. One undo step. */
+async function doorAction(act: "open" | "close" | "lock" | "unlock"): Promise<void> {
+  const p = state.worldObjects.picked;
+  if (!scene.file) return say(NoScene, "warn");
+  if (!p || p.what !== "door") return say("Pick a door that opens first: with Edit on, click one, or pick it on the World tab.", "warn");
+  if (!p.node) {
+    await findNode(p, pickSeq);
+    if (!p.node) return say(`${p.label}: ${p.note ?? "its node was not found"}`, "warn");
+  }
+  const removed = editFor(scene.worldEdits, p.node);
+  if (removed) return say(`${p.label} is removed from the world (${removed.id}): Restore it on the Scene tab first.`, "info");
+  const entity = liveThings.get(p.key) ?? (await world.entity(p.key).catch(() => null));
+  if (!entity) return say(`${p.label} is not in the world now: go near it, then pick it again.`, "warn");
+  const now = await doorStateOf(entity);
+  if (!now || (now.open === undefined && now.locked === undefined)) return say(`${p.label} has no state the game lets EDGEbuilder set.`, "warn");
+  const old = editFor(scene.worldEdits, p.node, "door");
+  const want = doorAfter(old?.door ?? {}, act);
+  step();
+  let e: WorldEdit;
+  if (old) {
+    // The past keeps its own copy (scene.state() copies the edits), so this one can change.
+    old.door = want;
+    e = old;
+  } else {
+    e = {
+      id: editId(p.label, scene.worldEdits, "door"),
+      action: "door",
+      what: "door",
+      label: p.label,
+      node: p.node,
+      fingerprint: { ...(p.resource ? { resource: p.resource } : {}), ...(p.appearance ? { appearance: p.appearance } : {}), position: p.position },
+      door: want,
+      before: { open: now.open, locked: now.locked, ...(now.closesItself !== undefined ? { closesItself: now.closesItself } : {}) },
+      ...(p.ref ? { ref: p.ref } : {}),
+    };
+    scene.worldEdits.push(e);
+  }
+  scene.save();
+  // A door kept open no longer closes itself; one only kept closed or locked gets it back.
+  if (want.open !== true && e.before?.closesItself === true) await setClosesItself(entity, true);
+  const done = await applyEdit(e);
+  p.stateBy = e.id;
+  for (const t of state.worldObjects.things) if (t.key === p.key) t.stateBy = e.id;
+  say(
+    done
+      ? `${p.label}: kept ${doorStateText(want)} while this scene is open in EDGEbuilder (the door's state is also in your save). Restore on the Scene tab, or Undo, puts it back as it was.`
+      : `${p.label}: kept ${doorStateText(want)} in the scene, but the game did not take it yet (the log says why); it is tried again when the door comes into the world.`,
+    done ? "ok" : "warn",
+  );
+  void refreshPickedDoor();
 }
 
 function setKinds(kinds: WorldKind[]): void {
@@ -2052,7 +2279,7 @@ async function switchTo(data: SceneFile, file: string): Promise<void> {
   const leaving = scene.worldEdits;
   scene.worldEdits = [];
   switchStandIns = 0;
-  for (const e of leaving) if (!(await showEdit(e))) switchStandIns++;
+  for (const e of leaving) if (!(await unapplyEdit(e))) switchStandIns++;
   await clearPicked();
   state.selected = [];
   state.duplicated = undefined;
@@ -2185,7 +2412,7 @@ async function loadOn(file: string): Promise<number> {
   const edits = readableEdits(data.worldEdits);
   if (edits.length) {
     onEdits.set(file, edits);
-    for (const e of edits) await hideEdit(e);
+    for (const e of edits) await applyEdit(e);
   } else onEdits.delete(file);
   return r.spawned.length;
 }
@@ -2211,7 +2438,7 @@ async function sceneOff(file: string): Promise<void> {
   console.log(`No longer showing ${path.basename(known)}`);
   const edits = onEdits.get(known) ?? [];
   onEdits.delete(known);
-  for (const e of edits) await showEdit(e);
+  for (const e of edits) await unapplyEdit(e);
   if (typeof world.unload === "function") await world.unload(known).catch((err) => console.log(`Unload ${known}: ${(err as Error).message}`));
   publish();
 }
@@ -2422,6 +2649,9 @@ channel.on<PageMessage>((m) => {
         break;
       case "world.remove":
         await inTurn("Remove from world", () => removePicked());
+        break;
+      case "world.door":
+        await inTurn("Door", () => doorAction(m.act));
         break;
       case "world.restore":
         await inTurn("Restore", () => restoreEdit(m.id));

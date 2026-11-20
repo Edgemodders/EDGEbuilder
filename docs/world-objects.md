@@ -124,6 +124,15 @@ The four choices: the World tab looks around the camera through REDnode's regist
 
 **Risks:** removing a door a mission locks or opens can break that mission or let V into unfinished space (the warnings above). Opening a door changes the player's save, unlike a hide: D2 says so, and Restore puts the door back as it was. Other mods' sectors stay out, as below.
 
-## Not in this plan
+**D2 plan** (built on 2026-11-20 as EDGEbuilder 0.13.0, the owner having agreed D0 to D2 on 2026-11-18; D5 settled that it runs through REDnode):
+
+| Part | Delivers |
+|---|---|
+| **The panel** | **Open**, **Close** and **Lock** / **Unlock** in **Picked in the world**, for a door that opens (not a painted-on door, which has no state). Each runs the door's own action (`ActionSetOpened`, `ActionSetClosed`, `ActionToggleLock`, queued with `QueuePSDeviceEvent`, as D0's probe did) and keeps the result in the open scene as a `door` world edit ([scene format 3](scene.md#format-3-draft-world-edits)): only what was set, so Open alone keeps the lock as the game has it. One undo step each |
+| **Kept** | EDGEbuilder sets the kept state when the scene opens, after a save loads, and each time the door comes into the world again (a look every 4 s at the doors a scene keeps). In between the player can use the door. A door kept open has its closing by itself switched off while it is kept; if the game refuses that, EDGEbuilder opens it again when it closes |
+| **Back** | Restore (on the Scene tab, or in the panel), Undo, closing the scene and switching a scene off put the door back as it was before the scene first set it, closing by itself too |
+| **Not baked** | The bake leaves door states out and says so; they never make a bake stale. Scenes that are on keep their doors too |
+
+
 
 Editing NPCs from crowds and traffic, which have no node; changing a node's materials or components beyond its appearance; and editing objects in other mods' sectors beyond hiding them, until the owner decides how a scene should depend on another author's mod.

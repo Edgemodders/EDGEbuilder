@@ -10,6 +10,16 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**New**
+
+- Open, Close, Lock and Unlock a picked door on the World tab. The scene keeps the door that way while it is open in EDGEbuilder: after a save loads, after a fast travel, and each time the door comes back into the world. Restore and Undo put the door back as it was.
+- A door kept open no longer closes by itself while the scene keeps it.
+- The Scene tab lists the doors a scene keeps, with their state, beside what it removes; scenes and bakes count them ("0 added, 0 removed, 1 door set").
+
+**Other**
+
+- A bake leaves door states out, since the game's files cannot set them, and the Bake tab says so.
+
 ## 0.12.5 (2026-11-19)
 
 <!-- nexus

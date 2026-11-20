@@ -5,6 +5,7 @@ import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../ma
 import type { AssetEntry, AssetFrom, AssetKind, ImportCollision, LibraryBake, ModelEntry, PageMessage, Place, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
 import { held } from "./held";
 import { Viewport, busyText } from "./viewport";
+import { doorStateText } from "../worldedits";
 
 declare const RednodeUI: { notify(text: string, options?: Record<string, unknown>): void } | undefined;
 
@@ -154,7 +155,7 @@ function render(s: Snapshot): void {
   // Scene.
   $("objects").innerHTML = sceneRows(s);
   const groupCount = s.scene.groups.length;
-  $("sceneCount").textContent = `${holds(s.scene.objects.length, s.scene.worldEdits.length)}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
+  $("sceneCount").textContent = `${holds(s.scene.objects.length, editCount(s).removals, false, editCount(s).doors)}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
   $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
   const sel = s.scene.objects.filter((o) => s.selected.includes(o.id));
   if (dropAsked && sel.length && sel.every((o) => !knownIds.has(o.id))) {
@@ -222,8 +223,15 @@ function render(s: Snapshot): void {
  * objects never reads as doing nothing (the owner's wording, 2026-11-20): `0 added, 2 removed`; short,
  * for list rows, `+0 −2`.
  */
-function holds(objects: number, removals = 0, short = false): string {
-  return short ? `+${objects} −${removals}` : `${objects} added, ${removals} removed`;
+function holds(objects: number, removals = 0, short = false, doors = 0): string {
+  const kept = doors ? (short ? `, ${doors} door${doors === 1 ? "" : "s"}` : `, ${doors} door${doors === 1 ? "" : "s"} set`) : "";
+  return (short ? `+${objects} −${removals}` : `${objects} added, ${removals} removed`) + kept;
+}
+
+/** The open scene's world edits counted: what it removes, and the doors whose state it keeps (D2). */
+function editCount(s: Snapshot): { removals: number; doors: number } {
+  const e = s.scene.worldEdits;
+  return { removals: e.filter((x) => x.action === "remove").length, doors: e.filter((x) => x.action === "door").length };
 }
 
 /** The count in the kind's own word, so an empty list says why: `0 entities found`, `1 mesh found for "katana"`. The tab says where. */
@@ -651,7 +659,7 @@ function libraryRows(s: Snapshot): string {
       for (const sc of sh.scenes.filter((x) => x.folder === folder)) {
         const open = sameFile(sc.file, s.scene.file ?? "");
         const tags = `${open ? '<span class="tag">open</span>' : ""}${isOn(sc.file) ? '<span class="tag">shown</span>' : ""}`;
-        const end = sc.error ? "cannot be read" : `${open ? holds(s.scene.objects.length, s.scene.worldEdits.length, true) : holds(sc.objects, sc.removals, true)} · ${when(sc.changed)}`;
+        const end = sc.error ? "cannot be read" : `${open ? holds(s.scene.objects.length, editCount(s).removals, true, editCount(s).doors) : holds(sc.objects, sc.removals, true, sc.doors)} · ${when(sc.changed)}`;
         rows.push(
           `<rn-item value="f:${esc(sc.file)}" title="${esc(sc.error ? `${sc.file}\n${sc.error}` : sc.file)}"${isPicked({ kind: "scene", file: sc.file }) ? " selected" : ""}${pad(depth)}><span class="fold"></span>${esc(sc.name)}${tags}<span slot="end">${esc(end)}</span></rn-item>`,
         );
@@ -725,7 +733,7 @@ let bakeConfirm: string | undefined;
 function renderBake(s: Snapshot): void {
   const b = s.bake;
   const n = s.scene.objects.length;
-  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${holds(n, s.scene.worldEdits.length)}` : "No scene open";
+  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${holds(n, editCount(s).removals, false, editCount(s).doors)}` : "No scene open";
   $("bakeInto").textContent = b.project ? `Into the REDcode project ${b.project.name}` : "";
   $("bakeInto").title = b.project?.dir ?? "";
   const checks = b.checks.map((c) => `<div class="check ${c.tone}">${esc(c.text)}</div>`).join("");
@@ -860,7 +868,7 @@ function renderLibrary(s: Snapshot): void {
   const open = !!sc && sameFile(sc.file, s.scene.file ?? "");
   const on = !!sc && s.library.on.some((f) => sameFile(f, sc.file));
   if (sc)
-    $("pickedText").textContent = `${sc.name}${open ? " (open)" : on ? " (shown in the world)" : ""}\n${whereLabel(s, sc.place, sc.folder)}\n${sc.error ? `Cannot be read: ${sc.error}` : `${open ? holds(s.scene.objects.length, s.scene.worldEdits.length) : holds(sc.objects, sc.removals)}, changed ${when(sc.changed)}`}\n${sc.file}`;
+    $("pickedText").textContent = `${sc.name}${open ? " (open)" : on ? " (shown in the world)" : ""}\n${whereLabel(s, sc.place, sc.folder)}\n${sc.error ? `Cannot be read: ${sc.error}` : `${open ? holds(s.scene.objects.length, editCount(s).removals, false, editCount(s).doors) : holds(sc.objects, sc.removals, false, sc.doors)}, changed ${when(sc.changed)}`}\n${sc.file}`;
   else if (picked?.kind === "folder") $("pickedText").textContent = `Folder: ${whereLabel(s, picked.place, picked.folder)}`;
   else if (lb) $("pickedText").textContent = bakeText(s, lb);
   else if (picked?.kind === "model") void 0;
@@ -1234,6 +1242,7 @@ let worldHtml = "";
 let editsHtml = "";
 let hoverKey: string | null = null;
 const WorldTab = 3;
+const DoorButtons = ["doorOpen", "doorClose", "doorLock", "doorRestore"];
 
 /** A door's state in a few words: `closed, locked`. */
 function doorText(d: WorldThing["door"]): string {
@@ -1257,7 +1266,7 @@ function renderWorld(s: Snapshot): void {
   const picked = wo.picked;
   const rows = wo.things
     .map((t) => {
-      const end = [t.removedBy ? '<span class="tag warn">removed</span>' : "", esc(doorText(t.door)), t.distance !== undefined ? `${t.distance.toFixed(1)} m` : ""].filter(Boolean).join(" ");
+      const end = [t.removedBy ? '<span class="tag warn">removed</span>' : "", t.stateBy ? '<span class="tag">kept</span>' : "", esc(doorText(t.door)), t.distance !== undefined ? `${t.distance.toFixed(1)} m` : ""].filter(Boolean).join(" ");
       return `<rn-item value="${esc(t.key)}" title="${esc([t.resource, t.appearance].filter(Boolean).join("\n"))}"${picked?.key === t.key ? " selected" : ""}>${esc(t.label)}<span slot="end">${end}</span></rn-item>`;
     })
     .join("");
@@ -1274,11 +1283,13 @@ function renderWorld(s: Snapshot): void {
     $("worldRemove").setAttribute("disabled", "");
     $("worldRemove").hidden = false;
     $("worldRestore").hidden = true;
+    for (const id of DoorButtons) $(id).hidden = true;
     $("worldGo").setAttribute("disabled", "");
     return;
   }
   const node = picked.node;
   const d = picked.door;
+  const kept = picked.stateBy ? s.scene.worldEdits.find((e) => e.id === picked.stateBy) : undefined;
   const where = node ? `${node.type}, entry ${node.entry} (node ${node.node}) in ${node.sector ? shortName(node.sector) : node.sectorHash}` : "";
   $("worldPicked").textContent = [
     picked.label,
@@ -1290,6 +1301,7 @@ function renderWorld(s: Snapshot): void {
     picked.ref ? `reference ${picked.ref}` : "",
     picked.proxies?.length ? `and its proxy mesh: ${picked.proxies.map((p) => `entry ${p.entry} in ${p.sector ? shortName(p.sector) : p.sectorHash}`).join(", ")}` : "",
     picked.removedBy ? `Removed by this scene (${picked.removedBy}).` : "",
+    kept ? `Kept ${doorStateText(kept.door)} by this scene (${kept.id}).` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -1300,6 +1312,19 @@ function renderWorld(s: Snapshot): void {
   $("worldRemove").toggleAttribute("disabled", removed || !s.scene.file || wo.status === "unavailable" || (!node && !!picked.note && !picked.note.startsWith("Looking")));
   $("worldRemove").title = !s.scene.file ? "Open a scene first: a removal is kept in the open scene" : "Delete. Hidden now, kept in the scene; Restore or Undo brings it back";
   $("worldRestore").hidden = !removed;
+  // D2: a door that opens gets its actions; the scene keeps what they set.
+  const canSet = picked.what === "door" && !!d && (d.open !== undefined || d.locked !== undefined) && !removed;
+  const off = !s.scene.file || s.world !== "ready" || (!node && !!picked.note && !picked.note.startsWith("Looking"));
+  const want = kept?.door ?? {};
+  for (const id of DoorButtons) $(id).hidden = !canSet;
+  $("doorOpen").toggleAttribute("disabled", off || (want.open === true && d?.open === true));
+  $("doorClose").toggleAttribute("disabled", off || (want.open === false && d?.open === false));
+  const locked = want.locked ?? d?.locked ?? false;
+  $("doorLock").textContent = locked ? "Unlock" : "Lock";
+  $("doorLock").title = locked ? "Unlock the door, and keep it unlocked while this scene is open" : "Lock the door, and keep it locked while this scene is open";
+  $("doorLock").toggleAttribute("disabled", off || d?.locked === undefined);
+  $("doorRestore").hidden = !canSet || !kept;
+  for (const id of ["doorOpen", "doorClose", "doorLock"]) if (!s.scene.file) $(id).title = "Open a scene first: a door's state is kept in the open scene";
   $("worldGo").toggleAttribute("disabled", s.world !== "ready");
 }
 
@@ -1307,9 +1332,15 @@ function renderWorld(s: Snapshot): void {
 function renderEdits(s: Snapshot): void {
   const edits = s.scene.worldEdits;
   $("editsTitle").hidden = $("worldEdits").hidden = !edits.length;
-  $("editsTitle").textContent = `World edits: this scene removes ${edits.length} of the game's own objects while it is open`;
+  const c = editCount(s);
+  $("editsTitle").textContent = `World edits, while this scene is open: ${[c.removals ? `${c.removals} of the game's own objects removed` : "", c.doors ? `${c.doors} door${c.doors === 1 ? "" : "s"} kept as set` : ""].filter(Boolean).join(", ")}`;
   const html = edits
-    .map((e) => `<rn-item value="${esc(e.id)}" title="${esc(`${e.node.sector || e.node.sectorHash}, entry ${e.node.entry}${e.ref ? `\n${e.ref}` : ""}`)}">${esc(e.label)}<span slot="end"><button data-restore="${esc(e.id)}" title="Take it out of the scene: it is back in the world">Restore</button></span></rn-item>`)
+    .map((e) => {
+      const door = e.action === "door";
+      const end = door ? `<span class="tag">${esc(doorStateText(e.door))}</span> ` : "";
+      const tip = door ? "Take it out of the scene: the door goes back as it was" : "Take it out of the scene: it is back in the world";
+      return `<rn-item value="${esc(e.id)}" title="${esc(`${e.node.sector || e.node.sectorHash}, entry ${e.node.entry}${e.ref ? `\n${e.ref}` : ""}`)}">${esc(e.label)}<span slot="end">${end}<button data-restore="${esc(e.id)}" title="${tip}">Restore</button></span></rn-item>`;
+    })
     .join("");
   if (html !== editsHtml) $("worldEdits").innerHTML = editsHtml = html;
 }
@@ -1356,6 +1387,13 @@ $("worldList").addEventListener("mouseleave", () => {
   post({ type: "world.hover", key: null });
 });
 $("worldRemove").addEventListener("click", () => post({ type: "world.remove" }));
+$("doorOpen").addEventListener("click", () => post({ type: "world.door", act: "open" }));
+$("doorClose").addEventListener("click", () => post({ type: "world.door", act: "close" }));
+$("doorLock").addEventListener("click", () => post({ type: "world.door", act: $("doorLock").textContent === "Unlock" ? "unlock" : "lock" }));
+$("doorRestore").addEventListener("click", () => {
+  const id = state?.worldObjects.picked?.stateBy;
+  if (id) post({ type: "world.restore", id });
+});
 $("worldRestore").addEventListener("click", () => {
   const id = state?.worldObjects.picked?.removedBy;
   if (id) post({ type: "world.restore", id });

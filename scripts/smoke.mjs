@@ -569,6 +569,29 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   fs.mkdirSync(path.join(fakeGame, "archive", "pc", "mod"), { recursive: true });
   fs.copyFileSync(path.join(xlDir, "d1b_doors.archive.xl"), path.join(fakeGame, "archive", "pc", "mod", "d1b_doors.archive.xl"));
   assert.equal(deployedBakes(fakeGame).get("d1b_doors"), "d1b_doors.archive.xl", "and seen in the game");
+  // D2: a door kept open, closed or locked.
+  const kept = { ...door, id: "door_single_door", action: "door", door: { open: true }, before: { open: false, locked: false, closesItself: true } };
+  assert.equal(m.editId(door.label, [], "door"), "door_single_door");
+  assert.equal(m.editFor([door, kept], door.node, "door"), kept, "a door state is found by its action");
+  assert.equal(m.editFor([kept], door.node), undefined, "and is not a removal");
+  assert.deepEqual(m.doorAfter({}, "open"), { open: true });
+  assert.deepEqual(m.doorAfter({ open: true }, "lock"), { open: true, locked: true }, "lock keeps what was set");
+  assert.deepEqual(m.doorAfter({ open: true, locked: true }, "close"), { open: false, locked: true });
+  assert.deepEqual(m.doorActions({ open: false, locked: false }, { open: true }), ["ActionSetOpened"]);
+  assert.deepEqual(m.doorActions({ open: true, locked: false }, { open: false, locked: true }), ["ActionToggleLock", "ActionSetClosed"], "lock first, then close");
+  assert.deepEqual(m.doorActions({ open: true, locked: true }, { open: true, locked: true }), [], "nothing when it is so already");
+  assert.deepEqual(m.doorActions({ open: undefined }, { open: true }), [], "nothing to do without a known state");
+  assert.equal(m.doorStateText({ open: false, locked: true }), "closed, locked");
+  const reopened = m.editsDiff([kept], [{ ...kept, door: { open: false } }]);
+  assert.deepEqual([reopened.hide.length, reopened.show.length], [1, 1], "a changed state is taken back and applied again");
+  assert.equal(m.editsDiff([kept], [kept]).hide.length, 0);
+  assert.equal(m.readableEdits([kept, { ...kept, door: undefined }]).length, 1, "a door edit needs its state");
+  assert.deepEqual(m.editCounts([door, kept]), { removals: 1, doors: 1 });
+  assert.equal(m.bakeHash(plainCrate, [kept]), m.bakeHash(plainCrate), "a door state never makes a bake stale");
+  assert.deepEqual(m.bakeRemovals([kept]).removals, [], "nor goes into one");
+  const onlyDoors = m.checkBake({ file: "f", name: "Doors", objects: [], project, bridgeReady: true, needs: [], worldEdits: [kept] });
+  assert.ok(onlyDoors.some((x) => x.tone === "error" && /nothing to bake/.test(x.text)), "door states alone are nothing to bake");
+  assert.ok(onlyDoors.some((x) => x.tone === "info" && /state is kept/.test(x.text)), "and the bake says why");
   console.log("world edits: ok");
 }
 

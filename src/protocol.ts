@@ -103,10 +103,17 @@ export interface WorldNodeRef {
   globalId?: string;
 }
 
-/** One change a scene makes to the game's own world (scene format 3). D1: removals. */
+/** A door's state as a scene sets it (D2): open or closed, locked or not; absent means as the game has it. */
+export interface DoorState {
+  open?: boolean;
+  locked?: boolean;
+}
+
+/** One change a scene makes to the game's own world (scene format 3). D1: removals; D2: a door's state. */
 export interface WorldEdit {
   id: string;
-  action: "remove";
+  /** `remove`: out of the world (D1). `door`: a door kept open, closed or locked (D2), in the running game only. */
+  action: "remove" | "door";
   what: WorldKind;
   /** What the panel and the Scene tab call it, such as `Door single_door.ent (doors_single_kitsch_g)`. */
   label: string;
@@ -117,6 +124,10 @@ export interface WorldEdit {
   proxies?: WorldNodeRef[];
   /** The node's reference, when it has one: a quest can address a node that has one. */
   ref?: string;
+  /** D2, `door` only: the state the scene keeps the door in. */
+  door?: DoorState;
+  /** D2, `door` only: how the door was before, which Restore and Undo put back. */
+  before?: DoorState & { closesItself?: boolean };
 }
 
 /** A door near V, or a mesh picked, as the World tab lists it. */
@@ -137,6 +148,8 @@ export interface WorldThing {
   door?: { open?: boolean; locked?: boolean; sealed?: boolean; initial?: string; closesItself?: boolean };
   /** The edit that removes it, when one does. */
   removedBy?: string;
+  /** D2: the edit that keeps its state, when one does. */
+  stateBy?: string;
 }
 
 /** The thing picked in the world, with its node once found and what to warn about. */
@@ -171,6 +184,8 @@ export interface SceneEntry {
   objects: number;
   /** D1: the game's own objects it removes (format 3's worldEdits). */
   removals?: number;
+  /** D2: the doors whose state it keeps. */
+  doors?: number;
   /** When the file last changed, ms since 1970. */
   changed: number;
   /** Set when the file is not a scene EDGEbuilder can read. */
@@ -446,6 +461,8 @@ export type PageMessage =
   | { type: "world.kinds"; kinds: WorldKind[] }
   /** Remove the picked thing from the world: hidden now, kept in the scene. One undo step. */
   | { type: "world.remove" }
+  /** D2: open, close, lock or unlock the picked door, kept in the scene. One undo step. */
+  | { type: "world.door"; act: "open" | "close" | "lock" | "unlock" }
   /** Take a world edit out of the scene: what it removed is back. One undo step. */
   | { type: "world.restore"; id: string }
   | { type: "undo" }

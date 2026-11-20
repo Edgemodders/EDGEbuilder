@@ -1201,6 +1201,12 @@ var Viewport = class {
   }
 };
 
+// src/worldedits.ts
+function doorStateText(d) {
+  if (!d) return "";
+  return [d.open === void 0 ? "" : d.open ? "open" : "closed", d.locked === void 0 ? "" : d.locked ? "locked" : "unlocked"].filter(Boolean).join(", ");
+}
+
 // src/app/main.ts
 var $ = (id) => document.getElementById(id);
 var post = (m) => channel.post(m);
@@ -1322,7 +1328,7 @@ ${looked.path}`;
   }
   $("objects").innerHTML = sceneRows(s);
   const groupCount = s.scene.groups.length;
-  $("sceneCount").textContent = `${holds(s.scene.objects.length, s.scene.worldEdits.length)}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
+  $("sceneCount").textContent = `${holds(s.scene.objects.length, editCount(s).removals, false, editCount(s).doors)}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
   $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
   const sel = s.scene.objects.filter((o) => s.selected.includes(o.id));
   if (dropAsked && sel.length && sel.every((o) => !knownIds.has(o.id))) {
@@ -1374,8 +1380,13 @@ ${looked.path}`;
     if (s.message.tone === "error" && typeof RednodeUI !== "undefined") RednodeUI.notify(s.message.text, { title: "EDGEbuilder", type: "error" });
   }
 }
-function holds(objects, removals = 0, short = false) {
-  return short ? `+${objects} \u2212${removals}` : `${objects} added, ${removals} removed`;
+function holds(objects, removals = 0, short = false, doors = 0) {
+  const kept = doors ? short ? `, ${doors} door${doors === 1 ? "" : "s"}` : `, ${doors} door${doors === 1 ? "" : "s"} set` : "";
+  return (short ? `+${objects} \u2212${removals}` : `${objects} added, ${removals} removed`) + kept;
+}
+function editCount(s) {
+  const e = s.scene.worldEdits;
+  return { removals: e.filter((x) => x.action === "remove").length, doors: e.filter((x) => x.action === "door").length };
 }
 function foundText(s) {
   const n = s.results.length;
@@ -1744,7 +1755,7 @@ function libraryRows(s) {
       for (const sc of sh.scenes.filter((x) => x.folder === folder)) {
         const open = sameFile(sc.file, s.scene.file ?? "");
         const tags = `${open ? '<span class="tag">open</span>' : ""}${isOn(sc.file) ? '<span class="tag">shown</span>' : ""}`;
-        const end = sc.error ? "cannot be read" : `${open ? holds(s.scene.objects.length, s.scene.worldEdits.length, true) : holds(sc.objects, sc.removals, true)} \xB7 ${when(sc.changed)}`;
+        const end = sc.error ? "cannot be read" : `${open ? holds(s.scene.objects.length, editCount(s).removals, true, editCount(s).doors) : holds(sc.objects, sc.removals, true, sc.doors)} \xB7 ${when(sc.changed)}`;
         rows.push(
           `<rn-item value="f:${esc(sc.file)}" title="${esc(sc.error ? `${sc.file}
 ${sc.error}` : sc.file)}"${isPicked({ kind: "scene", file: sc.file }) ? " selected" : ""}${pad(depth)}><span class="fold"></span>${esc(sc.name)}${tags}<span slot="end">${esc(end)}</span></rn-item>`
@@ -1813,7 +1824,7 @@ var bakeConfirm;
 function renderBake(s) {
   const b = s.bake;
   const n = s.scene.objects.length;
-  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${holds(n, s.scene.worldEdits.length)}` : "No scene open";
+  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${holds(n, editCount(s).removals, false, editCount(s).doors)}` : "No scene open";
   $("bakeInto").textContent = b.project ? `Into the REDcode project ${b.project.name}` : "";
   $("bakeInto").title = b.project?.dir ?? "";
   const checks = b.checks.map((c) => `<div class="check ${c.tone}">${esc(c.text)}</div>`).join("");
@@ -1927,7 +1938,7 @@ function renderLibrary(s) {
   if (sc)
     $("pickedText").textContent = `${sc.name}${open ? " (open)" : on ? " (shown in the world)" : ""}
 ${whereLabel(s, sc.place, sc.folder)}
-${sc.error ? `Cannot be read: ${sc.error}` : `${open ? holds(s.scene.objects.length, s.scene.worldEdits.length) : holds(sc.objects, sc.removals)}, changed ${when(sc.changed)}`}
+${sc.error ? `Cannot be read: ${sc.error}` : `${open ? holds(s.scene.objects.length, editCount(s).removals, false, editCount(s).doors) : holds(sc.objects, sc.removals, false, sc.doors)}, changed ${when(sc.changed)}`}
 ${sc.file}`;
   else if (picked?.kind === "folder") $("pickedText").textContent = `Folder: ${whereLabel(s, picked.place, picked.folder)}`;
   else if (lb) $("pickedText").textContent = bakeText(s, lb);
@@ -2258,6 +2269,7 @@ var worldHtml = "";
 var editsHtml = "";
 var hoverKey = null;
 var WorldTab = 3;
+var DoorButtons = ["doorOpen", "doorClose", "doorLock", "doorRestore"];
 function doorText(d) {
   if (!d) return "";
   return [d.open === void 0 ? "" : d.open ? "open" : "closed", d.locked ? "locked" : "", d.sealed ? "sealed" : ""].filter(Boolean).join(", ");
@@ -2270,7 +2282,7 @@ function renderWorld(s) {
   $("worldInfo").textContent = [wo.note ?? "", what].filter(Boolean).join("\n");
   const picked2 = wo.picked;
   const rows = wo.things.map((t) => {
-    const end = [t.removedBy ? '<span class="tag warn">removed</span>' : "", esc(doorText(t.door)), t.distance !== void 0 ? `${t.distance.toFixed(1)} m` : ""].filter(Boolean).join(" ");
+    const end = [t.removedBy ? '<span class="tag warn">removed</span>' : "", t.stateBy ? '<span class="tag">kept</span>' : "", esc(doorText(t.door)), t.distance !== void 0 ? `${t.distance.toFixed(1)} m` : ""].filter(Boolean).join(" ");
     return `<rn-item value="${esc(t.key)}" title="${esc([t.resource, t.appearance].filter(Boolean).join("\n"))}"${picked2?.key === t.key ? " selected" : ""}>${esc(t.label)}<span slot="end">${end}</span></rn-item>`;
   }).join("");
   if (rows !== worldHtml) $("worldList").innerHTML = worldHtml = rows;
@@ -2284,11 +2296,13 @@ function renderWorld(s) {
     $("worldRemove").setAttribute("disabled", "");
     $("worldRemove").hidden = false;
     $("worldRestore").hidden = true;
+    for (const id of DoorButtons) $(id).hidden = true;
     $("worldGo").setAttribute("disabled", "");
     return;
   }
   const node = picked2.node;
   const d = picked2.door;
+  const kept = picked2.stateBy ? s.scene.worldEdits.find((e) => e.id === picked2.stateBy) : void 0;
   const where = node ? `${node.type}, entry ${node.entry} (node ${node.node}) in ${node.sector ? shortName(node.sector) : node.sectorHash}` : "";
   $("worldPicked").textContent = [
     picked2.label,
@@ -2299,7 +2313,8 @@ function renderWorld(s) {
     where || picked2.note || "",
     picked2.ref ? `reference ${picked2.ref}` : "",
     picked2.proxies?.length ? `and its proxy mesh: ${picked2.proxies.map((p) => `entry ${p.entry} in ${p.sector ? shortName(p.sector) : p.sectorHash}`).join(", ")}` : "",
-    picked2.removedBy ? `Removed by this scene (${picked2.removedBy}).` : ""
+    picked2.removedBy ? `Removed by this scene (${picked2.removedBy}).` : "",
+    kept ? `Kept ${doorStateText(kept.door)} by this scene (${kept.id}).` : ""
   ].filter(Boolean).join("\n");
   $("worldWarnings").textContent = picked2.warnings.join("\n");
   $("worldWarnings").hidden = !picked2.warnings.length;
@@ -2308,14 +2323,32 @@ function renderWorld(s) {
   $("worldRemove").toggleAttribute("disabled", removed || !s.scene.file || wo.status === "unavailable" || !node && !!picked2.note && !picked2.note.startsWith("Looking"));
   $("worldRemove").title = !s.scene.file ? "Open a scene first: a removal is kept in the open scene" : "Delete. Hidden now, kept in the scene; Restore or Undo brings it back";
   $("worldRestore").hidden = !removed;
+  const canSet = picked2.what === "door" && !!d && (d.open !== void 0 || d.locked !== void 0) && !removed;
+  const off = !s.scene.file || s.world !== "ready" || !node && !!picked2.note && !picked2.note.startsWith("Looking");
+  const want = kept?.door ?? {};
+  for (const id of DoorButtons) $(id).hidden = !canSet;
+  $("doorOpen").toggleAttribute("disabled", off || want.open === true && d?.open === true);
+  $("doorClose").toggleAttribute("disabled", off || want.open === false && d?.open === false);
+  const locked = want.locked ?? d?.locked ?? false;
+  $("doorLock").textContent = locked ? "Unlock" : "Lock";
+  $("doorLock").title = locked ? "Unlock the door, and keep it unlocked while this scene is open" : "Lock the door, and keep it locked while this scene is open";
+  $("doorLock").toggleAttribute("disabled", off || d?.locked === void 0);
+  $("doorRestore").hidden = !canSet || !kept;
+  for (const id of ["doorOpen", "doorClose", "doorLock"]) if (!s.scene.file) $(id).title = "Open a scene first: a door's state is kept in the open scene";
   $("worldGo").toggleAttribute("disabled", s.world !== "ready");
 }
 function renderEdits(s) {
   const edits = s.scene.worldEdits;
   $("editsTitle").hidden = $("worldEdits").hidden = !edits.length;
-  $("editsTitle").textContent = `World edits: this scene removes ${edits.length} of the game's own objects while it is open`;
-  const html = edits.map((e) => `<rn-item value="${esc(e.id)}" title="${esc(`${e.node.sector || e.node.sectorHash}, entry ${e.node.entry}${e.ref ? `
-${e.ref}` : ""}`)}">${esc(e.label)}<span slot="end"><button data-restore="${esc(e.id)}" title="Take it out of the scene: it is back in the world">Restore</button></span></rn-item>`).join("");
+  const c = editCount(s);
+  $("editsTitle").textContent = `World edits, while this scene is open: ${[c.removals ? `${c.removals} of the game's own objects removed` : "", c.doors ? `${c.doors} door${c.doors === 1 ? "" : "s"} kept as set` : ""].filter(Boolean).join(", ")}`;
+  const html = edits.map((e) => {
+    const door = e.action === "door";
+    const end = door ? `<span class="tag">${esc(doorStateText(e.door))}</span> ` : "";
+    const tip = door ? "Take it out of the scene: the door goes back as it was" : "Take it out of the scene: it is back in the world";
+    return `<rn-item value="${esc(e.id)}" title="${esc(`${e.node.sector || e.node.sectorHash}, entry ${e.node.entry}${e.ref ? `
+${e.ref}` : ""}`)}">${esc(e.label)}<span slot="end">${end}<button data-restore="${esc(e.id)}" title="${tip}">Restore</button></span></rn-item>`;
+  }).join("");
   if (html !== editsHtml) $("worldEdits").innerHTML = editsHtml = html;
 }
 function flyToThing(t) {
@@ -2358,6 +2391,13 @@ $("worldList").addEventListener("mouseleave", () => {
   post({ type: "world.hover", key: null });
 });
 $("worldRemove").addEventListener("click", () => post({ type: "world.remove" }));
+$("doorOpen").addEventListener("click", () => post({ type: "world.door", act: "open" }));
+$("doorClose").addEventListener("click", () => post({ type: "world.door", act: "close" }));
+$("doorLock").addEventListener("click", () => post({ type: "world.door", act: $("doorLock").textContent === "Unlock" ? "unlock" : "lock" }));
+$("doorRestore").addEventListener("click", () => {
+  const id = state?.worldObjects.picked?.stateBy;
+  if (id) post({ type: "world.restore", id });
+});
 $("worldRestore").addEventListener("click", () => {
   const id = state?.worldObjects.picked?.removedBy;
   if (id) post({ type: "world.restore", id });

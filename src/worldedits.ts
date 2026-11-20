@@ -4,7 +4,7 @@
 // world.setVisible; the bake (D1b) writes them as ArchiveXL node deletions. See docs/world-objects.md,
 // "Doors first", and D0's answers there.
 
-import type { WorldEdit, WorldKind, WorldNodeRef } from "./protocol";
+import type { DoorState, WorldEdit, WorldKind, WorldNodeRef } from "./protocol";
 
 /** The game classes of interactive doors (shutter windows among them: they are `Door`s), from D0. */
 export const DoorClasses = new Set(["Door", "BunkerDoor", "MovableWallScreen", "Window"]);
@@ -114,7 +114,7 @@ export function doorUnderRay<T extends { position: V3 }>(origin: V3, dir: V3, do
 }
 
 /** A new edit's id: its label's file name, made unique among the scene's edits. */
-export function editId(label: string, edits: WorldEdit[]): string {
+export function editId(label: string, edits: WorldEdit[], prefix = "remove"): string {
   const base =
     (label.match(/([a-z0-9_]+)\.(ent|mesh)\b/i)?.[1] ?? label)
       .toLowerCase()
@@ -122,26 +122,58 @@ export function editId(label: string, edits: WorldEdit[]): string {
       .replace(/^_+|_+$/g, "")
       .slice(0, 40) || "edit";
   const taken = new Set(edits.map((e) => e.id));
-  let id = `remove_${base}`;
-  for (let n = 2; taken.has(id); n++) id = `remove_${base}_${n}`;
+  let id = `${prefix}_${base}`;
+  for (let n = 2; taken.has(id); n++) id = `${prefix}_${base}_${n}`;
   return id;
 }
 
-/** The edit that already removes this node, if any. */
-export function editFor(edits: WorldEdit[], node: Pick<WorldNodeRef, "sectorHash" | "entry">): WorldEdit | undefined {
-  return edits.find((e) => e.node.sectorHash.toLowerCase() === node.sectorHash.toLowerCase() && e.node.entry === node.entry);
+/** The scene's edit of this kind on this node, if any: a removal (the default) or a door's state (D2). */
+export function editFor(edits: WorldEdit[], node: Pick<WorldNodeRef, "sectorHash" | "entry">, action: WorldEdit["action"] = "remove"): WorldEdit | undefined {
+  return edits.find((e) => e.action === action && e.node.sectorHash.toLowerCase() === node.sectorHash.toLowerCase() && e.node.entry === node.entry);
+}
+
+/** What a door's state reads as on the Scene tab: `open, locked`. */
+export function doorStateText(d: DoorState | undefined): string {
+  if (!d) return "";
+  return [d.open === undefined ? "" : d.open ? "open" : "closed", d.locked === undefined ? "" : d.locked ? "locked" : "unlocked"].filter(Boolean).join(", ");
+}
+
+/**
+ * D2: a door's state after one of the panel's actions, from the state it was kept in (or had): open
+ * and close set `open`, lock and unlock set `locked`.
+ */
+export function doorAfter(now: DoorState, act: "open" | "close" | "lock" | "unlock"): DoorState {
+  if (act === "open" || act === "close") return { ...now, open: act === "open" };
+  return { ...now, locked: act === "lock" };
+}
+
+/** The game's door actions that bring a door from `now` to `want`, in order: lock first, then open or close. */
+export function doorActions(now: DoorState, want: DoorState): ("ActionToggleLock" | "ActionSetOpened" | "ActionSetClosed")[] {
+  const out: ("ActionToggleLock" | "ActionSetOpened" | "ActionSetClosed")[] = [];
+  if (want.locked !== undefined && now.locked !== undefined && want.locked !== now.locked) out.push("ActionToggleLock");
+  if (want.open !== undefined && now.open !== undefined && want.open !== now.open) out.push(want.open ? "ActionSetOpened" : "ActionSetClosed");
+  return out;
 }
 
 /** What changes between two lists of edits: the removals to hide (new) and to show again (gone). */
 export function editsDiff(before: WorldEdit[], after: WorldEdit[]): { hide: WorldEdit[]; show: WorldEdit[] } {
-  const key = (e: WorldEdit) => `${e.action}|${registryId(e.node).toLowerCase()}`;
+  // A door's state is part of its key: a changed state is taken back and applied again.
+  const key = (e: WorldEdit) => `${e.action}|${registryId(e.node).toLowerCase()}|${e.action === "door" ? JSON.stringify(e.door ?? {}) : ""}`;
   const was = new Set(before.map(key));
   const now = new Set(after.map(key));
   return { hide: after.filter((e) => !was.has(key(e))), show: before.filter((e) => !now.has(key(e))) };
 }
 
-/** Whether a scene file's edits are ones this version reads: removals with a node to name. */
+/** Whether a scene file's edits are ones this version reads: removals and door states with a node to name. */
 export function readableEdits(edits: unknown): WorldEdit[] {
   if (!Array.isArray(edits)) return [];
-  return edits.filter((e): e is WorldEdit => !!e && typeof e === "object" && (e as WorldEdit).action === "remove" && typeof (e as WorldEdit).node?.sectorHash === "string" && Number.isInteger((e as WorldEdit).node?.entry));
+  return edits.filter(
+    (e): e is WorldEdit =>
+      !!e && typeof e === "object" && ((e as WorldEdit).action === "remove" || ((e as WorldEdit).action === "door" && typeof (e as WorldEdit).door === "object")) && typeof (e as WorldEdit).node?.sectorHash === "string" && Number.isInteger((e as WorldEdit).node?.entry),
+  );
+}
+
+/** How many of a scene's edits remove something, and how many keep a door's state. */
+export function editCounts(edits: WorldEdit[]): { removals: number; doors: number } {
+  return { removals: edits.filter((e) => e.action === "remove").length, doors: edits.filter((e) => e.action === "door").length };
 }

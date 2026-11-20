@@ -921,6 +921,10 @@ function whereIs(file, roots) {
 }
 var MaxDepth = 8;
 var MaxScenes = 2e3;
+function worldCounts(edits) {
+  const list2 = Array.isArray(edits) ? edits : [];
+  return { removals: list2.filter((e) => e?.action === "remove").length, doors: list2.filter((e) => e?.action === "door").length };
+}
 var seen = /* @__PURE__ */ new Map();
 function describe(file, st) {
   const known = seen.get(file);
@@ -930,9 +934,9 @@ function describe(file, st) {
   try {
     const data = JSON.parse(fs5.readFileSync(file, "utf8"));
     if (typeof data.format !== "number" || !Array.isArray(data.objects)) throw new Error("not an EDGEbuilder scene");
-    out = { name: typeof data.name === "string" && data.name.trim() ? data.name : fallback, objects: data.objects.length, removals: Array.isArray(data.worldEdits) ? data.worldEdits.length : 0 };
+    out = { name: typeof data.name === "string" && data.name.trim() ? data.name : fallback, objects: data.objects.length, ...worldCounts(data.worldEdits) };
   } catch (err) {
-    out = { name: fallback, objects: 0, removals: 0, error: err.message };
+    out = { name: fallback, objects: 0, removals: 0, doors: 0, error: err.message };
   }
   seen.set(file, { size: st.size, mtime: st.mtimeMs, ...out });
   return out;
@@ -1000,14 +1004,15 @@ function atLeast(version, min) {
 }
 function bakeRemovals(edits = []) {
   const named = edits.filter((e) => e.action === "remove" && e.node.sector);
+  const removalsAsked = edits.filter((e) => e.action === "remove");
   return {
     removals: named.map((e) => ({ sector: e.node.sector, index: e.node.entry, kind: e.node.type, ...e.node.globalId ? { hash: e.node.globalId } : {} })),
-    unnamed: edits.filter((e) => !named.includes(e))
+    unnamed: removalsAsked.filter((e) => !named.includes(e))
   };
 }
 function bakeHash(objects, edits = []) {
   const parts = objects.filter((o) => Bakeable.has(o.kind)).map((o) => [o.id, o.kind, o.resource ?? "", o.appearance ?? "", o.transform, o.streaming ?? null, o.ref ?? "", o.props ?? null, ...o.kind === "mesh" && o.solid ? ["solid"] : []]);
-  const removals = edits.map((e) => [e.action, e.node.sector.toLowerCase(), e.node.entry, e.node.type]);
+  const removals = edits.filter((e) => e.action === "remove").map((e) => [e.action, e.node.sector.toLowerCase(), e.node.entry, e.node.type]);
   return createHash("sha256").update(JSON.stringify(removals.length ? [parts, removals] : parts)).digest("hex").slice(0, 16);
 }
 function checkBake(input) {
@@ -1051,6 +1056,8 @@ function checkBake(input) {
   if (seenFar.length && !atLeast(input.bridgeVersion, [0, 12, 1])) say2("warn", `REDbridge ${input.bridgeVersion} does not pass Seen from on to the game's own hide distance: ${seenFar.length === 1 ? "a mesh with Seen from shows" : `${seenFar.length} meshes with Seen from show`} only as far as the game allows for ${seenFar.length === 1 ? "its" : "their"} size (about 60 m for a crate). Update it to 0.12.1 or later (EDGEdeck: Get REDbridge).`);
   if (unnamed.length) say2("warn", `Left out, since the sector ${unnamed.length === 1 ? "it is in has" : "they are in have"} no name (REDbridge was not running when ${unnamed.length === 1 ? "it was" : "they were"} removed): ${unnamed.map((e) => e.label).join(", ")}. Restore and remove ${unnamed.length === 1 ? "it" : "them"} again.`);
   if (removals.length && input.bridgeVersion && !atLeast(input.bridgeVersion, [0, 16, 0])) say2("error", `REDbridge ${input.bridgeVersion} cannot bake removals: it needs 0.16.0 or later. Update it in EDGEdeck (Get REDbridge) or REDnode's Mod Manager.`);
+  const doorStates = (input.worldEdits ?? []).filter((e) => e.action === "door").length;
+  if (doorStates) say2("info", `${doorStates === 1 ? "A door's state is" : `${doorStates} doors' states are`} kept while the scene is open in EDGEbuilder. A bake can't set a door's state, so the bake leaves ${doorStates === 1 ? "it" : "them"} out.`);
   if (removals.length) say2("info", `${removals.length === 1 ? "1 of the game's own objects is" : `${removals.length} of the game's own objects are`} removed: the bake writes ${removals.length === 1 ? "it" : "them"} as ArchiveXL node deletions, with ${removals.length === 1 ? "its" : "their"} stand-in meshes, so the baked mod needs ArchiveXL. Finding the stand-ins can take half a minute the first time.`);
   if (plain) say2("info", `${plain} mesh${plain === 1 ? " is" : "es are"} set not solid: V walks through ${plain === 1 ? "it" : "them"}. The Solid switch on the Scene tab changes that.`);
   if (solid.length) say2("info", `${solid.length} mesh${solid.length === 1 ? "" : "es"} will stop V, bullets and cars. Entities keep their own collision.`);
@@ -1337,25 +1344,41 @@ function doorUnderRay(origin, dir, doors, wallAt) {
   }
   return best?.door;
 }
-function editId(label, edits) {
+function editId(label, edits, prefix = "remove") {
   const base = (label.match(/([a-z0-9_]+)\.(ent|mesh)\b/i)?.[1] ?? label).toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "edit";
   const taken = new Set(edits.map((e) => e.id));
-  let id = `remove_${base}`;
-  for (let n = 2; taken.has(id); n++) id = `remove_${base}_${n}`;
+  let id = `${prefix}_${base}`;
+  for (let n = 2; taken.has(id); n++) id = `${prefix}_${base}_${n}`;
   return id;
 }
-function editFor(edits, node) {
-  return edits.find((e) => e.node.sectorHash.toLowerCase() === node.sectorHash.toLowerCase() && e.node.entry === node.entry);
+function editFor(edits, node, action = "remove") {
+  return edits.find((e) => e.action === action && e.node.sectorHash.toLowerCase() === node.sectorHash.toLowerCase() && e.node.entry === node.entry);
+}
+function doorStateText(d) {
+  if (!d) return "";
+  return [d.open === void 0 ? "" : d.open ? "open" : "closed", d.locked === void 0 ? "" : d.locked ? "locked" : "unlocked"].filter(Boolean).join(", ");
+}
+function doorAfter(now, act) {
+  if (act === "open" || act === "close") return { ...now, open: act === "open" };
+  return { ...now, locked: act === "lock" };
+}
+function doorActions(now, want) {
+  const out = [];
+  if (want.locked !== void 0 && now.locked !== void 0 && want.locked !== now.locked) out.push("ActionToggleLock");
+  if (want.open !== void 0 && now.open !== void 0 && want.open !== now.open) out.push(want.open ? "ActionSetOpened" : "ActionSetClosed");
+  return out;
 }
 function editsDiff(before, after) {
-  const key = (e) => `${e.action}|${registryId(e.node).toLowerCase()}`;
+  const key = (e) => `${e.action}|${registryId(e.node).toLowerCase()}|${e.action === "door" ? JSON.stringify(e.door ?? {}) : ""}`;
   const was = new Set(before.map(key));
   const now = new Set(after.map(key));
   return { hide: after.filter((e) => !was.has(key(e))), show: before.filter((e) => !now.has(key(e))) };
 }
 function readableEdits(edits) {
   if (!Array.isArray(edits)) return [];
-  return edits.filter((e) => !!e && typeof e === "object" && e.action === "remove" && typeof e.node?.sectorHash === "string" && Number.isInteger(e.node?.entry));
+  return edits.filter(
+    (e) => !!e && typeof e === "object" && (e.action === "remove" || e.action === "door" && typeof e.door === "object") && typeof e.node?.sectorHash === "string" && Number.isInteger(e.node?.entry)
+  );
 }
 
 // src/scene.ts
@@ -2153,9 +2176,9 @@ async function travel(from, to, word) {
   if (!s) return say(`Nothing to ${word.toLowerCase()}.`, "info");
   to.push({ ...scene.state(), selected: [...state.selected] });
   const ch = scene.restore(s);
-  let standIns = 0;
-  for (const e of ch.show) if (!await showEdit(e)) standIns++;
-  for (const e of ch.hide) await hideEdit(e);
+  const standIns = await changeEdits(ch.show, ch.hide);
+  const count = (edits, action) => edits.filter((e) => e.action === action).length;
+  const doorsChanged = new Set([...ch.show, ...ch.hide].filter((e) => e.action === "door").map((e) => registryId(e.node))).size;
   for (const o of ch.gone) await removePreview(o);
   for (const o of ch.respawn) await respawn(o);
   for (const o of ch.move) {
@@ -2170,8 +2193,9 @@ async function travel(from, to, word) {
     moved ? `${moved} moved back` : "",
     ch.spawn.length ? `${ch.spawn.length} back${missing.length ? ` (${missing.join("; ")})` : ""}` : "",
     ch.gone.length ? `${ch.gone.length} taken out` : "",
-    ch.hide.length ? `${ch.hide.length} removed from the world again` : "",
-    ch.show.length ? `${ch.show.length} back in the world` : ""
+    count(ch.hide, "remove") ? `${count(ch.hide, "remove")} removed from the world again` : "",
+    count(ch.show, "remove") ? `${count(ch.show, "remove")} back in the world` : "",
+    doorsChanged ? `${doorsChanged} door${doorsChanged === 1 ? "" : "s"} ${word === "Undo" ? "set back" : "set again"}` : ""
   ].filter(Boolean);
   state.message = { text: `${word}${what.length ? `: ${what.join(", ")}` : ""}.${standInNote(standIns)}`, tone: "ok" };
   console.log(state.message.text);
@@ -2614,7 +2638,8 @@ async function lookNear() {
         position: [p.X, p.Y, p.Z],
         distance: e.distance,
         door: what === "door" ? await doorStateOf(e.entity) : void 0,
-        removedBy: scene.worldEdits.find((x) => sameId(x.node.globalId, e.id.hash))?.id
+        removedBy: scene.worldEdits.find((x) => x.action === "remove" && sameId(x.node.globalId, e.id.hash))?.id,
+        stateBy: scene.worldEdits.find((x) => x.action === "door" && sameId(x.node.globalId, e.id.hash))?.id
       });
     }
   } catch (err) {
@@ -2800,7 +2825,7 @@ async function showEdit(e) {
   const id = registryId(e.node);
   pendingHides.delete(id);
   const others = [...scene.worldEdits, ...[...onEdits.values()].flat()];
-  if (others.some((x) => registryId(x.node).toLowerCase() === id.toLowerCase())) return true;
+  if (others.some((x) => x.action === "remove" && registryId(x.node).toLowerCase() === id.toLowerCase())) return true;
   if (typeof world2.setVisible !== "function") return true;
   for (const n of [e.node, ...e.proxies ?? []]) {
     try {
@@ -2830,11 +2855,14 @@ function hideAgainSoon() {
 }
 async function applyEdits() {
   if (state.world !== "ready") return;
-  if (state.bake.inGame && scene.worldEdits.length) {
+  doorsIn.clear();
+  await keepDoors();
+  const removals = (edits) => edits.filter((e) => e.action === "remove");
+  if (state.bake.inGame && removals(scene.worldEdits).length) {
     console.log(`World edits: ${scene.name}'s bake is in the game (${state.bake.inGame}), which removes them; nothing to hide`);
-    for (const e of scene.worldEdits) pendingHides.delete(registryId(e.node));
+    for (const e of removals(scene.worldEdits)) pendingHides.delete(registryId(e.node));
   }
-  const all = [...state.bake.inGame ? [] : scene.worldEdits, ...[...onEdits.values()].flat()];
+  const all = removals([...state.bake.inGame ? [] : scene.worldEdits, ...[...onEdits.values()].flat()]);
   if (!all.length) return;
   let done = 0;
   for (const e of all) if (await hideEdit(e)) done++;
@@ -2878,10 +2906,193 @@ async function restoreEdit(id) {
   step();
   scene.worldEdits = scene.worldEdits.filter((x) => x !== e);
   scene.save();
-  const working = await showEdit(e);
-  for (const t of state.worldObjects.things) if (t.removedBy === id) t.removedBy = void 0;
-  if (state.worldObjects.picked?.removedBy === id) state.worldObjects.picked.removedBy = void 0;
+  const working = await unapplyEdit(e);
+  for (const t of [...state.worldObjects.things, ...state.worldObjects.picked ? [state.worldObjects.picked] : []]) {
+    if (t.removedBy === id) t.removedBy = void 0;
+    if (t.stateBy === id) t.stateBy = void 0;
+  }
+  if (e.action === "door") {
+    void refreshPickedDoor();
+    return say(`${e.label} is no longer kept ${doorStateText(e.door)}${e.before ? `: it is back as it was (${doorStateText(e.before)})` : ""}. Undo keeps it again.`, "ok");
+  }
   say(`Restored ${e.label}: it is back in the world. Undo removes it again.${standInNote(working ? 0 : 1)}`, working ? "ok" : "info");
+}
+var DoorWatch = 4e3;
+var doorTimer;
+var doorsIn = /* @__PURE__ */ new Set();
+var autoCloses = /* @__PURE__ */ new Set();
+function doorEdits() {
+  return [...scene.worldEdits, ...[...onEdits.values()].flat()].filter((e) => e.action === "door");
+}
+async function doorEntity(e) {
+  if (!e.node.globalId || state.world !== "ready") return null;
+  return world2.entity(e.node.globalId).catch(() => null);
+}
+async function setClosesItself(entity, value) {
+  try {
+    const ps = await entity.GetDevicePS();
+    const setup = await ps?.$get("doorProperties");
+    if (!ps || !setup || typeof setup !== "object") return false;
+    if (setup.automaticallyClosesItself === value) return true;
+    await ps.$set("doorProperties", { ...setup, automaticallyClosesItself: value });
+    const back = await ps.$get("doorProperties");
+    return back?.automaticallyClosesItself === value;
+  } catch (err) {
+    console.log(`A door's closing by itself was not changed: ${err.message}`);
+    return false;
+  }
+}
+async function runDoorActions(entity, now, want) {
+  const acts = doorActions(now, want);
+  if (!acts.length) return 0;
+  const ps = await entity.GetDevicePS();
+  const persistency = await api.GameInstance.GetPersistencySystem(game.instance);
+  for (const a of acts) await persistency.QueuePSDeviceEvent(await ps[a]());
+  return acts.length;
+}
+async function enforceDoor(e, entity) {
+  if (!e.door) return false;
+  const door = entity ?? await doorEntity(e);
+  if (!door) return false;
+  const now = await doorStateOf(door);
+  if (!now) return false;
+  const id = registryId(e.node).toLowerCase();
+  try {
+    if (e.door.open === true && now.closesItself !== false) {
+      if (await setClosesItself(door, false)) autoCloses.delete(id);
+      else autoCloses.add(id);
+    }
+    const n = await runDoorActions(door, now, e.door);
+    if (n) console.log(`${e.id}: ${doorStateText(now)} \u2192 ${doorStateText({ ...now, ...e.door })}`);
+    return true;
+  } catch (err) {
+    console.log(`${e.id}: its state was not set: ${err.message}`);
+    return false;
+  }
+}
+async function revertDoor(e) {
+  const id = registryId(e.node).toLowerCase();
+  doorsIn.delete(id);
+  autoCloses.delete(id);
+  if (doorEdits().some((x) => registryId(x.node).toLowerCase() === id)) return true;
+  const door = await doorEntity(e);
+  if (!door) {
+    if (state.world === "ready") console.log(`${e.id}: its door is not in the world, so it stays as the save has it`);
+    return true;
+  }
+  const now = await doorStateOf(door);
+  if (!now || !e.before) return true;
+  if (e.before.closesItself !== void 0) await setClosesItself(door, e.before.closesItself);
+  try {
+    await runDoorActions(door, now, { open: e.door?.open === void 0 ? void 0 : e.before.open, locked: e.door?.locked === void 0 ? void 0 : e.before.locked });
+  } catch (err) {
+    console.log(`${e.id}: it was not put back: ${err.message}`);
+  }
+  return true;
+}
+async function keepDoors() {
+  const edits = doorEdits();
+  if (!edits.length || state.world !== "ready") {
+    if (!edits.length && doorTimer) {
+      clearInterval(doorTimer);
+      doorTimer = void 0;
+    }
+    if (!edits.length) doorsIn.clear();
+    return;
+  }
+  if (!doorTimer) doorTimer = setInterval(() => void keepDoors(), DoorWatch);
+  for (const e of edits) {
+    const id = registryId(e.node).toLowerCase();
+    const door = await doorEntity(e);
+    if (!door) {
+      doorsIn.delete(id);
+      continue;
+    }
+    if (!doorsIn.has(id)) {
+      if (await enforceDoor(e, door)) doorsIn.add(id);
+    } else if (autoCloses.has(id)) {
+      await enforceDoor(e, door);
+    }
+  }
+}
+async function applyEdit(e) {
+  if (e.action !== "door") return hideEdit(e);
+  const done = await enforceDoor(e);
+  if (done) doorsIn.add(registryId(e.node).toLowerCase());
+  void keepDoors();
+  return done;
+}
+async function unapplyEdit(e) {
+  const done = e.action === "door" ? await revertDoor(e) : await showEdit(e);
+  void keepDoors();
+  return done;
+}
+async function changeEdits(back, on) {
+  const staying = new Set(on.filter((e) => e.action === "door").map((e) => registryId(e.node).toLowerCase()));
+  let standIns = 0;
+  for (const e of back) {
+    if (e.action === "door" && staying.has(registryId(e.node).toLowerCase())) continue;
+    if (!await unapplyEdit(e)) standIns++;
+  }
+  for (const e of on) await applyEdit(e);
+  return standIns;
+}
+async function refreshPickedDoor() {
+  const p = state.worldObjects.picked;
+  if (!p || p.what !== "door") return;
+  await new Promise((r) => setTimeout(r, 1500));
+  if (state.worldObjects.picked !== p) return;
+  const entity = liveThings.get(p.key) ?? await world2.entity(p.key).catch(() => null);
+  if (!entity) return;
+  p.door = await doorStateOf(entity);
+  for (const t of state.worldObjects.things) if (t.key === p.key) t.door = p.door;
+  publish();
+}
+async function doorAction(act) {
+  const p = state.worldObjects.picked;
+  if (!scene.file) return say(NoScene, "warn");
+  if (!p || p.what !== "door") return say("Pick a door that opens first: with Edit on, click one, or pick it on the World tab.", "warn");
+  if (!p.node) {
+    await findNode(p, pickSeq);
+    if (!p.node) return say(`${p.label}: ${p.note ?? "its node was not found"}`, "warn");
+  }
+  const removed = editFor(scene.worldEdits, p.node);
+  if (removed) return say(`${p.label} is removed from the world (${removed.id}): Restore it on the Scene tab first.`, "info");
+  const entity = liveThings.get(p.key) ?? await world2.entity(p.key).catch(() => null);
+  if (!entity) return say(`${p.label} is not in the world now: go near it, then pick it again.`, "warn");
+  const now = await doorStateOf(entity);
+  if (!now || now.open === void 0 && now.locked === void 0) return say(`${p.label} has no state the game lets EDGEbuilder set.`, "warn");
+  const old = editFor(scene.worldEdits, p.node, "door");
+  const want = doorAfter(old?.door ?? {}, act);
+  step();
+  let e;
+  if (old) {
+    old.door = want;
+    e = old;
+  } else {
+    e = {
+      id: editId(p.label, scene.worldEdits, "door"),
+      action: "door",
+      what: "door",
+      label: p.label,
+      node: p.node,
+      fingerprint: { ...p.resource ? { resource: p.resource } : {}, ...p.appearance ? { appearance: p.appearance } : {}, position: p.position },
+      door: want,
+      before: { open: now.open, locked: now.locked, ...now.closesItself !== void 0 ? { closesItself: now.closesItself } : {} },
+      ...p.ref ? { ref: p.ref } : {}
+    };
+    scene.worldEdits.push(e);
+  }
+  scene.save();
+  if (want.open !== true && e.before?.closesItself === true) await setClosesItself(entity, true);
+  const done = await applyEdit(e);
+  p.stateBy = e.id;
+  for (const t of state.worldObjects.things) if (t.key === p.key) t.stateBy = e.id;
+  say(
+    done ? `${p.label}: kept ${doorStateText(want)} while this scene is open in EDGEbuilder (the door's state is also in your save). Restore on the Scene tab, or Undo, puts it back as it was.` : `${p.label}: kept ${doorStateText(want)} in the scene, but the game did not take it yet (the log says why); it is tried again when the door comes into the world.`,
+    done ? "ok" : "warn"
+  );
+  void refreshPickedDoor();
 }
 function setKinds(kinds) {
   const known = kinds.filter((k) => k in KindLabels);
@@ -3185,7 +3396,7 @@ async function switchTo(data, file) {
   const leaving = scene.worldEdits;
   scene.worldEdits = [];
   switchStandIns = 0;
-  for (const e of leaving) if (!await showEdit(e)) switchStandIns++;
+  for (const e of leaving) if (!await unapplyEdit(e)) switchStandIns++;
   await clearPicked();
   state.selected = [];
   state.duplicated = void 0;
@@ -3299,7 +3510,7 @@ async function loadOn(file) {
   const edits = readableEdits(data.worldEdits);
   if (edits.length) {
     onEdits.set(file, edits);
-    for (const e of edits) await hideEdit(e);
+    for (const e of edits) await applyEdit(e);
   } else onEdits.delete(file);
   return r.spawned.length;
 }
@@ -3323,7 +3534,7 @@ async function sceneOff(file) {
   console.log(`No longer showing ${path10.basename(known)}`);
   const edits = onEdits.get(known) ?? [];
   onEdits.delete(known);
-  for (const e of edits) await showEdit(e);
+  for (const e of edits) await unapplyEdit(e);
   if (typeof world2.unload === "function") await world2.unload(known).catch((err) => console.log(`Unload ${known}: ${err.message}`));
   publish();
 }
@@ -3491,6 +3702,9 @@ channel.on((m) => {
         break;
       case "world.remove":
         await inTurn("Remove from world", () => removePicked());
+        break;
+      case "world.door":
+        await inTurn("Door", () => doorAction(m.act));
         break;
       case "world.restore":
         await inTurn("Restore", () => restoreEdit(m.id));
@@ -4049,7 +4263,7 @@ async function importModel(m) {
     return say(`Import is not available: ${err.message}`, "error");
   }
   const target = project;
-  const version = `EDGEbuilder ${"0.12.5"}`;
+  const version = `EDGEbuilder ${"0.13.0"}`;
   const call = (method, params) => stopAsked ? Promise.reject(new Error(ImportStopped)) : b.call(method, params);
   const began = Date.now();
   const step2 = (text) => {
@@ -4209,7 +4423,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.12.5"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.13.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs9.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {
