@@ -167,19 +167,21 @@ export function writeRecord(project: BakeProject, record: BakeRecord): void {
   fs.writeFileSync(file, JSON.stringify(record, null, 2));
 }
 
-/** The bakes in a project: every folder under source/archive/edgebuilder with a sector, and what its record says. */
+/**
+ * The bakes in a project: every folder under source/archive/edgebuilder with a sector, and every bake of
+ * removals alone (D1b: a record and its `.xl`, no sector), with what its record says.
+ */
 export function bakesIn(project: BakeProject | null): BakeRecord[] {
   if (!project) return [];
   const root = path.join(project.archive, "edgebuilder");
-  let names: string[];
-  try {
-    names = fs.readdirSync(root);
-  } catch {
-    return [];
-  }
+  const withSector = namesIn(root).filter((slug) => fs.existsSync(path.join(root, slug, `${slug}.streamingsector`)));
+  const xlDir = path.join(project.resources, "archive", "pc", "mod");
+  const removalsOnly = namesIn(path.join(project.raw, "edgebuilder"))
+    .filter((n) => n.endsWith(".bake.json"))
+    .map((n) => n.slice(0, -".bake.json".length))
+    .filter((slug) => !withSector.includes(slug) && fs.existsSync(path.join(xlDir, `${slug}.archive.xl`)));
   const out: BakeRecord[] = [];
-  for (const slug of names) {
-    if (!fs.existsSync(path.join(root, slug, `${slug}.streamingsector`))) continue;
+  for (const slug of [...withSector, ...removalsOnly]) {
     let record: BakeRecord = { slug, name: slug };
     try {
       record = { ...record, ...(JSON.parse(fs.readFileSync(recordFile(project, slug), "utf8")) as BakeRecord) };
@@ -218,6 +220,8 @@ export function deployedBakes(gameDir: string | undefined): Map<string, string> 
         continue;
       }
       for (const m of text.matchAll(/edgebuilder[\\/]([a-z0-9_]+)[\\/]\1\.streamingblock/gi)) found.set(m[1].toLowerCase(), name);
+      // A bake of removals alone adds no block (D1b): REDbridge names the scene in the file's first line.
+      for (const m of text.matchAll(/sector\.build for the EDGEbuilder scene "([a-z0-9_]+)"/gi)) found.set(m[1].toLowerCase(), name);
     }
   }
   return found;

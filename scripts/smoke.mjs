@@ -555,6 +555,18 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.ok(!onlyRemovals.some((x) => x.tone === "error"), "removals alone are something to bake");
   assert.ok(onlyRemovals.some((x) => x.tone === "info" && /ArchiveXL/.test(x.text)), "the bake says it needs ArchiveXL");
   assert.ok(m.checkBake({ file: "f", name: "Doors", objects: [], project, bridgeReady: true, needs: [] }).some((x) => x.tone === "error"), "nothing at all is still nothing");
+  // A bake of removals alone: listed in its project and seen in the game by its .xl.
+  const rp = path.join(tmp, "removals-project");
+  const rproj = { name: "R", dir: rp, archive: path.join(rp, "source", "archive"), raw: path.join(rp, "source", "raw"), resources: path.join(rp, "source", "resources") };
+  writeRecord(rproj, { slug: "d1b_doors", name: "D1b doors", removals: 4 });
+  const xlDir = path.join(rproj.resources, "archive", "pc", "mod");
+  fs.mkdirSync(xlDir, { recursive: true });
+  fs.writeFileSync(path.join(xlDir, "d1b_doors.archive.xl"), '# Written by REDbridge sector.build for the EDGEbuilder scene "d1b_doors".\nstreaming:\n  sectors: []\n');
+  assert.deepEqual(bakesIn(rproj).map((b) => [b.slug, b.removals]), [["d1b_doors", 4]], "a bake of removals alone is listed");
+  const fakeGame = path.join(tmp, "game-removals");
+  fs.mkdirSync(path.join(fakeGame, "archive", "pc", "mod"), { recursive: true });
+  fs.copyFileSync(path.join(xlDir, "d1b_doors.archive.xl"), path.join(fakeGame, "archive", "pc", "mod", "d1b_doors.archive.xl"));
+  assert.equal(deployedBakes(fakeGame).get("d1b_doors"), "d1b_doors.archive.xl", "and seen in the game");
   console.log("world edits: ok");
 }
 

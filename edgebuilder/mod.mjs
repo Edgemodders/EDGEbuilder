@@ -1076,15 +1076,11 @@ function writeRecord(project2, record) {
 function bakesIn(project2) {
   if (!project2) return [];
   const root = path6.join(project2.archive, "edgebuilder");
-  let names;
-  try {
-    names = fs6.readdirSync(root);
-  } catch {
-    return [];
-  }
+  const withSector = namesIn(root).filter((slug) => fs6.existsSync(path6.join(root, slug, `${slug}.streamingsector`)));
+  const xlDir = path6.join(project2.resources, "archive", "pc", "mod");
+  const removalsOnly = namesIn(path6.join(project2.raw, "edgebuilder")).filter((n) => n.endsWith(".bake.json")).map((n) => n.slice(0, -".bake.json".length)).filter((slug) => !withSector.includes(slug) && fs6.existsSync(path6.join(xlDir, `${slug}.archive.xl`)));
   const out = [];
-  for (const slug of names) {
-    if (!fs6.existsSync(path6.join(root, slug, `${slug}.streamingsector`))) continue;
+  for (const slug of [...withSector, ...removalsOnly]) {
     let record = { slug, name: slug };
     try {
       record = { ...record, ...JSON.parse(fs6.readFileSync(recordFile(project2, slug), "utf8")) };
@@ -1115,6 +1111,7 @@ function deployedBakes(gameDir2) {
         continue;
       }
       for (const m of text.matchAll(/edgebuilder[\\/]([a-z0-9_]+)[\\/]\1\.streamingblock/gi)) found.set(m[1].toLowerCase(), name);
+      for (const m of text.matchAll(/sector\.build for the EDGEbuilder scene "([a-z0-9_]+)"/gi)) found.set(m[1].toLowerCase(), name);
     }
   }
   return found;

@@ -936,3 +936,12 @@ Before: the game closed; Claude deploys 0.12.2 and sets EDGEbuilder's **REDbridg
 | B1 | Does a bake of removals alone stay removed in game with EDGEbuilder off, stand-ins included? |
 | B2 | Does REDbridge find every stand-in itself (the elevator's too)? |
 | B3 | Does F10 pause and resume builder mode cleanly? |
+
+**Results (2026-11-19, the desktop, 0.12.2, REDbridge built from its main): passed, all ten steps.** The bake of D1b doors (V's door and the elevator door, removals only) wrote one `.xl` with four deletions, the two doors and the two stand-ins REDbridge found itself (`exterior_-22_19_1_0` 288 of 853, `interior_-22_20_1_1` 175 of 775, `exterior_-11_9_0_1` 254 of 2,021, `interior_-11_10_0_2` 35 of 92): the set D0 saw work, made by EDGEbuilder and REDbridge alone. Packed and installed into the game, ArchiveXL applied all four sectors, and with EDGEbuilder off both doorways stayed open with no stand-ins (B1, B2). F10 paused and resumed builder mode each time (the log: "paused ... V's camera and HUD are back", "resumed") (B3). Found in the log:
+
+| # | Found | In 0.12.3 |
+|---|---|---|
+| 7 | EDGEbuilder did not see that D1b doors' bake was in the game, so it hid the two removals live as well ("2 of 2 removals in the game"); harmless, the doors were gone either way. A bake of removals alone adds no streaming block, which is what the check looked for, and the project's list of bakes looked only for sectors | Both also find a bake by its `.xl` (REDbridge names the scene in its first line) and its record |
+| 10 | The third door came back working, not as its stand-in, so the message was not needed: the hide after the load came once the door was already in | The message stays for when it is needed |
+
+**D1b passed in game on 2026-11-19.** 0.12 is released once REDbridge releases #18 (its main has it; 0.15.0 does not).
