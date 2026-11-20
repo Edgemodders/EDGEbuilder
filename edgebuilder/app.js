@@ -362,6 +362,8 @@ var Viewport = class {
   flyAsk;
   camDirty = false;
   builderAsked = false;
+  /** Builder mode paused: the overlay left interactive mode (F10), V has the view back; nothing moves or is drawn. */
+  paused = false;
   rmb = false;
   mmb = false;
   last = [0, 0];
@@ -376,6 +378,14 @@ var Viewport = class {
   }
   setBusy(b) {
     this.busyWith = b;
+  }
+  /** The mod paused builder mode (the overlay is passive) or resumed it. */
+  setPaused(on) {
+    if (on === this.paused) return;
+    this.paused = on;
+    if (on) this.cancel();
+    this.calib = void 0;
+    this.kick();
   }
   setEdit(on) {
     this.edit = on;
@@ -521,6 +531,12 @@ var Viewport = class {
         this.wantEscape(false);
         this.running = false;
         this.clear();
+        return;
+      }
+      if (this.paused) {
+        this.wantEscape(false);
+        this.clear();
+        setTimeout(() => requestAnimationFrame(() => void tick()), 250);
         return;
       }
       this.frame++;
@@ -1330,6 +1346,7 @@ ${looked.path}`;
   renderWorld(s);
   renderEdits(s);
   viewport.setCamera(s.camera?.entityId);
+  viewport.setPaused(!!s.camera?.paused);
   if (lastCopy === void 0) lastCopy = s.duplicated?.seq ?? 0;
   if (s.duplicated && s.duplicated.seq !== lastCopy) {
     lastCopy = s.duplicated.seq;

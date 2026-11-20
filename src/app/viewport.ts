@@ -139,6 +139,8 @@ export class Viewport {
   private flyAsk: { object: SceneObject; until: number } | undefined;
   private camDirty = false;
   private builderAsked = false;
+  /** Builder mode paused: the overlay left interactive mode (F10), V has the view back; nothing moves or is drawn. */
+  private paused = false;
   private rmb = false;
   private mmb = false;
   private last: [number, number] = [0, 0];
@@ -210,6 +212,15 @@ export class Viewport {
 
   setBusy(b: Busy | undefined): void {
     this.busyWith = b;
+  }
+
+  /** The mod paused builder mode (the overlay is passive) or resumed it. */
+  setPaused(on: boolean): void {
+    if (on === this.paused) return;
+    this.paused = on;
+    if (on) this.cancel();
+    this.calib = undefined; // the view changes camera: learn the screen again
+    this.kick();
   }
 
   setEdit(on: boolean): void {
@@ -376,6 +387,13 @@ export class Viewport {
         this.wantEscape(false);
         this.running = false;
         this.clear();
+        return;
+      }
+      if (this.paused) {
+        // V plays meanwhile: no camera moves, nothing drawn over the game, a look a few times a second.
+        this.wantEscape(false);
+        this.clear();
+        setTimeout(() => requestAnimationFrame(() => void tick()), 250);
         return;
       }
       this.frame++;

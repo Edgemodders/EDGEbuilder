@@ -4,6 +4,7 @@ export {
   bakeFolderProject,
   bakeHash,
   bakeInput,
+  bakeRemovals,
   bakesIn,
   checkBake,
   deployedBakes,

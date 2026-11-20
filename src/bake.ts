@@ -4,7 +4,7 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { BakeCheck, BakeRecord, SceneGroup, SceneObject } from "./protocol";
+import type { BakeCheck, BakeRecord, SceneGroup, SceneObject, WorldEdit } from "./protocol";
 import { collisionKey } from "./arrange";
 import { slugOf } from "./scenes";
 
@@ -59,11 +59,26 @@ function atLeast(version: string | undefined, min: number[]): boolean {
  * What changes a bake's result, and nothing else: moving a group in the tree or a preview coming and going does not.
  * `solid` joins only when set, so a bake from before the Solid switch does not read as changed.
  */
-export function bakeHash(objects: SceneObject[]): string {
+/**
+ * D1b: a scene's removals as REDbridge's sector.build takes them: a node data entry of a game sector, its
+ * node's class and its global id. REDbridge checks each against the sector and finds an entity's proxy
+ * meshes itself. A removal whose sector has no name (picked while REDbridge was not running) cannot be.
+ */
+export function bakeRemovals(edits: WorldEdit[] = []): { removals: { sector: string; index: number; kind: string; hash?: string }[]; unnamed: WorldEdit[] } {
+  const named = edits.filter((e) => e.action === "remove" && e.node.sector);
+  return {
+    removals: named.map((e) => ({ sector: e.node.sector, index: e.node.entry, kind: e.node.type, ...(e.node.globalId ? { hash: e.node.globalId } : {}) })),
+    unnamed: edits.filter((e) => !named.includes(e)),
+  };
+}
+
+export function bakeHash(objects: SceneObject[], edits: WorldEdit[] = []): string {
   const parts = objects
     .filter((o) => Bakeable.has(o.kind))
     .map((o) => [o.id, o.kind, o.resource ?? "", o.appearance ?? "", o.transform, o.streaming ?? null, o.ref ?? "", o.props ?? null, ...(o.kind === "mesh" && o.solid ? ["solid"] : [])]);
-  return createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 16);
+  // A scene without removals hashes as before, so its bake does not look stale after the update.
+  const removals = edits.map((e) => [e.action, e.node.sector.toLowerCase(), e.node.entry, e.node.type]);
+  return createHash("sha256").update(JSON.stringify(removals.length ? [parts, removals] : parts)).digest("hex").slice(0, 16);
 }
 
 /** What the panel says before a bake. A check with tone "error" stops it. */
@@ -84,6 +99,8 @@ export function checkBake(input: {
   noCollision?: ReadonlySet<string>;
   /** REDbridge's version: before 0.12.0 it writes no solid meshes, before 0.12.1 no hide distance from Seen from. */
   bridgeVersion?: string;
+  /** D1b: the game's own objects the scene removes. */
+  worldEdits?: WorldEdit[];
 }): BakeCheck[] {
   const out: BakeCheck[] = [];
   const say = (tone: BakeCheck["tone"], text: string) => out.push({ tone, text });
@@ -92,7 +109,8 @@ export function checkBake(input: {
     return out;
   }
   const { skipped, scene } = bakeInput(input.name, undefined, [], input.objects);
-  if (!scene.objects.length) say("error", "The scene has nothing to bake yet.");
+  const { removals, unnamed } = bakeRemovals(input.worldEdits);
+  if (!scene.objects.length && !removals.length) say("error", "The scene has nothing to bake yet.");
   if (!input.project && input.redcodeMissing)
     say("error", "No REDcode project can be seen: REDcode's REDnode package is not in the game, and it tells EDGEbuilder which project is open. REDcode puts it in when its Game Path setting is this game's folder (and REDnode: Install Package is on); then press Refresh. REDcode's output says whether it did.");
   else if (!input.project) say("error", "No REDcode project is open. A bake goes into a project: open or make one in REDcode (VS Code), and this tab picks it up (Refresh asks again).");
@@ -123,6 +141,8 @@ export function checkBake(input: {
   if (solid.length && !atLeast(input.bridgeVersion, [0, 12, 0])) say("warn", `REDbridge ${input.bridgeVersion} writes no solid meshes: V walks through all of them. Update it to 0.12.0 or later (EDGEdeck: Get REDbridge).`);
   const seenFar = meshes.filter((o) => o.streaming);
   if (seenFar.length && !atLeast(input.bridgeVersion, [0, 12, 1])) say("warn", `REDbridge ${input.bridgeVersion} does not pass Seen from on to the game's own hide distance: ${seenFar.length === 1 ? "a mesh with Seen from shows" : `${seenFar.length} meshes with Seen from show`} only as far as the game allows for ${seenFar.length === 1 ? "its" : "their"} size (about 60 m for a crate). Update it to 0.12.1 or later (EDGEdeck: Get REDbridge).`);
+  if (unnamed.length) say("warn", `Left out, since the sector ${unnamed.length === 1 ? "it is in has" : "they are in have"} no name (REDbridge was not running when ${unnamed.length === 1 ? "it was" : "they were"} removed): ${unnamed.map((e) => e.label).join(", ")}. Restore and remove ${unnamed.length === 1 ? "it" : "them"} again.`);
+  if (removals.length) say("info", `${removals.length === 1 ? "1 of the game's own objects is" : `${removals.length} of the game's own objects are`} removed: the bake writes ${removals.length === 1 ? "it" : "them"} as ArchiveXL node deletions, with ${removals.length === 1 ? "its" : "their"} stand-in meshes, so the baked mod needs ArchiveXL. Finding the stand-ins can take half a minute the first time.`);
   if (plain) say("info", `${plain} mesh${plain === 1 ? " is" : "es are"} set not solid: V walks through ${plain === 1 ? "it" : "them"}. The Solid switch on the Scene tab changes that.`);
   if (solid.length) say("info", `${solid.length} mesh${solid.length === 1 ? "" : "es"} will stop V, bullets and cars. Entities keep their own collision.`);
   return out;

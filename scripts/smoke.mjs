@@ -543,6 +543,18 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   const undo = scene.restore(before);
   assert.deepEqual([undo.show.map((e) => e.id), undo.hide.length, scene.worldEdits.length], [["x"], 0, 0], "Undo shows the door again");
   assert.equal(scene.data().format, 1);
+  // D1b: removals into the bake, the bake's hash and its checks.
+  const { removals, unnamed } = m.bakeRemovals([door, { ...door, id: "z", node: { ...door.node, sector: "" } }]);
+  assert.deepEqual(removals, [{ sector: door.node.sector, index: 288, kind: "worldEntityNode", hash: "6132383399567759307" }], "a removal as sector.build takes it");
+  assert.deepEqual(unnamed.map((e) => e.id), ["z"], "one with no sector name is left out");
+  const plainCrate = [{ id: "c", kind: "mesh", resource: "base\c.mesh", transform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } }];
+  assert.equal(m.bakeHash(plainCrate, []), m.bakeHash(plainCrate), "no removals: the hash as before");
+  assert.notEqual(m.bakeHash(plainCrate, [door]), m.bakeHash(plainCrate), "a removal makes a bake stale");
+  const project = { name: "P", dir: tmp, archive: tmp, raw: tmp, resources: tmp };
+  const onlyRemovals = m.checkBake({ file: "f", name: "Doors", objects: [], project, bridgeReady: true, needs: [], worldEdits: [door] });
+  assert.ok(!onlyRemovals.some((x) => x.tone === "error"), "removals alone are something to bake");
+  assert.ok(onlyRemovals.some((x) => x.tone === "info" && /ArchiveXL/.test(x.text)), "the bake says it needs ArchiveXL");
+  assert.ok(m.checkBake({ file: "f", name: "Doors", objects: [], project, bridgeReady: true, needs: [] }).some((x) => x.tone === "error"), "nothing at all is still nothing");
   console.log("world edits: ok");
 }
 

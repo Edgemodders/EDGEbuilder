@@ -55,20 +55,27 @@ export interface InfoFrom {
 /** What sector.build wrote: the bake's files, in full and as game paths. */
 export interface SectorBuilt {
   name: string;
-  sector: string;
-  block: string;
-  xl: string;
-  sectorPath: string;
-  blockPath: string;
+  /** Null for a bake of removals only (REDbridge after 0.15.0, #18): no sector, no block. */
+  sector: string | null;
+  block: string | null;
+  /** Null when nothing was written at all. */
+  xl: string | null;
+  sectorPath: string | null;
+  blockPath: string | null;
   nodes: number;
-  streamingBox: { min: number[]; max: number[] };
+  streamingBox: { min: number[]; max: number[] } | null;
   warnings: string[];
+  /** D1b: the entries written as deletions, an entity's proxies with `proxyOf`; those not written, with why. */
+  removed?: { sector: string; index: number; node: number; kind: string; id: string | null; proxyOf: { sector: string; index: number } | null }[];
+  refused?: { sector: string; index: number | null; why: string }[];
 }
 
 /** What sector.build takes: a project folder, a scene, and where to look for a project's or a mod's files (0.12.0 and later). */
 export interface SectorBuild extends InfoFrom {
   project: string;
   scene: unknown;
+  /** D1b: node data entries of the game's own sectors to delete (REDbridge after 0.15.0, #18). */
+  removals?: { sector: string; index: number; kind: string; hash?: string }[];
 }
 
 /** One page of tweakdb.records (REDbridge 0.8.0 and later): flats come back as plain JSON, LocKeys as { key, text }. */

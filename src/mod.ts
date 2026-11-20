@@ -18,6 +18,7 @@ import {
   bakeFolderProject,
   bakeHash,
   bakeInput,
+  bakeRemovals,
   bakesIn,
   checkBake,
   deployedBakes,
@@ -751,7 +752,8 @@ async function travel(from: SceneState[], to: SceneState[], word: "Undo" | "Redo
   if (!s) return say(`Nothing to ${word.toLowerCase()}.`, "info");
   to.push({ ...scene.state(), selected: [...state.selected] });
   const ch = scene.restore(s);
-  for (const e of ch.show) await showEdit(e);
+  let standIns = 0;
+  for (const e of ch.show) if (!(await showEdit(e))) standIns++;
   for (const e of ch.hide) await hideEdit(e);
   for (const o of ch.gone) await removePreview(o);
   for (const o of ch.respawn) await respawn(o);
@@ -770,7 +772,7 @@ async function travel(from: SceneState[], to: SceneState[], word: "Undo" | "Redo
     ch.hide.length ? `${ch.hide.length} removed from the world again` : "",
     ch.show.length ? `${ch.show.length} back in the world` : "",
   ].filter(Boolean);
-  state.message = { text: `${word}${what.length ? `: ${what.join(", ")}` : ""}.`, tone: "ok" };
+  state.message = { text: `${word}${what.length ? `: ${what.join(", ")}` : ""}.${standInNote(standIns)}`, tone: "ok" };
   console.log(state.message.text);
   const changed = [...ch.spawn, ...ch.respawn, ...ch.move].map((o) => o.id);
   // What changed, to see it; else what was selected then (Esc on a copy: the originals again).
@@ -1097,8 +1099,47 @@ async function hudOn(): Promise<void> {
 }
 
 function publishCamera(): void {
-  state.camera = editorCam ? { entityId: editorCam.id, hudHidden: !!tierWatch } : undefined;
+  state.camera = editorCam || builderPaused ? { entityId: editorCam?.id, hudHidden: !!tierWatch, paused: builderPaused } : undefined;
   publish();
+}
+
+/**
+ * Builder mode paused: the overlay left interactive mode (F10) while Edit is on, so the keys go to the
+ * game. V gets the view and the HUD back and plays; the editor camera stays where it was, switched off.
+ */
+let builderPaused = false;
+
+async function pauseBuilder(): Promise<void> {
+  if (!builderOn || builderPaused) return;
+  builderPaused = true;
+  if (editorCam) {
+    try {
+      await editorCam.component.Deactivate(0, false);
+    } catch {
+      // Gone with a save load: V's camera comes back below either way.
+    }
+    await playerCameraBack();
+  }
+  await hudOn();
+  console.log("Builder mode paused (the overlay is not interactive): V's camera and HUD are back");
+  publishCamera();
+}
+
+/** F10 again: the editor camera where it was, and the HUD hidden again. */
+async function resumeBuilder(): Promise<void> {
+  if (!builderOn || !builderPaused) return;
+  builderPaused = false;
+  if (editorCam) {
+    try {
+      await editorCam.component.Activate(0, false);
+    } catch (err) {
+      console.log(`The editor camera did not come back (${(err as Error).message}): V's camera stays`);
+      await cameraOff();
+    }
+  }
+  if (settings.hideHud !== false) await hudOff();
+  console.log("Builder mode resumed");
+  publishCamera();
 }
 
 /** What the switches leave as the game has it, said once as Edit goes on. */
@@ -1153,6 +1194,7 @@ async function builderStop(): Promise<void> {
   const record = readBuilderRecord();
   const wasOn = builderOn || !!record;
   builderOn = false;
+  builderPaused = false;
   await cameraOff();
   await hudOn();
   stopTierWatch();
@@ -1523,13 +1565,17 @@ async function hideEdit(e: WorldEdit): Promise<boolean> {
   return done;
 }
 
-/** Shows again what an edit removed, unless another scene in the world still removes it. */
-async function showEdit(e: WorldEdit): Promise<void> {
+/**
+ * Shows again what an edit removed, unless another scene in the world still removes it. False when it
+ * was an entity that is not in the game: removed before a save loaded, it never came in, so its proxy
+ * stands in its place until its area loads again (D1a test, step 10; REDnode #52).
+ */
+async function showEdit(e: WorldEdit): Promise<boolean> {
   const id = registryId(e.node);
   pendingHides.delete(id);
   const others = [...scene.worldEdits, ...[...onEdits.values()].flat()];
-  if (others.some((x) => registryId(x.node).toLowerCase() === id.toLowerCase())) return;
-  if (typeof world.setVisible !== "function") return;
+  if (others.some((x) => registryId(x.node).toLowerCase() === id.toLowerCase())) return true;
+  if (typeof world.setVisible !== "function") return true;
   for (const n of [e.node, ...(e.proxies ?? [])]) {
     try {
       await world.setVisible(registryId(n), true);
@@ -1537,6 +1583,15 @@ async function showEdit(e: WorldEdit): Promise<void> {
       console.log(`Restore ${e.id}: ${(err as Error).message}`);
     }
   }
+  if (e.what === "mesh" || !e.node.globalId || state.world !== "ready") return true;
+  const there = await world.entity(e.node.globalId).catch(() => null);
+  if (!there) console.log(`${e.id}: its entity is not in the game, so its stand-in shows until its area loads again`);
+  return !!there;
+}
+
+/** What to add when doors came back as their stand-ins. */
+function standInNote(n: number): string {
+  return n ? ` ${n === 1 ? "It shows as its stand-in" : `${n} show as their stand-ins`} until the area loads again (fast travel away and back, or load a save): removed before the last load, the working ${n === 1 ? "door is" : "doors are"} not in the game yet.` : "";
 }
 
 function hideAgainSoon(): void {
@@ -1554,7 +1609,11 @@ function hideAgainSoon(): void {
 /** The open scene's removals, and those of the scenes that are on, in the game again (a save loaded, a scene opened). */
 async function applyEdits(): Promise<void> {
   if (state.world !== "ready") return;
-  const all = [...scene.worldEdits, ...[...onEdits.values()].flat()];
+  if (state.bake.inGame && scene.worldEdits.length) {
+    console.log(`World edits: ${scene.name}'s bake is in the game (${state.bake.inGame}), which removes them; nothing to hide`);
+    for (const e of scene.worldEdits) pendingHides.delete(registryId(e.node));
+  }
+  const all = [...(state.bake.inGame ? [] : scene.worldEdits), ...[...onEdits.values()].flat()];
   if (!all.length) return;
   let done = 0;
   for (const e of all) if (await hideEdit(e)) done++;
@@ -1604,10 +1663,10 @@ async function restoreEdit(id: string): Promise<void> {
   step();
   scene.worldEdits = scene.worldEdits.filter((x) => x !== e);
   scene.save();
-  await showEdit(e);
+  const working = await showEdit(e);
   for (const t of state.worldObjects.things) if (t.removedBy === id) t.removedBy = undefined;
   if (state.worldObjects.picked?.removedBy === id) state.worldObjects.picked.removedBy = undefined;
-  say(`Restored ${e.label}: it is back in the world. Undo removes it again.`, "ok");
+  say(`Restored ${e.label}: it is back in the world. Undo removes it again.${standInNote(working ? 0 : 1)}`, working ? "ok" : "info");
 }
 
 function setKinds(kinds: WorldKind[]): void {
@@ -1983,13 +2042,17 @@ function writeSession(): void {
 
 const sameFile = (a: string, b: string) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
 
+/** How many doors the last scene switch brought back as their stand-ins, for its message. */
+let switchStandIns = 0;
+
 /** Takes the open scene's previews out and makes `data` the open scene, saved to `file`, with a fresh history. */
 async function switchTo(data: SceneFile, file: string): Promise<void> {
   for (const o of scene.objects) await removePreview(o);
   // Its removals go with it (unless a scene that is on keeps one); the next scene's come.
   const leaving = scene.worldEdits;
   scene.worldEdits = [];
-  for (const e of leaving) await showEdit(e);
+  switchStandIns = 0;
+  for (const e of leaving) if (!(await showEdit(e))) switchStandIns++;
   await clearPicked();
   state.selected = [];
   state.duplicated = undefined;
@@ -2010,7 +2073,7 @@ async function closeScene(): Promise<void> {
   await switchTo({ format: 1, name: "", groups: [], objects: [] }, "");
   scanLibrary();
   scene.onSave?.();
-  say(`Closed ${was}. It is saved in ${where}; the Library tab opens it again.`, "ok");
+  say(`Closed ${was}. It is saved in ${where}; the Library tab opens it again.${standInNote(switchStandIns)}`, "ok");
 }
 
 async function openScene(file: string): Promise<void> {
@@ -2596,13 +2659,6 @@ async function lookAtCollision(): Promise<void> {
 
 /** What the Bake tab shows, from the project's files and the game's. */
 function lookAtBakes(): void {
-  lookAtBakesOnly();
-  // D1a: removals are kept and shown live; baking them is D1b's.
-  const n = scene.worldEdits.length;
-  if (n) state.bake.checks.push({ tone: "info", text: `This scene removes ${n} of the game's own objects. Removals are not baked yet (that comes next, D1b): they show while the scene is open in EDGEbuilder.` });
-}
-
-function lookAtBakesOnly(): void {
   const target = bakeProject();
   const slug = slugOf(scene.name);
   const list = bakesIn(target);
@@ -2629,9 +2685,10 @@ function lookAtBakesOnly(): void {
       sameNameFrom: fromElsewhere ? whereText(fromElsewhere.file!) : undefined,
       noCollision: new Set(state.noCollision),
       bridgeVersion: state.bridge.version,
+      worldEdits: scene.worldEdits,
     }),
     current,
-    stale: !!current?.hash && !fromElsewhere && current.hash !== bakeHash(scene.objects),
+    stale: !!current?.hash && !fromElsewhere && current.hash !== bakeHash(scene.objects, scene.worldEdits),
     inGame: scene.file ? inGameNow.get(slug) : undefined,
     list,
   };
@@ -2654,10 +2711,10 @@ async function noCollisionFor(b: Bridge, objects: Omit<SceneObject, "entityId">[
 }
 
 /** A scene to bake: the open one as it is now, any other from its file. */
-function sceneToBake(file: string): { name: string; game?: string; groups: SceneFile["groups"]; objects: SceneObject[] } {
-  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, game: scene.game, groups: scene.groups, objects: scene.objects };
+function sceneToBake(file: string): { name: string; game?: string; groups: SceneFile["groups"]; objects: SceneObject[]; worldEdits: WorldEdit[] } {
+  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, game: scene.game, groups: scene.groups, objects: scene.objects, worldEdits: scene.worldEdits };
   const d = readSceneFile(file);
-  return { name: d.name, game: d.game, groups: d.groups ?? [], objects: d.objects as SceneObject[] };
+  return { name: d.name, game: d.game, groups: d.groups ?? [], objects: d.objects as SceneObject[], worldEdits: readableEdits(d.worldEdits) };
 }
 
 /**
@@ -2677,28 +2734,37 @@ async function bakeSceneInto(target: BakeProject, file: string, root?: string): 
     const info = await sources.lookAt(b, entry);
     if (info.bounds) o.bounds = info.bounds;
   }
+  // D1b: the game's own objects the scene removes, with their stand-ins (REDbridge finds those).
+  const { removals } = bakeRemovals(src.worldEdits);
   let built: SectorBuilt;
   try {
-    built = await b.sectorBuild({ project: target.dir, scene: input, ...(root ? { root } : {}) });
+    built = await b.sectorBuild({ project: target.dir, scene: input, ...(root ? { root } : {}), ...(removals.length ? { removals } : {}) });
   } catch (err) {
+    const signature = /param|argument|signature|method/i.test((err as Error).message);
+    // REDbridge 0.15.0 and before know no `removals` (#18).
+    if (removals.length && signature) throw new Error("baking removals needs a newer REDbridge than 0.15.0 (REDbridge #18): update it in EDGEdeck (Get REDbridge) once it is out");
     // REDbridge before 0.12.0 takes no `root`, and reads only the game's files.
-    if (!root || !/param|argument|signature|method/i.test((err as Error).message)) throw err;
+    if (!root || !signature) throw err;
     built = await b.sectorBuild({ project: target.dir, scene: input });
   }
-  const xl = settleXl(built.xl, built.name, built.blockPath);
+  if (!built.xl) throw new Error(`nothing was written${built.refused?.length ? `: ${built.refused.map((r) => r.why).join("; ")}` : ""}`);
+  const xl = built.blockPath ? settleXl(built.xl, built.name, built.blockPath) : built.xl;
+  for (const r of built.refused ?? []) console.log(`Bake ${src.name}: a removal was not written (${r.sector} entry ${r.index}): ${r.why}`);
   const record: BakeRecord = {
     slug: built.name,
     name: src.name,
     file,
-    hash: bakeHash(src.objects),
+    hash: bakeHash(src.objects, src.worldEdits),
     objects: built.nodes,
+    ...(built.removed?.length ? { removals: built.removed.length } : {}),
     date: new Date().toISOString(),
     bridge: state.bridge.version,
-    box: built.streamingBox,
+    box: built.streamingBox ?? undefined,
     needs: sceneNeeds(src.objects.map((o) => o.resource), index.extra),
   };
   writeRecord(target, record);
-  console.log(`Baked ${src.name}: ${built.nodes} objects into ${target.dir} (${built.sector})${built.warnings.length ? `; ${built.warnings.length} warnings: ${built.warnings.join(" | ")}` : ""}`);
+  const removedText = built.removed?.length ? `, ${built.removed.filter((r) => !r.proxyOf).length} removals with ${built.removed.filter((r) => r.proxyOf).length} stand-ins` : "";
+  console.log(`Baked ${src.name}: ${built.nodes} objects${removedText} into ${target.dir} (${built.sector ?? built.xl})${built.warnings.length ? `; ${built.warnings.length} warnings: ${built.warnings.join(" | ")}` : ""}`);
   return { built, xl, record };
 }
 
@@ -2722,10 +2788,18 @@ async function bakeOpenScene(): Promise<void> {
   }
   // Baked straight into the project: no longer the copy of a Library bake, if it was one.
   forgetInNote(target.dir, done.built.name);
-  state.bake.last = { slug: done.built.name, files: [done.built.sector, done.built.block, done.xl].map((f) => path.relative(target.dir, f)), warnings: done.built.warnings };
+  const refused = done.built.refused ?? [];
+  state.bake.last = {
+    slug: done.built.name,
+    files: [done.built.sector, done.built.block, done.xl].filter((f): f is string => !!f).map((f) => path.relative(target.dir, f)),
+    warnings: [...done.built.warnings, ...refused.map((r) => `A removal was not written (${path.win32.basename(r.sector)} entry ${r.index}): ${r.why}`)],
+  };
   lookAtBakes();
   const n = done.built.nodes;
-  say(`Baked ${scene.name}: ${n} object${n === 1 ? "" : "s"} into ${target.name}. Pack and install the project, and start the game again.`, "ok");
+  const gone = (done.built.removed ?? []).filter((r) => !r.proxyOf).length;
+  const standIns = (done.built.removed ?? []).filter((r) => r.proxyOf).length;
+  const what = [n ? `${n} object${n === 1 ? "" : "s"}` : "", gone ? `${gone} removal${gone === 1 ? "" : "s"} of the game's own objects${standIns ? ` (and ${standIns} stand-in${standIns === 1 ? "" : "s"})` : ""}` : ""].filter(Boolean).join(" and ");
+  say(`Baked ${scene.name}: ${what} into ${target.name}.${refused.length ? ` ${refused.length} removal${refused.length === 1 ? " was" : "s were"} not written (the Bake tab says why).` : ""} Pack and install the project, and start the game again.`, refused.length ? "warn" : "ok");
 }
 
 async function removeBake(slug: string): Promise<void> {
@@ -2755,7 +2829,7 @@ let libraryBakeDirs: { dir: string; folder: string }[] = [];
 const sceneHashes = new Map<string, { size: number; mtime: number; name: string; hash: string }>();
 
 function sceneNow(file: string): { name: string; hash: string } | undefined {
-  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, hash: bakeHash(scene.objects) };
+  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, hash: bakeHash(scene.objects, scene.worldEdits) };
   let st: fs.Stats;
   try {
     st = fs.statSync(file);
@@ -2766,7 +2840,7 @@ function sceneNow(file: string): { name: string; hash: string } | undefined {
   if (known && known.size === st.size && known.mtime === st.mtimeMs) return known;
   try {
     const d = readSceneFile(file);
-    const now = { size: st.size, mtime: st.mtimeMs, name: d.name, hash: bakeHash(d.objects as SceneObject[]) };
+    const now = { size: st.size, mtime: st.mtimeMs, name: d.name, hash: bakeHash(d.objects as SceneObject[], readableEdits(d.worldEdits)) };
     sceneHashes.set(file, now);
     return now;
   } catch {
@@ -2833,7 +2907,7 @@ async function changeLibraryBake(dir: string, meta: BakeMeta, files: string[], d
     const slug = slugOf(src.name);
     const other = meta.scenes.find((s) => s.slug === slug && !sameFile(fromLibraryPath(root, s.path), file)) ?? plan.find((p) => p.file !== file && slugOf(p.src.name) === slug);
     if (other) throw new Error(`Two scenes called ${src.name} can't be in one bake: a bake's files go by the scene's name. Rename one first.`);
-    const stop = checkBake({ file, name: src.name, objects: src.objects, project: target, bridgeReady: true, needs: [], bridgeVersion: state.bridge.version }).find((c) => c.tone === "error");
+    const stop = checkBake({ file, name: src.name, objects: src.objects, project: target, bridgeReady: true, needs: [], bridgeVersion: state.bridge.version, worldEdits: src.worldEdits }).find((c) => c.tone === "error");
     if (stop) throw new Error(`${src.name}: ${stop.text}`);
   }
   const warnings: string[] = [];
@@ -3076,7 +3150,13 @@ async function swapIn(archive: string): Promise<string | undefined> {
 
 // The host links to the game, or loses it: the world may have become usable, or not.
 let linked: boolean | undefined;
+/** The overlay's mode as last seen: builder mode pauses when it leaves interactive and resumes when it comes back. */
+let overlayMode: string | undefined;
 game.onState((s) => {
+  if (s.overlay && s.overlay !== overlayMode) {
+    overlayMode = s.overlay;
+    void queued(() => (s.overlay === "interactive" ? resumeBuilder() : pauseBuilder()));
+  }
   if (s.world && backWhenIn) {
     backWhenIn = false;
     previewsBackSoon();

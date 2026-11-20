@@ -178,6 +178,7 @@ function render(s: Snapshot): void {
   renderWorld(s);
   renderEdits(s);
   viewport.setCamera(s.camera?.entityId);
+  viewport.setPaused(!!s.camera?.paused);
   // A duplicate asked for with Edit on: its copies are selected now, and follow the mouse.
   if (lastCopy === undefined) lastCopy = s.duplicated?.seq ?? 0;
   if (s.duplicated && s.duplicated.seq !== lastCopy) {

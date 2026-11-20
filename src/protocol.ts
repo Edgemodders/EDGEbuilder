@@ -231,6 +231,8 @@ export interface BakeRecord {
   box?: { min: number[]; max: number[] };
   /** The mods and the project its objects need. */
   needs?: string[];
+  /** D1b: how many of the game's own entries it deletes, stand-ins included. */
+  removals?: number;
   /**
    * B4-3: the Library bake it came from, by Include in project. `latest` and `dir`: the version the
    * Library has now and where, when that is newer.
@@ -335,7 +337,7 @@ export interface Snapshot {
   /** The last Duplicate's copies, so the page can start moving them; `seq` counts duplicates. */
   duplicated?: { seq: number; ids: string[] };
   /** Builder mode: EDGEbuilder's own camera entity while Edit is on, and whether the game's HUD is hidden. */
-  camera?: { entityId: string; hudHidden: boolean };
+  camera?: { entityId?: string; hudHidden: boolean; paused?: boolean };
   /** The last thing worth telling the player. */
   message?: { text: string; tone: "info" | "ok" | "warn" | "error" };
   /**

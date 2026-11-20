@@ -998,9 +998,17 @@ function atLeast(version, min) {
   for (let i = 0; i < min.length; i++) if ((v2[i] ?? 0) !== min[i]) return (v2[i] ?? 0) > min[i];
   return true;
 }
-function bakeHash(objects) {
+function bakeRemovals(edits = []) {
+  const named = edits.filter((e) => e.action === "remove" && e.node.sector);
+  return {
+    removals: named.map((e) => ({ sector: e.node.sector, index: e.node.entry, kind: e.node.type, ...e.node.globalId ? { hash: e.node.globalId } : {} })),
+    unnamed: edits.filter((e) => !named.includes(e))
+  };
+}
+function bakeHash(objects, edits = []) {
   const parts = objects.filter((o) => Bakeable.has(o.kind)).map((o) => [o.id, o.kind, o.resource ?? "", o.appearance ?? "", o.transform, o.streaming ?? null, o.ref ?? "", o.props ?? null, ...o.kind === "mesh" && o.solid ? ["solid"] : []]);
-  return createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 16);
+  const removals = edits.map((e) => [e.action, e.node.sector.toLowerCase(), e.node.entry, e.node.type]);
+  return createHash("sha256").update(JSON.stringify(removals.length ? [parts, removals] : parts)).digest("hex").slice(0, 16);
 }
 function checkBake(input) {
   const out = [];
@@ -1010,7 +1018,8 @@ function checkBake(input) {
     return out;
   }
   const { skipped, scene: scene2 } = bakeInput(input.name, void 0, [], input.objects);
-  if (!scene2.objects.length) say2("error", "The scene has nothing to bake yet.");
+  const { removals, unnamed } = bakeRemovals(input.worldEdits);
+  if (!scene2.objects.length && !removals.length) say2("error", "The scene has nothing to bake yet.");
   if (!input.project && input.redcodeMissing)
     say2("error", "No REDcode project can be seen: REDcode's REDnode package is not in the game, and it tells EDGEbuilder which project is open. REDcode puts it in when its Game Path setting is this game's folder (and REDnode: Install Package is on); then press Refresh. REDcode's output says whether it did.");
   else if (!input.project) say2("error", "No REDcode project is open. A bake goes into a project: open or make one in REDcode (VS Code), and this tab picks it up (Refresh asks again).");
@@ -1040,6 +1049,8 @@ function checkBake(input) {
   if (solid.length && !atLeast(input.bridgeVersion, [0, 12, 0])) say2("warn", `REDbridge ${input.bridgeVersion} writes no solid meshes: V walks through all of them. Update it to 0.12.0 or later (EDGEdeck: Get REDbridge).`);
   const seenFar = meshes.filter((o) => o.streaming);
   if (seenFar.length && !atLeast(input.bridgeVersion, [0, 12, 1])) say2("warn", `REDbridge ${input.bridgeVersion} does not pass Seen from on to the game's own hide distance: ${seenFar.length === 1 ? "a mesh with Seen from shows" : `${seenFar.length} meshes with Seen from show`} only as far as the game allows for ${seenFar.length === 1 ? "its" : "their"} size (about 60 m for a crate). Update it to 0.12.1 or later (EDGEdeck: Get REDbridge).`);
+  if (unnamed.length) say2("warn", `Left out, since the sector ${unnamed.length === 1 ? "it is in has" : "they are in have"} no name (REDbridge was not running when ${unnamed.length === 1 ? "it was" : "they were"} removed): ${unnamed.map((e) => e.label).join(", ")}. Restore and remove ${unnamed.length === 1 ? "it" : "them"} again.`);
+  if (removals.length) say2("info", `${removals.length === 1 ? "1 of the game's own objects is" : `${removals.length} of the game's own objects are`} removed: the bake writes ${removals.length === 1 ? "it" : "them"} as ArchiveXL node deletions, with ${removals.length === 1 ? "its" : "their"} stand-in meshes, so the baked mod needs ArchiveXL. Finding the stand-ins can take half a minute the first time.`);
   if (plain) say2("info", `${plain} mesh${plain === 1 ? " is" : "es are"} set not solid: V walks through ${plain === 1 ? "it" : "them"}. The Solid switch on the Scene tab changes that.`);
   if (solid.length) say2("info", `${solid.length} mesh${solid.length === 1 ? "" : "es"} will stop V, bullets and cars. Entities keep their own collision.`);
   return out;
@@ -2144,7 +2155,8 @@ async function travel(from, to, word) {
   if (!s) return say(`Nothing to ${word.toLowerCase()}.`, "info");
   to.push({ ...scene.state(), selected: [...state.selected] });
   const ch = scene.restore(s);
-  for (const e of ch.show) await showEdit(e);
+  let standIns = 0;
+  for (const e of ch.show) if (!await showEdit(e)) standIns++;
   for (const e of ch.hide) await hideEdit(e);
   for (const o of ch.gone) await removePreview(o);
   for (const o of ch.respawn) await respawn(o);
@@ -2163,7 +2175,7 @@ async function travel(from, to, word) {
     ch.hide.length ? `${ch.hide.length} removed from the world again` : "",
     ch.show.length ? `${ch.show.length} back in the world` : ""
   ].filter(Boolean);
-  state.message = { text: `${word}${what.length ? `: ${what.join(", ")}` : ""}.`, tone: "ok" };
+  state.message = { text: `${word}${what.length ? `: ${what.join(", ")}` : ""}.${standInNote(standIns)}`, tone: "ok" };
   console.log(state.message.text);
   const changed = [...ch.spawn, ...ch.respawn, ...ch.move].map((o) => o.id);
   await select(changed.length ? changed : s.selected ?? state.selected);
@@ -2413,8 +2425,38 @@ async function hudOn() {
   writeBuilderRecord(record);
 }
 function publishCamera() {
-  state.camera = editorCam ? { entityId: editorCam.id, hudHidden: !!tierWatch } : void 0;
+  state.camera = editorCam || builderPaused ? { entityId: editorCam?.id, hudHidden: !!tierWatch, paused: builderPaused } : void 0;
   publish();
+}
+var builderPaused = false;
+async function pauseBuilder() {
+  if (!builderOn || builderPaused) return;
+  builderPaused = true;
+  if (editorCam) {
+    try {
+      await editorCam.component.Deactivate(0, false);
+    } catch {
+    }
+    await playerCameraBack();
+  }
+  await hudOn();
+  console.log("Builder mode paused (the overlay is not interactive): V's camera and HUD are back");
+  publishCamera();
+}
+async function resumeBuilder() {
+  if (!builderOn || !builderPaused) return;
+  builderPaused = false;
+  if (editorCam) {
+    try {
+      await editorCam.component.Activate(0, false);
+    } catch (err) {
+      console.log(`The editor camera did not come back (${err.message}): V's camera stays`);
+      await cameraOff();
+    }
+  }
+  if (settings.hideHud !== false) await hudOff();
+  console.log("Builder mode resumed");
+  publishCamera();
 }
 function switchesNote() {
   const off = [settings.editorCamera === false ? "EDGEbuilder's own camera" : "", settings.hideHud === false ? "hiding the game's HUD" : ""].filter(Boolean);
@@ -2462,6 +2504,7 @@ async function builderStop() {
   const record = readBuilderRecord();
   const wasOn = builderOn || !!record;
   builderOn = false;
+  builderPaused = false;
   await cameraOff();
   await hudOn();
   stopTierWatch();
@@ -2759,8 +2802,8 @@ async function showEdit(e) {
   const id = registryId(e.node);
   pendingHides.delete(id);
   const others = [...scene.worldEdits, ...[...onEdits.values()].flat()];
-  if (others.some((x) => registryId(x.node).toLowerCase() === id.toLowerCase())) return;
-  if (typeof world2.setVisible !== "function") return;
+  if (others.some((x) => registryId(x.node).toLowerCase() === id.toLowerCase())) return true;
+  if (typeof world2.setVisible !== "function") return true;
   for (const n of [e.node, ...e.proxies ?? []]) {
     try {
       await world2.setVisible(registryId(n), true);
@@ -2768,6 +2811,13 @@ async function showEdit(e) {
       console.log(`Restore ${e.id}: ${err.message}`);
     }
   }
+  if (e.what === "mesh" || !e.node.globalId || state.world !== "ready") return true;
+  const there = await world2.entity(e.node.globalId).catch(() => null);
+  if (!there) console.log(`${e.id}: its entity is not in the game, so its stand-in shows until its area loads again`);
+  return !!there;
+}
+function standInNote(n) {
+  return n ? ` ${n === 1 ? "It shows as its stand-in" : `${n} show as their stand-ins`} until the area loads again (fast travel away and back, or load a save): removed before the last load, the working ${n === 1 ? "door is" : "doors are"} not in the game yet.` : "";
 }
 function hideAgainSoon() {
   if (hideTimer) return;
@@ -2782,7 +2832,11 @@ function hideAgainSoon() {
 }
 async function applyEdits() {
   if (state.world !== "ready") return;
-  const all = [...scene.worldEdits, ...[...onEdits.values()].flat()];
+  if (state.bake.inGame && scene.worldEdits.length) {
+    console.log(`World edits: ${scene.name}'s bake is in the game (${state.bake.inGame}), which removes them; nothing to hide`);
+    for (const e of scene.worldEdits) pendingHides.delete(registryId(e.node));
+  }
+  const all = [...state.bake.inGame ? [] : scene.worldEdits, ...[...onEdits.values()].flat()];
   if (!all.length) return;
   let done = 0;
   for (const e of all) if (await hideEdit(e)) done++;
@@ -2826,10 +2880,10 @@ async function restoreEdit(id) {
   step();
   scene.worldEdits = scene.worldEdits.filter((x) => x !== e);
   scene.save();
-  await showEdit(e);
+  const working = await showEdit(e);
   for (const t of state.worldObjects.things) if (t.removedBy === id) t.removedBy = void 0;
   if (state.worldObjects.picked?.removedBy === id) state.worldObjects.picked.removedBy = void 0;
-  say(`Restored ${e.label}: it is back in the world. Undo removes it again.`, "ok");
+  say(`Restored ${e.label}: it is back in the world. Undo removes it again.${standInNote(working ? 0 : 1)}`, working ? "ok" : "info");
 }
 function setKinds(kinds) {
   const known = kinds.filter((k) => k in KindLabels);
@@ -3127,11 +3181,13 @@ function writeSession() {
   }
 }
 var sameFile = (a, b) => path10.resolve(a).toLowerCase() === path10.resolve(b).toLowerCase();
+var switchStandIns = 0;
 async function switchTo(data, file) {
   for (const o of scene.objects) await removePreview(o);
   const leaving = scene.worldEdits;
   scene.worldEdits = [];
-  for (const e of leaving) await showEdit(e);
+  switchStandIns = 0;
+  for (const e of leaving) if (!await showEdit(e)) switchStandIns++;
   await clearPicked();
   state.selected = [];
   state.duplicated = void 0;
@@ -3149,7 +3205,7 @@ async function closeScene() {
   await switchTo({ format: 1, name: "", groups: [], objects: [] }, "");
   scanLibrary();
   scene.onSave?.();
-  say(`Closed ${was}. It is saved in ${where}; the Library tab opens it again.`, "ok");
+  say(`Closed ${was}. It is saved in ${where}; the Library tab opens it again.${standInNote(switchStandIns)}`, "ok");
 }
 async function openScene(file) {
   if (sameFile(file, scene.file)) return say(`${scene.name} is already open.`, "info");
@@ -3654,11 +3710,6 @@ async function lookAtCollision() {
   }
 }
 function lookAtBakes() {
-  lookAtBakesOnly();
-  const n = scene.worldEdits.length;
-  if (n) state.bake.checks.push({ tone: "info", text: `This scene removes ${n} of the game's own objects. Removals are not baked yet (that comes next, D1b): they show while the scene is open in EDGEbuilder.` });
-}
-function lookAtBakesOnly() {
   const target = bakeProject();
   const slug = slugOf(scene.name);
   const list2 = bakesIn(target);
@@ -3683,10 +3734,11 @@ function lookAtBakesOnly() {
       needs: needsOf(),
       sameNameFrom: fromElsewhere ? whereText(fromElsewhere.file) : void 0,
       noCollision: new Set(state.noCollision),
-      bridgeVersion: state.bridge.version
+      bridgeVersion: state.bridge.version,
+      worldEdits: scene.worldEdits
     }),
     current,
-    stale: !!current?.hash && !fromElsewhere && current.hash !== bakeHash(scene.objects),
+    stale: !!current?.hash && !fromElsewhere && current.hash !== bakeHash(scene.objects, scene.worldEdits),
     inGame: scene.file ? inGameNow.get(slug) : void 0,
     list: list2
   };
@@ -3705,9 +3757,9 @@ async function noCollisionFor(b, objects) {
   return none;
 }
 function sceneToBake(file) {
-  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, game: scene.game, groups: scene.groups, objects: scene.objects };
+  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, game: scene.game, groups: scene.groups, objects: scene.objects, worldEdits: scene.worldEdits };
   const d = readSceneFile(file);
-  return { name: d.name, game: d.game, groups: d.groups ?? [], objects: d.objects };
+  return { name: d.name, game: d.game, groups: d.groups ?? [], objects: d.objects, worldEdits: readableEdits(d.worldEdits) };
 }
 async function bakeSceneInto(target, file, root) {
   const src = sceneToBake(file);
@@ -3721,27 +3773,34 @@ async function bakeSceneInto(target, file, root) {
     const info = await sources.lookAt(b, entry);
     if (info.bounds) o.bounds = info.bounds;
   }
+  const { removals } = bakeRemovals(src.worldEdits);
   let built;
   try {
-    built = await b.sectorBuild({ project: target.dir, scene: input, ...root ? { root } : {} });
+    built = await b.sectorBuild({ project: target.dir, scene: input, ...root ? { root } : {}, ...removals.length ? { removals } : {} });
   } catch (err) {
-    if (!root || !/param|argument|signature|method/i.test(err.message)) throw err;
+    const signature = /param|argument|signature|method/i.test(err.message);
+    if (removals.length && signature) throw new Error("baking removals needs a newer REDbridge than 0.15.0 (REDbridge #18): update it in EDGEdeck (Get REDbridge) once it is out");
+    if (!root || !signature) throw err;
     built = await b.sectorBuild({ project: target.dir, scene: input });
   }
-  const xl = settleXl(built.xl, built.name, built.blockPath);
+  if (!built.xl) throw new Error(`nothing was written${built.refused?.length ? `: ${built.refused.map((r) => r.why).join("; ")}` : ""}`);
+  const xl = built.blockPath ? settleXl(built.xl, built.name, built.blockPath) : built.xl;
+  for (const r of built.refused ?? []) console.log(`Bake ${src.name}: a removal was not written (${r.sector} entry ${r.index}): ${r.why}`);
   const record = {
     slug: built.name,
     name: src.name,
     file,
-    hash: bakeHash(src.objects),
+    hash: bakeHash(src.objects, src.worldEdits),
     objects: built.nodes,
+    ...built.removed?.length ? { removals: built.removed.length } : {},
     date: (/* @__PURE__ */ new Date()).toISOString(),
     bridge: state.bridge.version,
-    box: built.streamingBox,
+    box: built.streamingBox ?? void 0,
     needs: sceneNeeds(src.objects.map((o) => o.resource), index.extra)
   };
   writeRecord(target, record);
-  console.log(`Baked ${src.name}: ${built.nodes} objects into ${target.dir} (${built.sector})${built.warnings.length ? `; ${built.warnings.length} warnings: ${built.warnings.join(" | ")}` : ""}`);
+  const removedText = built.removed?.length ? `, ${built.removed.filter((r) => !r.proxyOf).length} removals with ${built.removed.filter((r) => r.proxyOf).length} stand-ins` : "";
+  console.log(`Baked ${src.name}: ${built.nodes} objects${removedText} into ${target.dir} (${built.sector ?? built.xl})${built.warnings.length ? `; ${built.warnings.length} warnings: ${built.warnings.join(" | ")}` : ""}`);
   return { built, xl, record };
 }
 async function bakeOpenScene() {
@@ -3763,10 +3822,18 @@ async function bakeOpenScene() {
     return say(`The bake did not go through: ${err.message}`, "error");
   }
   forgetInNote(target.dir, done.built.name);
-  state.bake.last = { slug: done.built.name, files: [done.built.sector, done.built.block, done.xl].map((f) => path10.relative(target.dir, f)), warnings: done.built.warnings };
+  const refused = done.built.refused ?? [];
+  state.bake.last = {
+    slug: done.built.name,
+    files: [done.built.sector, done.built.block, done.xl].filter((f) => !!f).map((f) => path10.relative(target.dir, f)),
+    warnings: [...done.built.warnings, ...refused.map((r) => `A removal was not written (${path10.win32.basename(r.sector)} entry ${r.index}): ${r.why}`)]
+  };
   lookAtBakes();
   const n = done.built.nodes;
-  say(`Baked ${scene.name}: ${n} object${n === 1 ? "" : "s"} into ${target.name}. Pack and install the project, and start the game again.`, "ok");
+  const gone2 = (done.built.removed ?? []).filter((r) => !r.proxyOf).length;
+  const standIns = (done.built.removed ?? []).filter((r) => r.proxyOf).length;
+  const what = [n ? `${n} object${n === 1 ? "" : "s"}` : "", gone2 ? `${gone2} removal${gone2 === 1 ? "" : "s"} of the game's own objects${standIns ? ` (and ${standIns} stand-in${standIns === 1 ? "" : "s"})` : ""}` : ""].filter(Boolean).join(" and ");
+  say(`Baked ${scene.name}: ${what} into ${target.name}.${refused.length ? ` ${refused.length} removal${refused.length === 1 ? " was" : "s were"} not written (the Bake tab says why).` : ""} Pack and install the project, and start the game again.`, refused.length ? "warn" : "ok");
 }
 async function removeBake2(slug) {
   const target = bakeProject();
@@ -3785,7 +3852,7 @@ async function removeBake2(slug) {
 var libraryBakeDirs = [];
 var sceneHashes = /* @__PURE__ */ new Map();
 function sceneNow(file) {
-  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, hash: bakeHash(scene.objects) };
+  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, hash: bakeHash(scene.objects, scene.worldEdits) };
   let st;
   try {
     st = fs9.statSync(file);
@@ -3796,7 +3863,7 @@ function sceneNow(file) {
   if (known && known.size === st.size && known.mtime === st.mtimeMs) return known;
   try {
     const d = readSceneFile(file);
-    const now = { size: st.size, mtime: st.mtimeMs, name: d.name, hash: bakeHash(d.objects) };
+    const now = { size: st.size, mtime: st.mtimeMs, name: d.name, hash: bakeHash(d.objects, readableEdits(d.worldEdits)) };
     sceneHashes.set(file, now);
     return now;
   } catch {
@@ -3853,7 +3920,7 @@ async function changeLibraryBake(dir, meta, files, drop2 = []) {
     const slug = slugOf(src.name);
     const other = meta.scenes.find((s) => s.slug === slug && !sameFile(fromLibraryPath(root, s.path), file)) ?? plan.find((p) => p.file !== file && slugOf(p.src.name) === slug);
     if (other) throw new Error(`Two scenes called ${src.name} can't be in one bake: a bake's files go by the scene's name. Rename one first.`);
-    const stop = checkBake({ file, name: src.name, objects: src.objects, project: target, bridgeReady: true, needs: [], bridgeVersion: state.bridge.version }).find((c) => c.tone === "error");
+    const stop = checkBake({ file, name: src.name, objects: src.objects, project: target, bridgeReady: true, needs: [], bridgeVersion: state.bridge.version, worldEdits: src.worldEdits }).find((c) => c.tone === "error");
     if (stop) throw new Error(`${src.name}: ${stop.text}`);
   }
   const warnings = [];
@@ -3984,7 +4051,7 @@ async function importModel(m) {
     return say(`Import is not available: ${err.message}`, "error");
   }
   const target = project;
-  const version = `EDGEbuilder ${"0.12.1"}`;
+  const version = `EDGEbuilder ${"0.12.2"}`;
   const call = (method, params) => stopAsked ? Promise.reject(new Error(ImportStopped)) : b.call(method, params);
   const began = Date.now();
   const step2 = (text) => {
@@ -4063,7 +4130,12 @@ async function swapIn(archive) {
   }
 }
 var linked;
+var overlayMode;
 game.onState((s) => {
+  if (s.overlay && s.overlay !== overlayMode) {
+    overlayMode = s.overlay;
+    void queued(() => s.overlay === "interactive" ? resumeBuilder() : pauseBuilder());
+  }
   if (s.world && backWhenIn) {
     backWhenIn = false;
     previewsBackSoon();
@@ -4139,7 +4211,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.12.1"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.12.2"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs9.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {
