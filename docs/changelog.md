@@ -10,11 +10,24 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.12.5 (2026-11-19)
+
+<!-- nexus
+New: Remove the game's own doors from the world: pick one with Edit on, or on the new World tab, and press Remove
+New: Bake writes the removals into your mod with each door's stand-in, so the doors stay gone with EDGEbuilder off
+New: Restore and Undo bring a removed door back; the Scene tab lists what a scene removes
+New: A warning before removing a door a quest uses, such as V's own
+Changed: F10 with Edit on gives V the view back to play; F10 again returns to EDGEbuilder's camera
+Changed: Scenes and bakes say what they add and remove, as "0 added, 2 removed"
+Fixed: Long file paths in tooltips wrap inside the tooltip
+Needs: REDbridge 0.16.0 or later to bake removals, and ArchiveXL in the game
+-->
+
 **New**
 
 - A World tab lists the game's own doors near V, with their state (open, closed, locked). Hover outlines one, a click picks it and flies the camera there.
 - With Edit on, a click on a door in the world picks it. Switch Meshes on to pick any mesh the game placed, such as a painted-on door.
-- Remove from world (or Delete) takes a picked door out of the game's world while the scene is open, collision too. The Scene tab lists what the scene removes, each with Restore, and Undo works on it. Removals come back after a save loads and go when the scene closes. Baking them into the mod comes next.
+- Remove from world (or Delete) takes a picked door out of the game's world while the scene is open, collision too. The Scene tab lists what the scene removes, each with Restore, and Undo works on it. Removals come back after a save loads and go when the scene closes.
 - A warning before removing a door a quest uses, such as V's own.
 - Bake writes what the scene removes into the mod, with each door's stand-in mesh, so the doors stay gone with EDGEbuilder off. A scene that only removes things bakes too. The baked mod needs ArchiveXL, and the bake needs REDbridge 0.16.0 or later.
 
