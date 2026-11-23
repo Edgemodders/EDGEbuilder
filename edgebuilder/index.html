@@ -37,6 +37,9 @@
   #exPreview { right: 1144px; width: 400px; }
   /* Opened from a search result (the Preview switch), with no Explorer: beside the window. */
   #exPreview.alone { right: 656px; }
+  /* Picked in the world with the cursor: at the screen's left edge, coming in from the left, so the middle stays clear. */
+  #exPreview.world { left: 24px; right: auto; }
+  #exPreview.world:not(.open) { transform: translateX(-60px); }
   #explorerDrawer.open, #exPreview.open { opacity: 1; visibility: visible; transform: none; }
   #exInfo { margin: 6px 0; word-break: normal; }
   #exList { --rn-list-height: 760px; }
@@ -318,6 +321,7 @@
         </rn-tabs>
         <rn-panel id="worldPanel" class="pinnable" title="Picked in the world" data-pin-note="so Remove from world stays in view">
           <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
+          <rn-toggle id="freePick" label="Pick under the cursor" title="With Edit on: what a click would pick is outlined as the mouse moves, a click picks any mesh or door there (whatever the Meshes switch says), and its details open in a drawer at the left of the screen"></rn-toggle>
           <pre id="worldPicked">Nothing picked. With Edit on, click a door, or pick one in the list.</pre>
           <div id="worldWarnings" class="detail" hidden></div>
           <div class="row">

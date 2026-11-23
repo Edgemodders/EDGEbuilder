@@ -1314,9 +1314,14 @@ function renderWorld(s: Snapshot): void {
   // A click in the world picked something new: show it here.
   if (picked?.key !== lastPickedKey) {
     lastPickedKey = picked?.key;
-    if (picked && performance.now() - worldClickAt < 5000) mainTabs().select?.(WorldTab);
+    if (picked && performance.now() - worldClickAt < 5000) {
+      mainTabs().select?.(WorldTab);
+      // Picked with the cursor: its details in the Preview drawer at the screen's left.
+      showWorldPreview();
+    }
   }
   if (!picked) {
+    previewWorld = false;
     $("worldPicked").textContent = "Nothing picked. With Edit on, click a door, or pick one in the list.";
     $("worldWarnings").hidden = true;
     $("worldRemove").setAttribute("disabled", "");
@@ -1539,7 +1544,7 @@ function renderSectorDrawer(s: Snapshot): void {
   }
   if (v.path !== lastSector) {
     lastSector = v.path;
-    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = previewWorld = false;
     renderLeft();
     ($("sectorFilter") as HTMLInputElement).value = v.filter;
   }
@@ -1673,8 +1678,9 @@ for (const id of ["bakeProjects", "importProjects"]) {
 let libraryDrawerOpen = false;
 let previewsOpen = false;
 
-function openLeft(which: "objects" | "library" | "previews" | "explorer" | "preview" | "none"): void {
+function openLeft(which: "objects" | "library" | "previews" | "explorer" | "preview" | "world" | "none"): void {
   previewAlone = which === "preview";
+  previewWorld = which === "world";
   drawerOpen = which === "objects";
   libraryDrawerOpen = which === "library";
   previewsOpen = which === "previews";
@@ -1696,10 +1702,12 @@ function renderLeft(): void {
   $("previewsDrawer").classList.toggle("open", previewsOpen);
   $("previewsEye").setAttribute("aria-pressed", String(previewsOpen));
   $("explorerDrawer").classList.toggle("open", explorerOpen);
-  $("exPreview").classList.toggle("open", (explorerOpen || previewAlone) && !!exPicked);
-  $("exPreview").classList.toggle("alone", !explorerOpen);
+  const worldOpen = previewWorld && !!state?.worldObjects.picked;
+  $("exPreview").classList.toggle("open", worldOpen || ((explorerOpen || previewAlone) && !!exPicked));
+  $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld);
+  $("exPreview").classList.toggle("world", previewWorld);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
-  if ((!explorerOpen && !previewAlone) || !exPicked) stopExView();
+  if (!worldOpen && ((!explorerOpen && !previewAlone) || !exPicked)) stopExView();
 }
 
 // ---- the Library out of the window (0.14.0) ------------------------------------------------------------
@@ -1958,7 +1966,97 @@ let explorerOpen = false;
  * result count). With the Explorer open, a result shows beside the Explorer instead.
  */
 let previewAlone = false;
+/** The Preview drawer at the screen's left, for the thing picked in the world with the cursor. */
+let previewWorld = false;
 let previewPick = false;
+/** Pick under the cursor (the World tab's switch): outlines what a click would pick, and a click picks any mesh. */
+let freePick = false;
+let hoverSent = false;
+try {
+  freePick = localStorage.getItem("edgebuilder.freePick") === "1";
+} catch {
+  // No storage: off.
+}
+($("freePick") as HTMLElement & { checked: boolean }).checked = freePick;
+$("freePick").addEventListener("change", (e) => {
+  freePick = !!(e as CustomEvent<{ checked: boolean }>).detail.checked;
+  try {
+    localStorage.setItem("edgebuilder.freePick", freePick ? "1" : "0");
+  } catch {
+    // No storage: for this session only.
+  }
+  if (!freePick && hoverSent) {
+    hoverSent = false;
+    post({ type: "world.hoverRay", ray: null });
+  }
+});
+
+/** Opens the Preview drawer at the screen's left for the thing picked in the world; the other left drawers close. */
+function showWorldPreview(): void {
+  drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = false;
+  previewWorld = true;
+  if (state?.sectors.open) post({ type: "sectors.close" });
+}
+
+let worldLookAsked = "";
+
+/** The Preview drawer for the thing picked in the world: its model, what the game says of it, and whether it is solid there. */
+function renderWorldPreview(s: Snapshot): void {
+  const p = s.worldObjects.picked;
+  if (!p) {
+    stopExView();
+    return;
+  }
+  const res = p.resource && kindOfPath(p.resource) ? p.resource : undefined;
+  $("exTitle").textContent = p.label;
+  $("exTitle").title = p.resource ?? "";
+  if (res) {
+    void showExView(res);
+    // Its size, collision data and looks, from REDbridge's mesh.info (once per pick).
+    if (worldLookAsked !== res) {
+      worldLookAsked = res;
+      post({ type: "look", path: res });
+    }
+  } else {
+    stopExView();
+    ($("exCanvas") as HTMLCanvasElement).getContext("2d")?.clearRect(0, 0, 378, 400);
+    $("exNote").textContent = p.resource ? "No 3D preview for this kind of file." : "Its file is not known, so there is no 3D preview.";
+  }
+  const info = res && s.looked?.path === res ? s.looked.info : undefined;
+  const b = info?.bounds;
+  const sc = p.scale ?? [1, 1, 1];
+  const node = p.node;
+  const d = p.door;
+  const solid = p.ray
+    ? p.ray.solid
+      ? `yes: the game's physics stopped the click's line on it${p.ray.distance !== undefined ? ` (${p.ray.distance.toFixed(1)} m from the camera)` : ""}`
+      : "no: the click's line went through it (walk-through here, or its collision is a separate node)"
+    : p.what === "door"
+      ? "a door: solid while it is closed"
+      : "not known: pick it with the cursor to find out";
+  const lines: [string, string][] = [
+    ["Name", p.label],
+    ["Kind", `${p.className}${p.what === "door" ? " (a door that opens)" : p.what === "fakeDoor" ? " (a painted-on door)" : ""}`],
+    ["Solid", solid],
+  ];
+  if (res && p.what === "mesh") lines.push(["Collision", info?.hasCollision === true ? "its mesh carries collision data" : info?.hasCollision === false ? "its mesh has no collision data" : "reading..."]);
+  if (p.resource) lines.push(["Path", p.resource]);
+  if (p.appearance) lines.push(["Look", p.appearance]);
+  if (b) lines.push(["Size", `${((b.max[0] - b.min[0]) * sc[0]).toFixed(2)} × ${((b.max[1] - b.min[1]) * sc[1]).toFixed(2)} × ${((b.max[2] - b.min[2]) * sc[2]).toFixed(2)} m${sc.some((v) => Math.abs(v - 1) > 1e-3) ? ` (scaled ${sc.map((v) => v.toFixed(2)).join(", ")})` : ""}`]);
+  lines.push(["At", p.position.map((v) => v.toFixed(2)).join(", ")]);
+  if (d) lines.push(["Door", [doorText(d), d.initial ? `starts ${d.initial.toLowerCase()}` : "", d.closesItself ? "closes by itself" : ""].filter(Boolean).join("; ")]);
+  if (node) lines.push(["Node", `${node.type}, entry ${node.entry} (node ${node.node})`], ["Sector", node.sector ? shortName(node.sector) : node.sectorHash]);
+  else if (p.note) lines.push(["Node", p.note]);
+  if (p.ref) lines.push(["Ref", p.ref]);
+  if (p.proxies?.length) lines.push(["Proxy", p.proxies.map((x) => `entry ${x.entry} in ${x.sector ? shortName(x.sector) : x.sectorHash}`).join(", ")]);
+  if (p.removedBy) lines.push(["Scene", `removed by this scene (${p.removedBy})`]);
+  $("exProps").innerHTML = lines.map(([k, v]) => `<div class="prop"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join("");
+  $("exAppearances").hidden = true;
+  $("exAppLabel").hidden = true;
+  $("exDrop").textContent = "Drop a copy";
+  $("exDrop").toggleAttribute("disabled", !res);
+  $("exDrop").title = res ? "A copy of it in the open scene: Drop at click starts with its outline under the crosshair" : "Its file is not known";
+}
 try {
   previewPick = localStorage.getItem("edgebuilder.previewPick") === "1";
 } catch {
@@ -2097,7 +2195,7 @@ function renderExplorer(): void {
 $("explorerOpen").addEventListener("click", () => openLeft(explorerOpen ? "none" : "explorer"));
 $("explorerClose").addEventListener("click", () => openLeft("none"));
 $("exPreviewClose").addEventListener("click", () => {
-  if (previewAlone) return openLeft("none");
+  if (previewAlone || previewWorld) return openLeft("none");
   exPicked = undefined;
   renderLeft();
   renderExplorer();
@@ -2196,6 +2294,10 @@ async function showExView(path: string): Promise<void> {
 const kindOfPath = (p: string) => /\.(mesh|ent)$/i.test(p);
 
 function renderExPreview(s: Snapshot): void {
+  if (previewWorld) return renderWorldPreview(s);
+  $("exDrop").textContent = "Drop";
+  $("exDrop").removeAttribute("disabled");
+  $("exDrop").title = "Closes the drawers and starts Drop at click: the object's outline follows the cursor, a click puts it there, Esc cancels";
   const e = exPicked;
   if (!e || (!explorerOpen && !previewAlone)) {
     stopExView();
@@ -2239,6 +2341,14 @@ $("exAppearances").addEventListener("select", (e) => {
   appearance = (e as CustomEvent<{ value: string }>).detail.value;
 });
 $("exDrop").addEventListener("click", () => {
+  if (previewWorld) {
+    // A copy of what the game placed, into the open scene.
+    const p = state?.worldObjects.picked;
+    if (!p?.resource || !kindOfPath(p.resource)) return;
+    openLeft("none");
+    startDropAtClick(p.resource, p.appearance, shortName(p.resource));
+    return;
+  }
   const e = exPicked;
   if (!e) return;
   openLeft("none");
@@ -2300,7 +2410,7 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
     else if (ray) {
       // None of the scene's objects: the game's own door (or mesh) there, if any (D1).
       worldClickAt = performance.now();
-      post({ type: "world.pick", origin: ray.o, dir: ray.d });
+      post({ type: "world.pick", origin: ray.o, dir: ray.d, free: freePick });
     }
   },
   pickBox(found, opts) {
@@ -2318,6 +2428,11 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
   builderStart: (pose) => post({ type: "builder.start", pose }),
   builderStop: () => post({ type: "builder.stop" }),
   probe: (seq, ray) => post({ type: "drop.probe", seq, origin: ray.o, dir: ray.d }),
+  hoverWorld: (ray) => {
+    if (!freePick && !hoverSent) return;
+    hoverSent = !!(freePick && ray);
+    post({ type: "world.hoverRay", ray: freePick && ray ? { origin: ray.o, dir: ray.d } : null, free: true });
+  },
   status(text) {
     $("message").textContent = text;
     $("message").className = "message warn";

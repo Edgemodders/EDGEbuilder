@@ -3058,9 +3058,12 @@ async function pickThing(t) {
   await findNode(p, seq);
   if (seq === pickSeq) publish();
 }
-async function pickMesh(n) {
+async function pickMesh(n, physicsHit) {
   const resource = await pathOf(n.resource);
   await pickThing({
+    // The game's physics stopped the line inside its bounds: solid there.
+    ray: { solid: !!n.holdsHit, distance: n.holdsHit ? physicsHit?.distance : void 0 },
+    scale: n.scale,
     key: n.id,
     what: "mesh",
     className: n.kind,
@@ -3071,29 +3074,56 @@ async function pickMesh(n) {
     removedBy: editFor(scene.worldEdits, { sectorHash: n.sector, entry: n.instance })?.id
   });
 }
-async function worldPick(origin, dir) {
-  const kinds = state.worldObjects.kinds;
-  if (state.world !== "ready" || !kinds.length || state.worldObjects.status === "unavailable") {
-    await clearPicked();
-    return publish();
-  }
+var freeKinds = () => [.../* @__PURE__ */ new Set([...state.worldObjects.kinds, "mesh"])];
+async function pickTarget(origin, dir, kinds) {
   if (kinds.includes("door") || kinds.includes("fakeDoor")) {
     if (Date.now() - nearAt > NearFresh) await lookNear();
     const { hit } = await raycast(origin, add(origin, mul(dir, 80)));
-    const door = doorUnderRay(origin, dir, state.worldObjects.things.filter((t) => t.what !== "mesh"), hit ? Math.hypot(...sub(hit, origin)) : void 0);
-    if (door) return pickThing(door);
+    const door = doorUnderRay(origin, dir, state.worldObjects.things.filter((t) => t.what !== "mesh" && kinds.includes(t.what)), hit ? Math.hypot(...sub(hit, origin)) : void 0);
+    if (door) return { door };
   }
   if (kinds.includes("mesh") && typeof world2.pick === "function") {
     try {
       const r = await world2.pick({ from: toPoint(origin), dir: toPoint(dir), max: 80, limit: 4, kinds: MeshNodeKinds });
       const n = r.hits.find((h) => h.holdsHit) ?? (r.physicsHit ? void 0 : r.hits[0]);
-      if (n) return pickMesh(n);
+      if (n) return { node: n, physicsHit: r.physicsHit };
     } catch (err) {
       console.log(`Mesh pick: ${err.message}`);
     }
   }
+  return void 0;
+}
+async function worldPick(origin, dir, free = false) {
+  const kinds = free ? freeKinds() : state.worldObjects.kinds;
+  if (state.world !== "ready" || !kinds.length || state.worldObjects.status === "unavailable") {
+    await clearPicked();
+    return publish();
+  }
+  const t = await pickTarget(origin, dir, kinds);
+  if (t?.door) return pickThing(t.door);
+  if (t?.node) return pickMesh(t.node, t.physicsHit);
   await clearPicked();
   publish();
+}
+var hoverNext;
+var hoverLooking = false;
+async function runHover() {
+  if (hoverLooking) return;
+  hoverLooking = true;
+  try {
+    while (hoverNext !== void 0) {
+      const next = hoverNext;
+      hoverNext = void 0;
+      if (!next || state.world !== "ready" || state.worldObjects.status === "unavailable") {
+        await hoverThing(null);
+        continue;
+      }
+      const t = await pickTarget(next.origin, next.dir, next.free ? freeKinds() : state.worldObjects.kinds);
+      await hoverThing(t?.door?.key ?? t?.node?.id ?? null);
+    }
+  } finally {
+    hoverLooking = false;
+  }
 }
 async function hoverThing(key) {
   const picked = state.worldObjects.picked?.key;
@@ -4290,7 +4320,11 @@ channel.on((m) => {
         await inTurn("Select", () => select(m.ids));
         break;
       case "world.pick":
-        await worldPick(m.origin, m.dir);
+        await worldPick(m.origin, m.dir, !!m.free);
+        break;
+      case "world.hoverRay":
+        hoverNext = m.ray ? { origin: m.ray.origin, dir: m.ray.dir, free: !!m.free } : null;
+        await runHover();
         break;
       case "world.select": {
         const t = state.worldObjects.things.find((x) => x.key === m.key);

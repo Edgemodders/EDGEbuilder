@@ -1655,9 +1655,12 @@ async function pickThing(t: WorldThing): Promise<void> {
 }
 
 /** A mesh the registry's pick found: the World panel shows it as a thing of its own. */
-async function pickMesh(n: WorldNode): Promise<void> {
+async function pickMesh(n: WorldNode, physicsHit?: { distance: number } | null): Promise<void> {
   const resource = await pathOf(n.resource);
   await pickThing({
+    // The game's physics stopped the line inside its bounds: solid there.
+    ray: { solid: !!n.holdsHit, distance: n.holdsHit ? physicsHit?.distance : undefined },
+    scale: n.scale,
     key: n.id,
     what: "mesh",
     className: n.kind,
@@ -1669,30 +1672,64 @@ async function pickMesh(n: WorldNode): Promise<void> {
   });
 }
 
-/** A click on none of the scene's objects: a door along the line, else (Meshes on) the mesh it hits, else nothing. */
-async function worldPick(origin: V3, dir: V3): Promise<void> {
-  const kinds = state.worldObjects.kinds;
-  if (state.world !== "ready" || !kinds.length || state.worldObjects.status === "unavailable") {
-    await clearPicked();
-    return publish();
-  }
+/** Pick under the cursor (0.14.0): the kinds switched on, and meshes whatever their switch says. */
+const freeKinds = (): WorldKind[] => [...new Set<WorldKind>([...state.worldObjects.kinds, "mesh"])];
+
+/** What a click along this line would pick: a door along it, else (Meshes on) the mesh it hits. */
+async function pickTarget(origin: V3, dir: V3, kinds: WorldKind[]): Promise<{ door?: WorldThing; node?: WorldNode; physicsHit?: { distance: number } | null } | undefined> {
   if (kinds.includes("door") || kinds.includes("fakeDoor")) {
     if (Date.now() - nearAt > NearFresh) await lookNear();
     const { hit } = await raycast(origin, add(origin, mul(dir, 80)));
-    const door = doorUnderRay(origin, dir, state.worldObjects.things.filter((t) => t.what !== "mesh"), hit ? Math.hypot(...sub(hit, origin)) : undefined);
-    if (door) return pickThing(door);
+    const door = doorUnderRay(origin, dir, state.worldObjects.things.filter((t) => t.what !== "mesh" && kinds.includes(t.what)), hit ? Math.hypot(...sub(hit, origin)) : undefined);
+    if (door) return { door };
   }
   if (kinds.includes("mesh") && typeof world.pick === "function") {
     try {
       const r = await world.pick({ from: toPoint(origin), dir: toPoint(dir), max: 80, limit: 4, kinds: MeshNodeKinds });
       const n = r.hits.find((h) => h.holdsHit) ?? (r.physicsHit ? undefined : r.hits[0]);
-      if (n) return pickMesh(n);
+      if (n) return { node: n, physicsHit: r.physicsHit };
     } catch (err) {
       console.log(`Mesh pick: ${(err as Error).message}`);
     }
   }
+  return undefined;
+}
+
+/** A click on none of the scene's objects: a door along the line, else (Meshes on) the mesh it hits, else nothing. `free`: every kind. */
+async function worldPick(origin: V3, dir: V3, free = false): Promise<void> {
+  const kinds = free ? freeKinds() : state.worldObjects.kinds;
+  if (state.world !== "ready" || !kinds.length || state.worldObjects.status === "unavailable") {
+    await clearPicked();
+    return publish();
+  }
+  const t = await pickTarget(origin, dir, kinds);
+  if (t?.door) return pickThing(t.door);
+  if (t?.node) return pickMesh(t.node, t.physicsHit);
   await clearPicked();
   publish();
+}
+
+// Pick under the cursor: what a click would pick is outlined while the mouse moves; one look at a time, the newest line next.
+let hoverNext: { origin: V3; dir: V3; free: boolean } | null | undefined;
+let hoverLooking = false;
+
+async function runHover(): Promise<void> {
+  if (hoverLooking) return;
+  hoverLooking = true;
+  try {
+    while (hoverNext !== undefined) {
+      const next = hoverNext;
+      hoverNext = undefined;
+      if (!next || state.world !== "ready" || state.worldObjects.status === "unavailable") {
+        await hoverThing(null);
+        continue;
+      }
+      const t = await pickTarget(next.origin, next.dir, next.free ? freeKinds() : state.worldObjects.kinds);
+      await hoverThing(t?.door?.key ?? t?.node?.id ?? null);
+    }
+  } finally {
+    hoverLooking = false;
+  }
 }
 
 async function hoverThing(key: string | null): Promise<void> {
@@ -3146,7 +3183,11 @@ channel.on<PageMessage>((m) => {
         await inTurn("Select", () => select(m.ids));
         break;
       case "world.pick":
-        await worldPick(m.origin, m.dir);
+        await worldPick(m.origin, m.dir, !!m.free);
+        break;
+      case "world.hoverRay":
+        hoverNext = m.ray ? { origin: m.ray.origin, dir: m.ray.dir, free: !!m.free } : null;
+        await runHover();
         break;
       case "world.select": {
         const t = state.worldObjects.things.find((x) => x.key === m.key);

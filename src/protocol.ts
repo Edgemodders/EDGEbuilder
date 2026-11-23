@@ -152,6 +152,13 @@ export interface WorldThing {
   removedBy?: string;
   /** D2: the edit that keeps its state, when one does. */
   stateBy?: string;
+  /**
+   * Picked with the cursor: whether the game's physics stopped the click's line on it (it is solid there) and how far
+   * along; false when the line went through it.
+   */
+  ray?: { solid: boolean; distance?: number };
+  /** Its scale in the world, for a mesh from the node registry. */
+  scale?: [number, number, number];
 }
 
 /** The thing picked in the world, with its node once found and what to warn about. */
@@ -534,7 +541,9 @@ export type PageMessage =
   /** Look at the folders again (a file changed outside EDGEbuilder). */
   | { type: "library.refresh" }
   /** D1: a click that hit none of the scene's objects: the game's door (or mesh) along this line, if any. */
-  | { type: "world.pick"; origin: [number, number, number]; dir: [number, number, number] }
+  | { type: "world.pick"; origin: [number, number, number]; dir: [number, number, number]; free?: boolean }
+  /** Pick under the cursor (0.14.0): outline what a click would pick along this line; null takes the outline off. */
+  | { type: "world.hoverRay"; ray: { origin: [number, number, number]; dir: [number, number, number] } | null; free?: boolean }
   /** The World tab's row: pick it; hover outlines it (null: the outline goes). */
   | { type: "world.select"; key: string }
   | { type: "world.hover"; key: string | null }

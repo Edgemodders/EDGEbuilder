@@ -456,6 +456,26 @@ var Viewport = class {
     const r = rayFrom(this.cam, x, y);
     this.hooks.probe(++this.probeSeq, { o: r.o, d: r.d });
   }
+  hoverAt = { x: NaN, y: NaN, t: 0, sent: false };
+  /** Pick under the cursor: the line through it about seven times a second while the mouse moves over the world. */
+  hoverWorldIfMoved() {
+    if (!this.hooks.hoverWorld) return;
+    const busy = !this.edit || !this.cam || !this.overView || this.placing || this.drag || this.box || this.rmb;
+    if (busy) {
+      if (this.hoverAt.sent) {
+        this.hoverAt = { x: NaN, y: NaN, t: 0, sent: false };
+        this.hooks.hoverWorld(null);
+      }
+      return;
+    }
+    const now = performance.now();
+    const [x, y] = this.mouse;
+    if (x === this.hoverAt.x && y === this.hoverAt.y || now - this.hoverAt.t < 140) return;
+    const ray = rayFrom(this.cam, x, y);
+    const own = this.objects.some((o) => o.entityId && rayHitsBox(ray, o.bounds ? { min: o.bounds.min, max: o.bounds.max } : UNIT_BOX, o.transform.position, o.transform.rotation, o.transform.scale) !== null);
+    this.hoverAt = { x, y, t: now, sent: true };
+    this.hooks.hoverWorld(own ? null : { o: ray.o, d: ray.d });
+  }
   /** Drop at click's look: the object's box where a click would put it (white on a surface, amber 8 m along the line when nothing is there), and a white crosshair for the cursor. */
   drawPlacing() {
     const ctx = this.ctx;
@@ -614,6 +634,7 @@ var Viewport = class {
       this.frame++;
       this.wantEscape(!!(this.drag || this.placing || this.box));
       this.probeIfMoved();
+      this.hoverWorldIfMoved();
       this.flushMove();
       this.flyWhenReady();
       this.flyAndSend();
@@ -2424,9 +2445,13 @@ function renderWorld(s) {
   if (rows !== worldHtml) $("worldList").innerHTML = worldHtml = rows;
   if (picked2?.key !== lastPickedKey) {
     lastPickedKey = picked2?.key;
-    if (picked2 && performance.now() - worldClickAt < 5e3) mainTabs().select?.(WorldTab);
+    if (picked2 && performance.now() - worldClickAt < 5e3) {
+      mainTabs().select?.(WorldTab);
+      showWorldPreview();
+    }
   }
   if (!picked2) {
+    previewWorld = false;
     $("worldPicked").textContent = "Nothing picked. With Edit on, click a door, or pick one in the list.";
     $("worldWarnings").hidden = true;
     $("worldRemove").setAttribute("disabled", "");
@@ -2616,7 +2641,7 @@ function renderSectorDrawer(s) {
   }
   if (v2.path !== lastSector) {
     lastSector = v2.path;
-    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = previewWorld = false;
     renderLeft();
     $("sectorFilter").value = v2.filter;
   }
@@ -2723,6 +2748,7 @@ var libraryDrawerOpen = false;
 var previewsOpen = false;
 function openLeft(which) {
   previewAlone = which === "preview";
+  previewWorld = which === "world";
   drawerOpen = which === "objects";
   libraryDrawerOpen = which === "library";
   previewsOpen = which === "previews";
@@ -2743,10 +2769,12 @@ function renderLeft() {
   $("previewsDrawer").classList.toggle("open", previewsOpen);
   $("previewsEye").setAttribute("aria-pressed", String(previewsOpen));
   $("explorerDrawer").classList.toggle("open", explorerOpen);
-  $("exPreview").classList.toggle("open", (explorerOpen || previewAlone) && !!exPicked);
-  $("exPreview").classList.toggle("alone", !explorerOpen);
+  const worldOpen = previewWorld && !!state?.worldObjects.picked;
+  $("exPreview").classList.toggle("open", worldOpen || (explorerOpen || previewAlone) && !!exPicked);
+  $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld);
+  $("exPreview").classList.toggle("world", previewWorld);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
-  if (!explorerOpen && !previewAlone || !exPicked) stopExView();
+  if (!worldOpen && (!explorerOpen && !previewAlone || !exPicked)) stopExView();
 }
 var libraryOut = false;
 try {
@@ -2953,7 +2981,81 @@ $("previewGrid").addEventListener("click", (e) => {
 });
 var explorerOpen = false;
 var previewAlone = false;
+var previewWorld = false;
 var previewPick = false;
+var freePick = false;
+var hoverSent = false;
+try {
+  freePick = localStorage.getItem("edgebuilder.freePick") === "1";
+} catch {
+}
+$("freePick").checked = freePick;
+$("freePick").addEventListener("change", (e) => {
+  freePick = !!e.detail.checked;
+  try {
+    localStorage.setItem("edgebuilder.freePick", freePick ? "1" : "0");
+  } catch {
+  }
+  if (!freePick && hoverSent) {
+    hoverSent = false;
+    post({ type: "world.hoverRay", ray: null });
+  }
+});
+function showWorldPreview() {
+  drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = false;
+  previewWorld = true;
+  if (state?.sectors.open) post({ type: "sectors.close" });
+}
+var worldLookAsked = "";
+function renderWorldPreview(s) {
+  const p = s.worldObjects.picked;
+  if (!p) {
+    stopExView();
+    return;
+  }
+  const res = p.resource && kindOfPath(p.resource) ? p.resource : void 0;
+  $("exTitle").textContent = p.label;
+  $("exTitle").title = p.resource ?? "";
+  if (res) {
+    void showExView(res);
+    if (worldLookAsked !== res) {
+      worldLookAsked = res;
+      post({ type: "look", path: res });
+    }
+  } else {
+    stopExView();
+    $("exCanvas").getContext("2d")?.clearRect(0, 0, 378, 400);
+    $("exNote").textContent = p.resource ? "No 3D preview for this kind of file." : "Its file is not known, so there is no 3D preview.";
+  }
+  const info = res && s.looked?.path === res ? s.looked.info : void 0;
+  const b = info?.bounds;
+  const sc = p.scale ?? [1, 1, 1];
+  const node = p.node;
+  const d = p.door;
+  const solid = p.ray ? p.ray.solid ? `yes: the game's physics stopped the click's line on it${p.ray.distance !== void 0 ? ` (${p.ray.distance.toFixed(1)} m from the camera)` : ""}` : "no: the click's line went through it (walk-through here, or its collision is a separate node)" : p.what === "door" ? "a door: solid while it is closed" : "not known: pick it with the cursor to find out";
+  const lines = [
+    ["Name", p.label],
+    ["Kind", `${p.className}${p.what === "door" ? " (a door that opens)" : p.what === "fakeDoor" ? " (a painted-on door)" : ""}`],
+    ["Solid", solid]
+  ];
+  if (res && p.what === "mesh") lines.push(["Collision", info?.hasCollision === true ? "its mesh carries collision data" : info?.hasCollision === false ? "its mesh has no collision data" : "reading..."]);
+  if (p.resource) lines.push(["Path", p.resource]);
+  if (p.appearance) lines.push(["Look", p.appearance]);
+  if (b) lines.push(["Size", `${((b.max[0] - b.min[0]) * sc[0]).toFixed(2)} \xD7 ${((b.max[1] - b.min[1]) * sc[1]).toFixed(2)} \xD7 ${((b.max[2] - b.min[2]) * sc[2]).toFixed(2)} m${sc.some((v2) => Math.abs(v2 - 1) > 1e-3) ? ` (scaled ${sc.map((v2) => v2.toFixed(2)).join(", ")})` : ""}`]);
+  lines.push(["At", p.position.map((v2) => v2.toFixed(2)).join(", ")]);
+  if (d) lines.push(["Door", [doorText(d), d.initial ? `starts ${d.initial.toLowerCase()}` : "", d.closesItself ? "closes by itself" : ""].filter(Boolean).join("; ")]);
+  if (node) lines.push(["Node", `${node.type}, entry ${node.entry} (node ${node.node})`], ["Sector", node.sector ? shortName(node.sector) : node.sectorHash]);
+  else if (p.note) lines.push(["Node", p.note]);
+  if (p.ref) lines.push(["Ref", p.ref]);
+  if (p.proxies?.length) lines.push(["Proxy", p.proxies.map((x) => `entry ${x.entry} in ${x.sector ? shortName(x.sector) : x.sectorHash}`).join(", ")]);
+  if (p.removedBy) lines.push(["Scene", `removed by this scene (${p.removedBy})`]);
+  $("exProps").innerHTML = lines.map(([k, v2]) => `<div class="prop"><span class="k">${esc(k)}</span><span class="v">${esc(v2)}</span></div>`).join("");
+  $("exAppearances").hidden = true;
+  $("exAppLabel").hidden = true;
+  $("exDrop").textContent = "Drop a copy";
+  $("exDrop").toggleAttribute("disabled", !res);
+  $("exDrop").title = res ? "A copy of it in the open scene: Drop at click starts with its outline under the crosshair" : "Its file is not known";
+}
 try {
   previewPick = localStorage.getItem("edgebuilder.previewPick") === "1";
 } catch {
@@ -3074,7 +3176,7 @@ function renderExplorer() {
 $("explorerOpen").addEventListener("click", () => openLeft(explorerOpen ? "none" : "explorer"));
 $("explorerClose").addEventListener("click", () => openLeft("none"));
 $("exPreviewClose").addEventListener("click", () => {
-  if (previewAlone) return openLeft("none");
+  if (previewAlone || previewWorld) return openLeft("none");
   exPicked = void 0;
   renderLeft();
   renderExplorer();
@@ -3163,6 +3265,10 @@ async function showExView(path) {
 }
 var kindOfPath = (p) => /\.(mesh|ent)$/i.test(p);
 function renderExPreview(s) {
+  if (previewWorld) return renderWorldPreview(s);
+  $("exDrop").textContent = "Drop";
+  $("exDrop").removeAttribute("disabled");
+  $("exDrop").title = "Closes the drawers and starts Drop at click: the object's outline follows the cursor, a click puts it there, Esc cancels";
   const e = exPicked;
   if (!e || !explorerOpen && !previewAlone) {
     stopExView();
@@ -3205,6 +3311,13 @@ $("exAppearances").addEventListener("select", (e) => {
   appearance = e.detail.value;
 });
 $("exDrop").addEventListener("click", () => {
+  if (previewWorld) {
+    const p = state?.worldObjects.picked;
+    if (!p?.resource || !kindOfPath(p.resource)) return;
+    openLeft("none");
+    startDropAtClick(p.resource, p.appearance, shortName(p.resource));
+    return;
+  }
   const e = exPicked;
   if (!e) return;
   openLeft("none");
@@ -3254,7 +3367,7 @@ var viewport = new Viewport($("view"), {
     if (ids.length) showSceneTab();
     else if (ray) {
       worldClickAt = performance.now();
-      post({ type: "world.pick", origin: ray.o, dir: ray.d });
+      post({ type: "world.pick", origin: ray.o, dir: ray.d, free: freePick });
     }
   },
   pickBox(found, opts) {
@@ -3272,6 +3385,11 @@ var viewport = new Viewport($("view"), {
   builderStart: (pose) => post({ type: "builder.start", pose }),
   builderStop: () => post({ type: "builder.stop" }),
   probe: (seq, ray) => post({ type: "drop.probe", seq, origin: ray.o, dir: ray.d }),
+  hoverWorld: (ray) => {
+    if (!freePick && !hoverSent) return;
+    hoverSent = !!(freePick && ray);
+    post({ type: "world.hoverRay", ray: freePick && ray ? { origin: ray.o, dir: ray.d } : null, free: true });
+  },
   status(text) {
     $("message").textContent = text;
     $("message").className = "message warn";

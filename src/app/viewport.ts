@@ -69,6 +69,8 @@ export interface ViewportHooks {
   builderStop(): void;
   /** Drop at click waits: where would a click through this line put the object? The answer comes to `setProbe`. */
   probe(seq: number, ray: { o: V3; d: V3 }): void;
+  /** Pick under the cursor: the line through the cursor while it moves over the world with Edit on (null: over one of the scene's objects, or gone). */
+  hoverWorld?(ray: { o: V3; d: V3 } | null): void;
 }
 
 /** What Drop at click draws while it waits: the object's own edges once the page has them, else its box, the size of its bounds when known. */
@@ -312,6 +314,29 @@ export class Viewport {
     this.hooks.probe(++this.probeSeq, { o: r.o, d: r.d });
   }
 
+  private hoverAt = { x: NaN, y: NaN, t: 0, sent: false };
+
+  /** Pick under the cursor: the line through it about seven times a second while the mouse moves over the world. */
+  private hoverWorldIfMoved(): void {
+    if (!this.hooks.hoverWorld) return;
+    const busy = !this.edit || !this.cam || !this.overView || this.placing || this.drag || this.box || this.rmb;
+    if (busy) {
+      if (this.hoverAt.sent) {
+        this.hoverAt = { x: NaN, y: NaN, t: 0, sent: false };
+        this.hooks.hoverWorld(null);
+      }
+      return;
+    }
+    const now = performance.now();
+    const [x, y] = this.mouse;
+    if ((x === this.hoverAt.x && y === this.hoverAt.y) || now - this.hoverAt.t < 140) return;
+    const ray = rayFrom(this.cam!, x, y);
+    // Over one of the scene's own objects, a click selects that, so nothing of the world is outlined.
+    const own = this.objects.some((o) => o.entityId && rayHitsBox(ray, o.bounds ? { min: o.bounds.min as V3, max: o.bounds.max as V3 } : UNIT_BOX, o.transform.position, o.transform.rotation as Q, o.transform.scale as V3) !== null);
+    this.hoverAt = { x, y, t: now, sent: true };
+    this.hooks.hoverWorld(own ? null : { o: ray.o, d: ray.d });
+  }
+
   /** Drop at click's look: the object's box where a click would put it (white on a surface, amber 8 m along the line when nothing is there), and a white crosshair for the cursor. */
   private drawPlacing(): void {
     const ctx = this.ctx;
@@ -488,6 +513,7 @@ export class Viewport {
       this.frame++;
       this.wantEscape(!!(this.drag || this.placing || this.box));
       this.probeIfMoved();
+      this.hoverWorldIfMoved();
       this.flushMove();
       this.flyWhenReady();
       this.flyAndSend();

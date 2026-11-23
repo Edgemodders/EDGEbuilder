@@ -1090,7 +1090,7 @@ REDcode #32 (REDcode 0.10.15: `projects()` and `projects-changed`), asked for by
 
 ### Previews, the Explorer, the Library drawer and Drop at click's outline (0.14.0)
 
-Asked for by the owner on 2026-11-23. Built the same day; checked in REDnode's host without the game, against REDbridge 0.18.0: "crate" gave 95 tiles, meshes and entities drawn (two entities with no mesh parts say "no picture"), a picture turns under the mouse, a click closes the drawer, picks the result and starts Drop at click; the Library goes out to its drawer and back, one drawer at a time, the choice kept after a reload. The Explorer (asked for the same day, with the object's own outline for Drop at click): Game 31,601, base 28,781, containers 667 with their folders; a delivery crate picked showed in 3D with its size, collision and file size, turned by a drag and brought nearer by the wheel; a filter for `barrel` in containers found 37; Drop closed both drawers and started Drop at click, and the page made the crate's outline (482 edges). The Preview switch (asked for the same day): a result clicked with it on showed in the Preview drawer beside the window; off closed it; the search box's ✕ emptied the box and the list. The crosshair and the outline need the game's camera, so they are untested.
+Asked for by the owner on 2026-11-23. Built the same day; checked in REDnode's host without the game, against REDbridge 0.18.0: "crate" gave 95 tiles, meshes and entities drawn (two entities with no mesh parts say "no picture"), a picture turns under the mouse, a click closes the drawer, picks the result and starts Drop at click; the Library goes out to its drawer and back, one drawer at a time, the choice kept after a reload. The Explorer (asked for the same day, with the object's own outline for Drop at click): Game 31,601, base 28,781, containers 667 with their folders; a delivery crate picked showed in 3D with its size, collision and file size, turned by a drag and brought nearer by the wheel; a filter for `barrel` in containers found 37; Drop closed both drawers and started Drop at click, and the page made the crate's outline (482 edges). The Preview switch (asked for the same day): a result clicked with it on showed in the Preview drawer beside the window; off closed it; the search box's ✕ emptied the box and the list. Pick under the cursor (asked for the same day, needed for the owner's work with a user): its switch shows and is kept; the pick itself needs the game. The crosshair and the outline need the game's camera, so they are untested.
 
 Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a scene open.
 
@@ -1124,6 +1124,13 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | 26 | With the Explorer open, click a search result | It shows in the Preview beside the Explorer | P5 |
 | 27 | Switch Preview off | The Preview drawer closes; a click on a result only picks it | P5 |
 | 28 | Press the ✕ at the right of the search box | The box and the result list empty; the count says to type a name | P5 |
+| 29 | World tab: switch **Pick under the cursor** on (in Picked in the world); Edit on; move the mouse over walls, crates, a door | What a click would pick is outlined as the mouse moves (meshes too, with the Meshes switch off); nothing is outlined over the scene's own objects | P6 |
+| 30 | Click a crate or a wall | The drawer comes in from the left edge of the screen: the object in 3D, Name, Kind (its node class), Solid, Collision, Path, Size, At, Node and Sector; the World tab shows it in Picked in the world | P6 |
+| 31 | Click something you can walk through (a hanging sign, a plant, a decal-like mesh) | Solid says no: the click's line went through it | P6 |
+| 32 | Click a door | Kind says a door; its state; Solid says what the click found | P6 |
+| 33 | Press **Drop a copy** | The drawer closes; Drop at click starts with that object's outline; a click puts a copy in the open scene | P6 |
+| 34 | Pick a door in the Nearby list (no click in the world); then the drawer's ✕ | The list pick does not open the drawer; ✕ closes it | P6 |
+| 35 | Switch Pick under the cursor off | No outline as the mouse moves; a click picks by the kind switches as before | P6 |
 
 | # | Question |
 |---|---|
@@ -1132,3 +1139,4 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | P3 | Do the crosshair and the box show where the drop lands, and do click, Esc and right-click work as before? |
 | P4 | Does the Library work from its drawer as it did in the window? |
 | P5 | Can objects be found and placed from the game's own folders, and does the preview show them well enough to choose? |
+| P6 | Does Pick under the cursor find what is under the mouse, and does Solid match what V bumps into? |
