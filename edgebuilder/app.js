@@ -461,9 +461,14 @@ var Viewport = class {
     const ctx = this.ctx;
     const p = this.probed;
     if (p && this.cam && this.probeSeq - p.seq < 30) {
-      const b = this.outline?.bounds?.();
-      const o = { id: "drop-outline", kind: "mesh", transform: { position: p.position, rotation: p.rotation, scale: [1, 1, 1] }, bounds: b ? { min: b.min, max: b.max } : void 0 };
-      this.drawBox(o, p.hit ? "rgba(255,255,255,0.95)" : "rgba(255,204,77,0.95)", 1.5);
+      const colour = p.hit ? "rgba(255,255,255,0.9)" : "rgba(255,204,77,0.9)";
+      const lines = this.outline?.edges?.();
+      if (lines) this.drawEdges(lines, p.position, p.rotation, colour);
+      else {
+        const b = this.outline?.bounds?.();
+        const o = { id: "drop-outline", kind: "mesh", transform: { position: p.position, rotation: p.rotation, scale: [1, 1, 1] }, bounds: b ? { min: b.min, max: b.max } : void 0 };
+        this.drawBox(o, colour, 1.5);
+      }
     }
     if (!this.overView) return;
     const [x, y] = this.mouse;
@@ -742,6 +747,40 @@ var Viewport = class {
       ctx.fillRect(left + (w - w / 4) * t, 52, w / 4, 4);
     }
     ctx.fillText(text, left + 12, 46);
+  }
+  /** Drop at click's outline: the object's own edges (line pairs in its space, game axes) placed at `at`, turned by `q`. */
+  drawEdges(lines, at, q, colour) {
+    const cam = this.cam;
+    const [x, y, z, w] = q;
+    const m = [
+      1 - 2 * (y * y + z * z),
+      2 * (x * y - z * w),
+      2 * (x * z + y * w),
+      2 * (x * y + z * w),
+      1 - 2 * (x * x + z * z),
+      2 * (y * z - x * w),
+      2 * (x * z - y * w),
+      2 * (y * z + x * w),
+      1 - 2 * (x * x + y * y)
+    ];
+    const place = (i) => {
+      const a = lines[i];
+      const b = lines[i + 1];
+      const c = lines[i + 2];
+      return [at[0] + m[0] * a + m[1] * b + m[2] * c, at[1] + m[3] * a + m[4] * b + m[5] * c, at[2] + m[6] * a + m[7] * b + m[8] * c];
+    };
+    const ctx = this.ctx;
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i + 5 < lines.length; i += 6) {
+      const p = project(cam, place(i));
+      const r = project(cam, place(i + 3));
+      if (!p || !r) continue;
+      ctx.moveTo(p[0], p[1]);
+      ctx.lineTo(r[0], r[1]);
+    }
+    ctx.stroke();
   }
   drawBox(o, colour = "rgba(25,243,255,0.7)", width = 1) {
     const cam = this.cam;
@@ -1423,7 +1462,9 @@ ${looked.path}`;
   renderSectors(s);
   renderSectorDrawer(s);
   renderPreviews(s);
+  explorerFresh(s);
   renderLeft();
+  renderExPreview(s);
   renderEdits(s);
   viewport.setCamera(s.camera?.entityId);
   viewport.setPaused(!!s.camera?.paused);
@@ -1603,6 +1644,15 @@ window.addEventListener(
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "RN-INPUT") return;
     if (lastDownInWorld && $("edit").checked) return;
+    if (explorerOpen) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const box2 = $("exFilter");
+      box2.focus();
+      box2.value = (box2.value ?? "") + e.key;
+      box2.dispatchEvent(new Event("input"));
+      return;
+    }
     if (!document.querySelector("#mainTabs > rn-tab")?.hasAttribute("active")) return;
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -1639,20 +1689,21 @@ $("drop").addEventListener("click", () => {
 $("dropClick").addEventListener("click", () => {
   if (lookedAt) startDropAtClick(lookedAt, appearance);
 });
-function startDropAtClick(path, looks) {
+function startDropAtClick(path, looks, label) {
   const edit = $("edit");
   if (!edit.checked) {
     edit.checked = true;
     viewport.setEdit(true);
   }
-  const name = labelFor(path);
+  const name = label ?? labelFor(path);
   viewport.armDrop(
     (ray) => {
       dropAsked = true;
       post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } });
     },
-    { name, bounds: () => state?.looked?.path === path ? state.looked.info?.bounds : void 0 }
+    { name, bounds: () => state?.looked?.path === path ? state.looked.info?.bounds : void 0, edges: () => edgesFor(path) }
   );
+  edgesFor(path);
   $("message").textContent = `Drop at click is on: click in the world where ${name} should go. Esc or right-click cancels.`;
   $("message").className = "message";
 }
@@ -2564,7 +2615,7 @@ function renderSectorDrawer(s) {
   }
   if (v2.path !== lastSector) {
     lastSector = v2.path;
-    drawerOpen = libraryDrawerOpen = previewsOpen = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = false;
     renderLeft();
     $("sectorFilter").value = v2.filter;
   }
@@ -2673,6 +2724,9 @@ function openLeft(which) {
   drawerOpen = which === "objects";
   libraryDrawerOpen = which === "library";
   previewsOpen = which === "previews";
+  const wasExplorer = explorerOpen;
+  explorerOpen = which === "explorer";
+  if (explorerOpen && !wasExplorer) renderExplorer();
   if (which !== "none" && state?.sectors.open) post({ type: "sectors.close" });
   if (which === "objects") {
     peekAsked = "";
@@ -2686,6 +2740,10 @@ function renderLeft() {
   $("libraryDrawer").classList.toggle("open", libraryOut && libraryDrawerOpen);
   $("previewsDrawer").classList.toggle("open", previewsOpen);
   $("previewsEye").setAttribute("aria-pressed", String(previewsOpen));
+  $("explorerDrawer").classList.toggle("open", explorerOpen);
+  $("exPreview").classList.toggle("open", explorerOpen && !!exPicked);
+  $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
+  if (!explorerOpen || !exPicked) stopExView();
 }
 var libraryOut = false;
 try {
@@ -2888,6 +2946,269 @@ $("previewGrid").addEventListener("click", (e) => {
   openLeft("none");
   startDropAtClick(path, void 0);
 });
+var explorerOpen = false;
+var exPicked;
+var exRoots = [];
+var exCache = /* @__PURE__ */ new Map();
+var exOpen = /* @__PURE__ */ new Set(["game|"]);
+var exAsked = /* @__PURE__ */ new Set();
+var exFolder = { root: "game", dir: "" };
+var exFilter = "";
+var exFound;
+var exSeq = 0;
+var exFilterSeq = 0;
+var exCounts = "";
+var exEntries = /* @__PURE__ */ new Map();
+var exKey = (root, dir) => `${root}|${dir.toLowerCase()}`;
+var exJoin = (dir, name) => dir ? `${dir}\\${name}` : name;
+function exAsk(root, dir) {
+  const key = exKey(root, dir);
+  if (exAsked.has(key)) return;
+  exAsked.add(key);
+  post({ type: "explore", seq: ++exSeq, root, dir });
+}
+function explorerCame(m) {
+  exRoots = m.roots;
+  for (const e of m.items) exEntries.set(e.path, e);
+  if (m.text) {
+    if (m.seq === exFilterSeq) exFound = m;
+  } else if (m.root) exCache.set(exKey(m.root, m.dir), m);
+  if (!exFolder.root || !exRoots.some((r) => r.id === exFolder.root)) exFolder = { root: exRoots[0]?.id ?? "game", dir: "" };
+  renderExplorer();
+}
+function explorerFresh(s) {
+  const counts = `${s.index.count}|${s.sources.mods.assets}|${s.sources.project?.assets ?? 0}|${s.npcs.count}`;
+  if (counts === exCounts) return;
+  exCounts = counts;
+  exCache.clear();
+  exAsked.clear();
+  exFound = void 0;
+  if (explorerOpen) {
+    post({ type: "explore", seq: ++exSeq, root: "", dir: "" });
+    if (exFilter) askExFilter();
+    renderExplorer();
+  }
+}
+function askExFilter() {
+  exFilterSeq = ++exSeq;
+  post({ type: "explore", seq: exFilterSeq, root: exFolder.root, dir: exFolder.dir, text: exFilter });
+}
+function renderExplorer() {
+  if (!explorerOpen) return;
+  const rows = [];
+  const pad = (depth) => ` style="padding-left:${8 + depth * 16}px"`;
+  const itemRow = (e, depth, label) => `<rn-item value="i:${esc(e.path)}" title="${esc(rowTitle(e))}"${exPicked?.path === e.path ? " selected" : ""}${pad(depth)}><span class="fold"></span>${esc(label)}<span slot="end">${esc(e.kind === "npc" ? "NPC" : e.kind)}</span></rn-item>`;
+  const folderLabel = exFolder.dir ? `${exRoots.find((r) => r.id === exFolder.root)?.label ?? exFolder.root} > ${exFolder.dir.replace(/\\/g, " > ")}` : exRoots.find((r) => r.id === exFolder.root)?.label ?? "";
+  $("exFilter").setAttribute("placeholder", `Filter in ${folderLabel || "the game"}, e.g. crate`);
+  if (exFilter) {
+    const f = exFound;
+    if (!f) rows.push(`<rn-item disabled${pad(0)}>looking...</rn-item>`);
+    else {
+      for (const e of f.items) rows.push(itemRow(e, 0, e.kind === "npc" ? labelOf(e) : f.dir && e.path.toLowerCase().startsWith(`${f.dir.toLowerCase()}\\`) ? e.path.slice(f.dir.length + 1) : e.path));
+      if (!f.items.length) rows.push(`<rn-item disabled${pad(0)}>nothing here matches</rn-item>`);
+    }
+    $("exInfo").textContent = f ? `${f.total.toLocaleString()} match${f.total === 1 ? "" : "es"} in ${folderLabel}${f.total > f.items.length ? `, the first ${f.items.length} shown` : ""}` : "";
+  } else {
+    const walk = (root, dir, depth) => {
+      const got = exCache.get(exKey(root, dir));
+      if (!got) {
+        exAsk(root, dir);
+        rows.push(`<rn-item disabled${pad(depth)}><span class="fold"></span>reading...</rn-item>`);
+        return;
+      }
+      for (const f of got.folders) {
+        const sub2 = exJoin(dir, f.name);
+        const key = exKey(root, sub2);
+        const here = exFolder.root === root && exFolder.dir.toLowerCase() === sub2.toLowerCase();
+        rows.push(`<rn-item value="d:${esc(root)}|${esc(sub2)}"${here ? ' class="here"' : ""}${pad(depth)}><span class="fold">${exOpen.has(key) ? "\u25BE" : "\u25B8"}</span>${esc(f.name)}<span slot="end">${f.count.toLocaleString()}</span></rn-item>`);
+        if (exOpen.has(key)) walk(root, sub2, depth + 1);
+      }
+      for (const e of got.items) rows.push(itemRow(e, depth, e.kind === "npc" ? labelOf(e) : shortName(e.path)));
+      if (got.total > got.items.length) rows.push(`<rn-item disabled${pad(depth)}><span class="fold"></span>${(got.total - got.items.length).toLocaleString()} more: filter to find them</rn-item>`);
+    };
+    if (!exRoots.length) {
+      exAsk("", "");
+      rows.push(`<rn-item disabled>reading...</rn-item>`);
+    }
+    for (const r of exRoots) {
+      const key = exKey(r.id, "");
+      const here = exFolder.root === r.id && !exFolder.dir;
+      rows.push(`<rn-item value="d:${esc(r.id)}|"${here ? ' class="here"' : ""}${pad(0)}><span class="fold">${exOpen.has(key) ? "\u25BE" : "\u25B8"}</span><span class="section">${esc(r.label)}</span><span slot="end">${r.count.toLocaleString()}</span></rn-item>`);
+      if (exOpen.has(key)) walk(r.id, "", 1);
+    }
+    $("exInfo").textContent = exRoots.length ? "A click opens a folder; a pick shows it beside this, in 3D. Typing filters in the folder clicked last." : "";
+  }
+  $("exList").innerHTML = rows.join("");
+}
+$("explorerOpen").addEventListener("click", () => openLeft(explorerOpen ? "none" : "explorer"));
+$("explorerClose").addEventListener("click", () => openLeft("none"));
+$("exPreviewClose").addEventListener("click", () => {
+  exPicked = void 0;
+  renderLeft();
+  renderExplorer();
+});
+var exTyping;
+$("exFilter").addEventListener("input", () => {
+  clearTimeout(exTyping);
+  exTyping = setTimeout(() => {
+    exFilter = ($("exFilter").value ?? "").trim();
+    exFound = void 0;
+    if (exFilter) askExFilter();
+    renderExplorer();
+  }, 200);
+});
+$("exList").addEventListener("select", (e) => {
+  const value = e.detail.value ?? "";
+  if (value.startsWith("d:")) {
+    const [root, ...rest] = value.slice(2).split("|");
+    const dir = rest.join("|");
+    const key = exKey(root, dir);
+    if (exOpen.has(key) && exFolder.root === root && exFolder.dir.toLowerCase() === dir.toLowerCase()) exOpen.delete(key);
+    else exOpen.add(key);
+    exFolder = { root, dir };
+    renderExplorer();
+    return;
+  }
+  if (!value.startsWith("i:")) return;
+  const entry = exEntries.get(value.slice(2));
+  if (!entry) return;
+  exPicked = entry;
+  lookedAt = entry.path;
+  appearance = void 0;
+  post({ type: "look", path: entry.path });
+  renderLeft();
+  renderExplorer();
+  if (state) render(state);
+});
+var exView;
+var exGlbAsked = "";
+var exErrors = /* @__PURE__ */ new Map();
+function stopExView() {
+  exView?.stop?.();
+  exView = void 0;
+}
+async function showExView(path) {
+  if (exView?.path === path) return;
+  stopExView();
+  const view = { path };
+  exView = view;
+  const note = $("exNote");
+  const canvas = $("exCanvas");
+  canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+  if (!kindOfPath(path)) {
+    note.textContent = "People have no 3D preview yet.";
+    return;
+  }
+  await loadPreviews();
+  if (exView !== view) return;
+  if (!previews) {
+    note.textContent = previewsWhy;
+    return;
+  }
+  const why = exErrors.get(path);
+  if (why) {
+    note.textContent = `No 3D preview: ${why}`;
+    return;
+  }
+  const parts = models.get(path);
+  if (!parts) {
+    note.textContent = "drawing...";
+    if (exGlbAsked !== path) {
+      exGlbAsked = path;
+      post({ type: "preview.ask", paths: [path], glb: true });
+    }
+    exView = void 0;
+    return;
+  }
+  note.textContent = "";
+  try {
+    const v2 = await previews.view(parts, canvas);
+    if (exView !== view) return v2.stop();
+    view.stop = () => v2.stop();
+  } catch (err) {
+    note.textContent = `No 3D preview: ${err.message}`;
+  }
+}
+var kindOfPath = (p) => /\.(mesh|ent)$/i.test(p);
+function renderExPreview(s) {
+  const e = exPicked;
+  if (!e || !explorerOpen) {
+    stopExView();
+    return;
+  }
+  $("exTitle").textContent = labelOf(e);
+  $("exTitle").title = e.path;
+  void showExView(e.path);
+  const info = s.looked?.path === e.path ? s.looked.info : void 0;
+  const parts = models.get(e.path);
+  const b = info?.bounds;
+  const from2 = e.source ? e.source.kind === "project" ? `the project ${e.source.name}` : `the mod ${e.source.name}` : e.kind === "npc" ? "the game's TweakDB" : e.path.toLowerCase().startsWith("ep1\\") ? "the game (Phantom Liberty)" : "the game";
+  const lines = [
+    ["Name", e.kind === "npc" ? e.name ?? e.path : shortName(e.path)],
+    ["Path", e.path],
+    ["Kind", e.kind === "npc" ? "a person (NPC)" : e.kind === "entity" ? "an entity" : "a mesh"],
+    ["From", from2 + (e.replaces ? ", changing the game's file" : "")],
+    ["Size", b ? `${(b.max[0] - b.min[0]).toFixed(2)} \xD7 ${(b.max[1] - b.min[1]).toFixed(2)} \xD7 ${(b.max[2] - b.min[2]).toFixed(2)} m (width, depth, height)` : info?.error ? info.error : s.bridge.status === "ready" ? "reading..." : "needs REDbridge"]
+  ];
+  if (e.kind === "mesh") lines.push(["Solid", info?.hasCollision === true ? "yes: it has collision" : info?.hasCollision === false ? "no: it has no collision data" : "not known yet"]);
+  if (e.kind === "entity" && parts) lines.push(["Draws", `${parts.length} mesh${parts.length === 1 ? "" : "es"}${parts.length >= 16 ? " (the first 16 shown)" : ""}`]);
+  if (e.kind === "npc" && e.template) lines.push(["Template", e.template]);
+  if (e.size) lines.push(["File", `${(e.size / 1024).toFixed(e.size < 10240 ? 1 : 0)} KB`]);
+  if (e.source) lines.push(["Archive", e.source.file]);
+  $("exProps").innerHTML = lines.map(([k, v2]) => `<div class="prop"><span class="k">${esc(k)}</span><span class="v">${esc(v2)}</span></div>`).join("");
+  const apps = info?.appearances ?? [];
+  const list = $("exAppearances");
+  if (apps.length > 1) {
+    if (!appearance || !apps.includes(appearance)) appearance = apps[0];
+    list.innerHTML = apps.map((a) => `<rn-item value="${esc(a)}"${a === appearance ? " selected" : ""}>${esc(a)}</rn-item>`).join("");
+    list.hidden = false;
+    $("exAppLabel").hidden = false;
+  } else {
+    if (lookedAt === e.path) appearance = apps[0];
+    list.hidden = true;
+    $("exAppLabel").hidden = true;
+  }
+}
+$("exAppearances").addEventListener("select", (e) => {
+  appearance = e.detail.value;
+});
+$("exDrop").addEventListener("click", () => {
+  const e = exPicked;
+  if (!e) return;
+  openLeft("none");
+  startDropAtClick(e.path, appearance, labelOf(e));
+});
+function modelCame(m) {
+  if (m.error) exErrors.set(m.path, m.error);
+  if (exPicked?.path === m.path && !exView) void showExView(m.path);
+  if (m.parts && edgesWanted === m.path) void makeEdges(m.path);
+}
+var edgeCache = /* @__PURE__ */ new Map();
+var edgesWanted = "";
+function edgesFor(path) {
+  const got = edgeCache.get(path);
+  if (got !== void 0) return got ?? void 0;
+  if (edgesWanted !== path) {
+    edgesWanted = path;
+    if (!kindOfPath(path)) return void 0;
+    if (models.has(path)) void makeEdges(path);
+    else post({ type: "preview.ask", paths: [path], glb: true });
+  }
+  return void 0;
+}
+async function makeEdges(path) {
+  await loadPreviews();
+  const parts = models.get(path);
+  if (!previews || !parts || edgeCache.has(path)) return;
+  try {
+    const lines = await previews.edges(parts, 8e3) ?? null;
+    edgeCache.set(path, lines);
+    post({ type: "log", text: `Drop at click's outline for ${shortName(path)}: ${lines ? `${(lines.length / 6).toLocaleString()} edges` : "too many edges, its box instead"}` });
+  } catch {
+    edgeCache.set(path, null);
+  }
+  while (edgeCache.size > 20) edgeCache.delete(edgeCache.keys().next().value);
+}
 function status(text) {
   $("message").textContent = text;
   $("message").className = "message warn";
@@ -2965,7 +3286,8 @@ $("saveSettings").addEventListener(
 );
 channel.on((m) => {
   if (m?.type === "state" && m.state) render(m.state);
-  else if (m?.type === "preview") void previewCame(m);
+  else if (m?.type === "preview") void previewCame(m).then(() => modelCame(m));
+  else if (m?.type === "explore") explorerCame(m);
   else if (m?.type === "probe") viewport.setProbe(m);
 });
 post({ type: "hello" });

@@ -1088,9 +1088,9 @@ REDcode #32 (REDcode 0.10.15: `projects()` and `projects-changed`), asked for by
 
 **All five steps passed in game on 2026-11-23 on 0.13.1 (the owner).** One change asked for: the Bake tab's panel "Bakes in this project" should name the project. **0.13.2** titles it "Bakes for <project>": **seen in game by the owner on 2026-11-23**.
 
-### Previews, the Library drawer and Drop at click's outline (0.14.0)
+### Previews, the Explorer, the Library drawer and Drop at click's outline (0.14.0)
 
-Asked for by the owner on 2026-11-23. Built the same day; checked in REDnode's host without the game, against REDbridge 0.18.0: "crate" gave 95 tiles, meshes and entities drawn (two entities with no mesh parts say "no picture"), a picture turns under the mouse, a click closes the drawer, picks the result and starts Drop at click; the Library goes out to its drawer and back, one drawer at a time, the choice kept after a reload. The crosshair and the outline need the game's camera, so they are untested.
+Asked for by the owner on 2026-11-23. Built the same day; checked in REDnode's host without the game, against REDbridge 0.18.0: "crate" gave 95 tiles, meshes and entities drawn (two entities with no mesh parts say "no picture"), a picture turns under the mouse, a click closes the drawer, picks the result and starts Drop at click; the Library goes out to its drawer and back, one drawer at a time, the choice kept after a reload. The Explorer (asked for the same day, with the object's own outline for Drop at click): Game 31,601, base 28,781, containers 667 with their folders; a delivery crate picked showed in 3D with its size, collision and file size, turned by a drag and brought nearer by the wheel; a filter for `barrel` in containers found 37; Drop closed both drawers and started Drop at click, and the page made the crate's outline (482 edges). The crosshair and the outline need the game's camera, so they are untested.
 
 Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a scene open.
 
@@ -1102,15 +1102,24 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | 4 | Close the drawer and open it again; search something else and back to `crate` | The pictures show at once (kept) | P1 |
 | 5 | Note the game's frame rate with the drawer open and pictures drawing, then with it closed | No large drop while it draws (say what you see) | P2 |
 | 6 | Click a crate's tile | The drawer closes, the crate is picked, Edit goes on; the message says Drop at click is on; the help line at the bottom says "Drop at click: click where ... should go" | P3 |
-| 7 | Move the mouse over the world | A white crosshair instead of the cursor; a white box the crate's size sits on the surface under it and follows the mouse | P3 |
-| 8 | Point at the sky | The box turns amber, 8 m along the line | P3 |
-| 9 | Right-drag to look around, fly with WASD | The box keeps up with what is under the crosshair | P3 |
-| 10 | Click on the floor | The crate lands where the box was | P3 |
-| 11 | Start Drop at click again (Picked's **Drop at click**), press Esc | Cancelled: the cursor comes back, no box | P3 |
+| 7 | Move the mouse over the world | A white crosshair instead of the cursor; the crate's outline in white lines (its own edges, a box for a moment while they are worked out) sits on the surface under it and follows the mouse | P3 |
+| 8 | Point at the sky | The outline turns amber, 8 m along the line | P3 |
+| 9 | Right-drag to look around, fly with WASD | The outline keeps up with what is under the crosshair | P3 |
+| 10 | Click on the floor | The crate lands where the outline was, the same way round | P3 |
+| 11 | Start Drop at click again (Picked's **Drop at click**), press Esc | Cancelled: the cursor comes back, no outline | P3 |
 | 12 | Library tab: press the icon at the top right of the Library tree | The tree moves to a drawer on the left; a **Library** button and the icon stay in its place | P4 |
 | 13 | On the Assets tab, click a scene in the Library drawer | The Library tab comes forward with that scene in Picked | P4 |
 | 14 | Library tab's **Objects**; then the **Library** button | Objects replaces the Library drawer; the Library button brings it back | P4 |
 | 15 | Turn EDGEbuilder off and on in REDnode (or restart the game) | The Library is still out of the window; the icon in the drawer's head (or in the tab) brings it back in | P4 |
+| 16 | Assets tab: press the folder icon at the right of the search box | The **Explorer**, a wider drawer on the left: Game (open), the mods, the project if one is open, People, each with a count | P5 |
+| 17 | Open base > environment > decoration > containers > crates > delivery_crate | Each click opens a folder (a second click closes it); the folder clicked last is yellow; its files are listed under its folders | P5 |
+| 18 | Pick `delivery_crate_a.mesh` | A **Preview** drawer opens to the Explorer's left: the crate in grey 3D, turning slowly; below, its name, path, kind, where it is from, size, whether it can be solid and its file size | P5 |
+| 19 | Drag in the picture; turn the wheel over it | The drag turns it; the wheel brings it nearer; it starts turning again two seconds after the drag | P5 |
+| 20 | Pick an entity with several appearances (for example in base > gameplay > devices) | The preview shows its meshes; Appearance lists its looks | P5 |
+| 21 | Type `barrel` with the containers folder clicked last | The list shows only barrels under containers, with how many match | P5 |
+| 22 | Pick one and press **Drop** | Both drawers close, Edit goes on, Drop at click starts with that object's outline under the crosshair; a click drops it with the appearance picked | P3, P5 |
+| 23 | Open People, then a folder such as `afterlife` | The people grouped by the first word of their record; a pick shows its properties and says people have no 3D preview yet; Drop drops the person | P5 |
+| 24 | Open Objects (Library tab) while the Explorer is open | The Explorer and its Preview close together | P5 |
 
 | # | Question |
 |---|---|
@@ -1118,3 +1127,4 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | P2 | Does drawing them in the overlay cost the game's frame rate? |
 | P3 | Do the crosshair and the box show where the drop lands, and do click, Esc and right-click work as before? |
 | P4 | Does the Library work from its drawer as it did in the window? |
+| P5 | Can objects be found and placed from the game's own folders, and does the preview show them well enough to choose? |

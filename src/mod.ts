@@ -3126,10 +3126,17 @@ channel.on<PageMessage>((m) => {
       {
         // Tiles in view replace what still waits; a model asked for under the mouse goes first and keeps the rest.
         const asked = m.paths.filter((p) => kindOf(p)).map((p) => ({ path: p, glb: !!m.glb }));
-        previewQueue = m.glb ? [...asked, ...previewQueue.filter((q) => !asked.some((a) => a.path === q.path))] : asked;
+        // Models asked for (the Explorer's preview, a picture turning, Drop at click's outline) stay asked when tiles scroll.
+        previewQueue = m.glb ? [...asked, ...previewQueue.filter((q) => !asked.some((a) => a.path === q.path))] : [...previewQueue.filter((q) => q.glb), ...asked];
       }
         await runPreviews();
         break;
+      case "explore": {
+        // The Explorer (0.14.0): one folder of a place, from the asset index alone (REDbridge is not asked).
+        const found = index.explore(m.root, m.dir, m.text ?? "");
+        channel.post({ type: "explore", seq: m.seq, root: m.root, dir: m.dir, text: m.text ?? "", roots: index.exploreRoots(), ...found });
+        break;
+      }
       case "preview.save":
         savePreview(m.key, m.png);
         break;

@@ -2,7 +2,7 @@
 import { channel } from "rednode";
 import { applyChange, boxOf, centreOf, collisionKey, membersOf, seenFromBySize, SeenFromRange, pickMany, pickSelection, selectionUnits } from "../arrange";
 import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
-import type { AssetEntry, AssetFrom, AssetKind, ImportCollision, LibraryBake, ModelEntry, ModMessage, PageMessage, Place, PreviewReply, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
+import type { AssetEntry, AssetFrom, AssetKind, ImportCollision, LibraryBake, ModelEntry, ExploreReply, ExploreRoot, ModMessage, PageMessage, Place, PreviewReply, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
 import type { Part, Previews } from "./previews";
 import { held } from "./held";
 import { Viewport, busyText } from "./viewport";
@@ -181,7 +181,9 @@ function render(s: Snapshot): void {
   renderSectors(s);
   renderSectorDrawer(s);
   renderPreviews(s);
+  explorerFresh(s);
   renderLeft();
+  renderExPreview(s);
   renderEdits(s);
   viewport.setCamera(s.camera?.entityId);
   viewport.setPaused(!!s.camera?.paused);
@@ -398,6 +400,16 @@ window.addEventListener(
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "RN-INPUT") return;
     if (lastDownInWorld && ($("edit") as HTMLElement & { checked: boolean }).checked) return;
+    // With the Explorer open, typing filters it.
+    if (explorerOpen) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const box = $("exFilter") as HTMLElement & { value: string; focus(): void };
+      box.focus();
+      box.value = (box.value ?? "") + e.key;
+      box.dispatchEvent(new Event("input"));
+      return;
+    }
     if (!document.querySelector("#mainTabs > rn-tab")?.hasAttribute("active")) return;
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -437,23 +449,25 @@ $("dropClick").addEventListener("click", () => {
 });
 
 /**
- * Drop at click: Edit goes on, the cursor becomes a white crosshair and the object's box shows where a
- * click would put it (its bounds once the mod has read them); the next left click drops it there.
+ * Drop at click: Edit goes on, the cursor becomes a white crosshair and the object's outline shows where a
+ * click would put it (its own edges once the page has its model, its box until then); the next left click drops it there.
  */
-function startDropAtClick(path: string, looks: string | undefined): void {
+function startDropAtClick(path: string, looks: string | undefined, label?: string): void {
   const edit = $("edit") as HTMLElement & { checked: boolean };
   if (!edit.checked) {
     edit.checked = true;
     viewport.setEdit(true);
   }
-  const name = labelFor(path);
+  const name = label ?? labelFor(path);
   viewport.armDrop(
     (ray) => {
       dropAsked = true;
       post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } });
     },
-    { name, bounds: () => (state?.looked?.path === path ? state.looked.info?.bounds : undefined) },
+    { name, bounds: () => (state?.looked?.path === path ? state.looked.info?.bounds : undefined), edges: () => edgesFor(path) },
   );
+  // The outline's edges are worked out now, while the mouse finds its way to the world.
+  edgesFor(path);
   $("message").textContent = `Drop at click is on: click in the world where ${name} should go. Esc or right-click cancels.`;
   $("message").className = "message";
 }
@@ -1523,7 +1537,7 @@ function renderSectorDrawer(s: Snapshot): void {
   }
   if (v.path !== lastSector) {
     lastSector = v.path;
-    drawerOpen = libraryDrawerOpen = previewsOpen = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = false;
     renderLeft();
     ($("sectorFilter") as HTMLInputElement).value = v.filter;
   }
@@ -1657,10 +1671,13 @@ for (const id of ["bakeProjects", "importProjects"]) {
 let libraryDrawerOpen = false;
 let previewsOpen = false;
 
-function openLeft(which: "objects" | "library" | "previews" | "none"): void {
+function openLeft(which: "objects" | "library" | "previews" | "explorer" | "none"): void {
   drawerOpen = which === "objects";
   libraryDrawerOpen = which === "library";
   previewsOpen = which === "previews";
+  const wasExplorer = explorerOpen;
+  explorerOpen = which === "explorer";
+  if (explorerOpen && !wasExplorer) renderExplorer();
   if (which !== "none" && state?.sectors.open) post({ type: "sectors.close" });
   if (which === "objects") {
     peekAsked = "";
@@ -1675,6 +1692,10 @@ function renderLeft(): void {
   $("libraryDrawer").classList.toggle("open", libraryOut && libraryDrawerOpen);
   $("previewsDrawer").classList.toggle("open", previewsOpen);
   $("previewsEye").setAttribute("aria-pressed", String(previewsOpen));
+  $("explorerDrawer").classList.toggle("open", explorerOpen);
+  $("exPreview").classList.toggle("open", explorerOpen && !!exPicked);
+  $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
+  if (!explorerOpen || !exPicked) stopExView();
 }
 
 // ---- the Library out of the window (0.14.0) ------------------------------------------------------------
@@ -1917,6 +1938,308 @@ $("previewGrid").addEventListener("click", (e) => {
   startDropAtClick(path, undefined);
 });
 
+// ---- the Explorer (0.14.0) ------------------------------------------------------------------------------
+//
+// The folder icon beside the search box opens the Explorer, a wider drawer to the left: the game's folders,
+// each mod, the open project and the game's people, opened folder by folder (the mod answers from the asset
+// index). A pick there opens the Preview drawer beside it: the object in 3D (the mouse turns it), what is known
+// about it, and Drop, which starts Drop at click. The two open and close together.
+
+let explorerOpen = false;
+/** The Preview drawer beside the Explorer, for the object picked there. */
+let exPicked: AssetEntry | undefined;
+let exRoots: ExploreRoot[] = [];
+/** What each folder holds, by `root|dir`, once the mod has said. */
+const exCache = new Map<string, ExploreReply>();
+/** Open folders (and places), by `root|dir`; the game's top is open at first. */
+const exOpen = new Set<string>(["game|"]);
+const exAsked = new Set<string>();
+/** The folder a filter looks in: the last one clicked. */
+let exFolder = { root: "game", dir: "" };
+let exFilter = "";
+let exFound: ExploreReply | undefined;
+let exSeq = 0;
+let exFilterSeq = 0;
+let exCounts = "";
+const exEntries = new Map<string, AssetEntry>();
+
+const exKey = (root: string, dir: string) => `${root}|${dir.toLowerCase()}`;
+const exJoin = (dir: string, name: string) => (dir ? `${dir}\\${name}` : name);
+
+function exAsk(root: string, dir: string): void {
+  const key = exKey(root, dir);
+  if (exAsked.has(key)) return;
+  exAsked.add(key);
+  post({ type: "explore", seq: ++exSeq, root, dir });
+}
+
+function explorerCame(m: ExploreReply): void {
+  exRoots = m.roots;
+  for (const e of m.items) exEntries.set(e.path, e);
+  if (m.text) {
+    if (m.seq === exFilterSeq) exFound = m;
+  } else if (m.root) exCache.set(exKey(m.root, m.dir), m);
+  if (!exFolder.root || !exRoots.some((r) => r.id === exFolder.root)) exFolder = { root: exRoots[0]?.id ?? "game", dir: "" };
+  renderExplorer();
+}
+
+/** Asks again for what is open when the index, the mods or the project changed. */
+function explorerFresh(s: Snapshot): void {
+  const counts = `${s.index.count}|${s.sources.mods.assets}|${s.sources.project?.assets ?? 0}|${s.npcs.count}`;
+  if (counts === exCounts) return;
+  exCounts = counts;
+  exCache.clear();
+  exAsked.clear();
+  exFound = undefined;
+  if (explorerOpen) {
+    post({ type: "explore", seq: ++exSeq, root: "", dir: "" });
+    if (exFilter) askExFilter();
+    renderExplorer();
+  }
+}
+
+function askExFilter(): void {
+  exFilterSeq = ++exSeq;
+  post({ type: "explore", seq: exFilterSeq, root: exFolder.root, dir: exFolder.dir, text: exFilter });
+}
+
+function renderExplorer(): void {
+  if (!explorerOpen) return;
+  const rows: string[] = [];
+  const pad = (depth: number) => ` style="padding-left:${8 + depth * 16}px"`;
+  const itemRow = (e: AssetEntry, depth: number, label: string) =>
+    `<rn-item value="i:${esc(e.path)}" title="${esc(rowTitle(e))}"${exPicked?.path === e.path ? " selected" : ""}${pad(depth)}><span class="fold"></span>${esc(label)}<span slot="end">${esc(e.kind === "npc" ? "NPC" : e.kind)}</span></rn-item>`;
+  const folderLabel = exFolder.dir ? `${exRoots.find((r) => r.id === exFolder.root)?.label ?? exFolder.root} > ${exFolder.dir.replace(/\\/g, " > ")}` : exRoots.find((r) => r.id === exFolder.root)?.label ?? "";
+  $<Field>("exFilter").setAttribute("placeholder", `Filter in ${folderLabel || "the game"}, e.g. crate`);
+  if (exFilter) {
+    const f = exFound;
+    if (!f) rows.push(`<rn-item disabled${pad(0)}>looking...</rn-item>`);
+    else {
+      for (const e of f.items) rows.push(itemRow(e, 0, e.kind === "npc" ? labelOf(e) : f.dir && e.path.toLowerCase().startsWith(`${f.dir.toLowerCase()}\\`) ? e.path.slice(f.dir.length + 1) : e.path));
+      if (!f.items.length) rows.push(`<rn-item disabled${pad(0)}>nothing here matches</rn-item>`);
+    }
+    $("exInfo").textContent = f ? `${f.total.toLocaleString()} match${f.total === 1 ? "" : "es"} in ${folderLabel}${f.total > f.items.length ? `, the first ${f.items.length} shown` : ""}` : "";
+  } else {
+    const walk = (root: string, dir: string, depth: number) => {
+      const got = exCache.get(exKey(root, dir));
+      if (!got) {
+        exAsk(root, dir);
+        rows.push(`<rn-item disabled${pad(depth)}><span class="fold"></span>reading...</rn-item>`);
+        return;
+      }
+      for (const f of got.folders) {
+        const sub = exJoin(dir, f.name);
+        const key = exKey(root, sub);
+        const here = exFolder.root === root && exFolder.dir.toLowerCase() === sub.toLowerCase();
+        rows.push(`<rn-item value="d:${esc(root)}|${esc(sub)}"${here ? ' class="here"' : ""}${pad(depth)}><span class="fold">${exOpen.has(key) ? "▾" : "▸"}</span>${esc(f.name)}<span slot="end">${f.count.toLocaleString()}</span></rn-item>`);
+        if (exOpen.has(key)) walk(root, sub, depth + 1);
+      }
+      for (const e of got.items) rows.push(itemRow(e, depth, e.kind === "npc" ? labelOf(e) : shortName(e.path)));
+      if (got.total > got.items.length) rows.push(`<rn-item disabled${pad(depth)}><span class="fold"></span>${(got.total - got.items.length).toLocaleString()} more: filter to find them</rn-item>`);
+    };
+    if (!exRoots.length) {
+      exAsk("", "");
+      rows.push(`<rn-item disabled>reading...</rn-item>`);
+    }
+    for (const r of exRoots) {
+      const key = exKey(r.id, "");
+      const here = exFolder.root === r.id && !exFolder.dir;
+      rows.push(`<rn-item value="d:${esc(r.id)}|"${here ? ' class="here"' : ""}${pad(0)}><span class="fold">${exOpen.has(key) ? "▾" : "▸"}</span><span class="section">${esc(r.label)}</span><span slot="end">${r.count.toLocaleString()}</span></rn-item>`);
+      if (exOpen.has(key)) walk(r.id, "", 1);
+    }
+    $("exInfo").textContent = exRoots.length ? "A click opens a folder; a pick shows it beside this, in 3D. Typing filters in the folder clicked last." : "";
+  }
+  $("exList").innerHTML = rows.join("");
+}
+
+$("explorerOpen").addEventListener("click", () => openLeft(explorerOpen ? "none" : "explorer"));
+$("explorerClose").addEventListener("click", () => openLeft("none"));
+$("exPreviewClose").addEventListener("click", () => {
+  exPicked = undefined;
+  renderLeft();
+  renderExplorer();
+});
+
+let exTyping: ReturnType<typeof setTimeout> | undefined;
+$("exFilter").addEventListener("input", () => {
+  clearTimeout(exTyping);
+  exTyping = setTimeout(() => {
+    exFilter = ($<Field>("exFilter").value ?? "").trim();
+    exFound = undefined;
+    if (exFilter) askExFilter();
+    renderExplorer();
+  }, 200);
+});
+
+$("exList").addEventListener("select", (e) => {
+  const value = (e as CustomEvent<{ value: string }>).detail.value ?? "";
+  if (value.startsWith("d:")) {
+    const [root, ...rest] = value.slice(2).split("|");
+    const dir = rest.join("|");
+    const key = exKey(root, dir);
+    if (exOpen.has(key) && exFolder.root === root && exFolder.dir.toLowerCase() === dir.toLowerCase()) exOpen.delete(key);
+    else exOpen.add(key);
+    exFolder = { root, dir };
+    renderExplorer();
+    return;
+  }
+  if (!value.startsWith("i:")) return;
+  const entry = exEntries.get(value.slice(2));
+  if (!entry) return;
+  exPicked = entry;
+  lookedAt = entry.path;
+  appearance = undefined;
+  post({ type: "look", path: entry.path });
+  renderLeft();
+  renderExplorer();
+  if (state) render(state);
+});
+
+// The Preview drawer: the model turning in the top half (the mouse turns it), what is known below, and Drop.
+
+let exView: { path: string; stop?: () => void } | undefined;
+let exGlbAsked = "";
+/** Models that could not be had, and why. */
+const exErrors = new Map<string, string>();
+
+function stopExView(): void {
+  exView?.stop?.();
+  exView = undefined;
+}
+
+async function showExView(path: string): Promise<void> {
+  if (exView?.path === path) return;
+  stopExView();
+  const view: { path: string; stop?: () => void } = { path };
+  exView = view;
+  const note = $("exNote");
+  const canvas = $("exCanvas") as HTMLCanvasElement;
+  canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+  if (!kindOfPath(path)) {
+    note.textContent = "People have no 3D preview yet.";
+    return;
+  }
+  await loadPreviews();
+  if (exView !== view) return;
+  if (!previews) {
+    note.textContent = previewsWhy;
+    return;
+  }
+  const why = exErrors.get(path);
+  if (why) {
+    note.textContent = `No 3D preview: ${why}`;
+    return;
+  }
+  const parts = models.get(path);
+  if (!parts) {
+    note.textContent = "drawing...";
+    if (exGlbAsked !== path) {
+      exGlbAsked = path;
+      post({ type: "preview.ask", paths: [path], glb: true });
+    }
+    exView = undefined;
+    return;
+  }
+  note.textContent = "";
+  try {
+    const v = await previews.view(parts, canvas);
+    if (exView !== view) return v.stop();
+    view.stop = () => v.stop();
+  } catch (err) {
+    note.textContent = `No 3D preview: ${(err as Error).message}`;
+  }
+}
+
+const kindOfPath = (p: string) => /\.(mesh|ent)$/i.test(p);
+
+function renderExPreview(s: Snapshot): void {
+  const e = exPicked;
+  if (!e || !explorerOpen) {
+    stopExView();
+    return;
+  }
+  $("exTitle").textContent = labelOf(e);
+  $("exTitle").title = e.path;
+  void showExView(e.path);
+  const info = s.looked?.path === e.path ? s.looked.info : undefined;
+  const parts = models.get(e.path);
+  const b = info?.bounds;
+  const from = e.source ? (e.source.kind === "project" ? `the project ${e.source.name}` : `the mod ${e.source.name}`) : e.kind === "npc" ? "the game's TweakDB" : e.path.toLowerCase().startsWith("ep1\\") ? "the game (Phantom Liberty)" : "the game";
+  const lines: [string, string][] = [
+    ["Name", e.kind === "npc" ? (e.name ?? e.path) : shortName(e.path)],
+    ["Path", e.path],
+    ["Kind", e.kind === "npc" ? "a person (NPC)" : e.kind === "entity" ? "an entity" : "a mesh"],
+    ["From", from + (e.replaces ? ", changing the game's file" : "")],
+    ["Size", b ? `${(b.max[0] - b.min[0]).toFixed(2)} × ${(b.max[1] - b.min[1]).toFixed(2)} × ${(b.max[2] - b.min[2]).toFixed(2)} m (width, depth, height)` : info?.error ? info.error : s.bridge.status === "ready" ? "reading..." : "needs REDbridge"],
+  ];
+  if (e.kind === "mesh") lines.push(["Solid", info?.hasCollision === true ? "yes: it has collision" : info?.hasCollision === false ? "no: it has no collision data" : "not known yet"]);
+  if (e.kind === "entity" && parts) lines.push(["Draws", `${parts.length} mesh${parts.length === 1 ? "" : "es"}${parts.length >= 16 ? " (the first 16 shown)" : ""}`]);
+  if (e.kind === "npc" && e.template) lines.push(["Template", e.template]);
+  if (e.size) lines.push(["File", `${(e.size / 1024).toFixed(e.size < 10240 ? 1 : 0)} KB`]);
+  if (e.source) lines.push(["Archive", e.source.file]);
+  $("exProps").innerHTML = lines.map(([k, v]) => `<div class="prop"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join("");
+  const apps = info?.appearances ?? [];
+  const list = $("exAppearances");
+  if (apps.length > 1) {
+    if (!appearance || !apps.includes(appearance)) appearance = apps[0];
+    list.innerHTML = apps.map((a) => `<rn-item value="${esc(a)}"${a === appearance ? " selected" : ""}>${esc(a)}</rn-item>`).join("");
+    list.hidden = false;
+    $("exAppLabel").hidden = false;
+  } else {
+    if (lookedAt === e.path) appearance = apps[0];
+    list.hidden = true;
+    $("exAppLabel").hidden = true;
+  }
+}
+
+$("exAppearances").addEventListener("select", (e) => {
+  appearance = (e as CustomEvent<{ value: string }>).detail.value;
+});
+$("exDrop").addEventListener("click", () => {
+  const e = exPicked;
+  if (!e) return;
+  openLeft("none");
+  startDropAtClick(e.path, appearance, labelOf(e));
+});
+
+/** A model came (or failed): the Explorer's preview and Drop at click's outline may have waited for it. */
+function modelCame(m: PreviewReply): void {
+  if (m.error) exErrors.set(m.path, m.error);
+  if (exPicked?.path === m.path && !exView) void showExView(m.path);
+  if (m.parts && edgesWanted === m.path) void makeEdges(m.path);
+}
+
+// Drop at click's outline: the object's own edges, worked out once per model from what Previews loaded.
+
+const edgeCache = new Map<string, Float32Array | null>();
+let edgesWanted = "";
+
+function edgesFor(path: string): Float32Array | undefined {
+  const got = edgeCache.get(path);
+  if (got !== undefined) return got ?? undefined;
+  if (edgesWanted !== path) {
+    edgesWanted = path;
+    if (!kindOfPath(path)) return undefined;
+    if (models.has(path)) void makeEdges(path);
+    else post({ type: "preview.ask", paths: [path], glb: true });
+  }
+  return undefined;
+}
+
+async function makeEdges(path: string): Promise<void> {
+  await loadPreviews();
+  const parts = models.get(path);
+  if (!previews || !parts || edgeCache.has(path)) return;
+  try {
+    const lines = (await previews.edges(parts, 8000)) ?? null;
+    edgeCache.set(path, lines);
+    post({ type: "log", text: `Drop at click's outline for ${shortName(path)}: ${lines ? `${(lines.length / 6).toLocaleString()} edges` : "too many edges, its box instead"}` });
+  } catch {
+    edgeCache.set(path, null);
+  }
+  while (edgeCache.size > 20) edgeCache.delete(edgeCache.keys().next().value!);
+}
+
 function status(text: string): void {
   $("message").textContent = text;
   $("message").className = "message warn";
@@ -2002,7 +2325,8 @@ $("saveSettings").addEventListener("click", () =>
 
 channel.on<ModMessage>((m) => {
   if (m?.type === "state" && m.state) render(m.state);
-  else if (m?.type === "preview") void previewCame(m);
+  else if (m?.type === "preview") void previewCame(m).then(() => modelCame(m));
+  else if (m?.type === "explore") explorerCame(m);
   else if (m?.type === "probe") viewport.setProbe(m);
 });
 post({ type: "hello" });

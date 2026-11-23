@@ -573,7 +573,12 @@ export type PageMessage =
   /** The picture the page drew from a preview's model, kept in the data folder for next time. */
   | { type: "preview.save"; key: string; png: string }
   /** Drop at click, while it waits: where a click through this line would put the object. */
-  | { type: "drop.probe"; seq: number; origin: [number, number, number]; dir: [number, number, number] };
+  | { type: "drop.probe"; seq: number; origin: [number, number, number]; dir: [number, number, number] }
+  /**
+   * The Explorer (0.14.0): what one folder of a place holds (its folders with their counts, and its files), or
+   * with `text` what matches under it. Answered with an `explore` message carrying the same `seq`.
+   */
+  | { type: "explore"; seq: number; root: string; dir: string; text?: string };
 
 /** One model of a preview: a mesh's plain GLB (base64), and for an entity's part its offset and scale in the entity (game axes). */
 export interface PreviewPart {
@@ -601,4 +606,32 @@ export interface ProbeReply {
   hit: boolean;
 }
 
-export type ModMessage = { type: "state"; state: Snapshot } | PreviewReply | ProbeReply;
+/** A place the Explorer shows at the top of its tree: the game, a mod, the open project, or the game's people. */
+export interface ExploreRoot {
+  /** `game`, `project`, `people`, or `mod:<name>`. */
+  id: string;
+  label: string;
+  count: number;
+}
+
+/** One folder in the Explorer, with how many meshes and entities (or people) are under it. */
+export interface ExploreFolder {
+  name: string;
+  count: number;
+}
+
+/** What the Explorer asked for: one folder of a place, or what matches `text` under it (then `folders` is empty). */
+export interface ExploreReply {
+  type: "explore";
+  seq: number;
+  root: string;
+  dir: string;
+  text: string;
+  roots: ExploreRoot[];
+  folders: ExploreFolder[];
+  items: AssetEntry[];
+  /** Files in the folder (or matches), of which `items` holds the first few hundred. */
+  total: number;
+}
+
+export type ModMessage = { type: "state"; state: Snapshot } | PreviewReply | ProbeReply | ExploreReply;

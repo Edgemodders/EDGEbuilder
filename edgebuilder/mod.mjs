@@ -305,6 +305,67 @@ var AssetIndex = class {
     }
     return score;
   }
+  /**
+   * The Explorer's places (0.14.0): the game's own files, each mod, the open project, and the game's people,
+   * with how many assets each holds.
+   */
+  exploreRoots() {
+    const roots = [];
+    if (this.entries.length) roots.push({ id: "game", label: "Game", count: this.entries.length });
+    const mods = /* @__PURE__ */ new Map();
+    let project2;
+    for (const e of this.extra) {
+      if (e.source?.kind === "mod") mods.set(e.source.name, (mods.get(e.source.name) ?? 0) + 1);
+      else if (e.source?.kind === "project") project2 = { name: e.source.name, count: (project2?.count ?? 0) + 1 };
+    }
+    if (project2) roots.push({ id: "project", label: `Project ${project2.name}`, count: project2.count });
+    for (const [name, count] of [...mods].sort((x, y) => x[0].localeCompare(y[0]))) roots.push({ id: `mod:${name}`, label: `Mod ${name}`, count });
+    if (this.npcs.length) roots.push({ id: "people", label: "People", count: this.npcs.length });
+    return roots;
+  }
+  /**
+   * One folder of an Explorer place: its folders, each with how many assets are under it, and the files
+   * directly in it (the first `limit`). With `text`, every file under the folder that matches, as the search does.
+   * `dir` is the folder's path inside the place, backslashes, any case; empty for the top.
+   */
+  explore(root, dir, text = "", limit = 400) {
+    const want = dir ? dir.toLowerCase().split("\\").filter(Boolean) : [];
+    const terms = text.toLowerCase().split(/\s+/).filter(Boolean);
+    const folders = /* @__PURE__ */ new Map();
+    const items = [];
+    let total = 0;
+    for (const e of this.poolOf(root)) {
+      const seg = exploreSegments(root, e.path);
+      if (seg.length <= want.length) continue;
+      let under = true;
+      for (let i = 0; i < want.length && under; i++) under = seg[i].toLowerCase() === want[i];
+      if (!under) continue;
+      if (terms.length) {
+        if (this.score(e, terms) < 0) continue;
+      } else if (seg.length > want.length + 1) {
+        const key = seg[want.length].toLowerCase();
+        const f = folders.get(key);
+        if (f) f.count++;
+        else folders.set(key, { name: seg[want.length], count: 1 });
+        continue;
+      }
+      total++;
+      if (items.length < limit) items.push(e);
+    }
+    const byName = (x, y) => x.localeCompare(y, void 0, { sensitivity: "base", numeric: true });
+    items.sort((x, y) => byName(x.path, y.path));
+    return { folders: [...folders.values()].sort((x, y) => byName(x.name, y.name)), items, total };
+  }
+  poolOf(root) {
+    if (root === "game") return this.entries;
+    if (root === "people") return this.npcs;
+    if (root === "project") return this.extra.filter((e) => e.source?.kind === "project");
+    if (root.startsWith("mod:")) {
+      const name = root.slice(4);
+      return this.extra.filter((e) => e.source?.kind === "mod" && e.source.name === name);
+    }
+    return [];
+  }
   /** What the bridge knows about an asset, asked once and remembered. */
   async lookAt(bridge2, assetPath) {
     const known = this.info[assetPath];
@@ -327,6 +388,12 @@ function unique(entries) {
     seen2.add(key);
     return true;
   });
+}
+function exploreSegments(root, assetPath) {
+  if (root !== "people") return assetPath.split("\\");
+  const name = assetPath.replace(/^character\./i, "");
+  const cut2 = name.indexOf("_");
+  return cut2 > 0 ? [name.slice(0, cut2).toLowerCase(), assetPath] : [assetPath];
 }
 function kindOf(file) {
   const lower = file.toLowerCase();
@@ -4206,10 +4273,15 @@ channel.on((m) => {
       case "preview.ask":
         {
           const asked = m.paths.filter((p) => kindOf(p)).map((p) => ({ path: p, glb: !!m.glb }));
-          previewQueue = m.glb ? [...asked, ...previewQueue.filter((q) => !asked.some((a) => a.path === q.path))] : asked;
+          previewQueue = m.glb ? [...asked, ...previewQueue.filter((q) => !asked.some((a) => a.path === q.path))] : [...previewQueue.filter((q) => q.glb), ...asked];
         }
         await runPreviews();
         break;
+      case "explore": {
+        const found = index.explore(m.root, m.dir, m.text ?? "");
+        channel.post({ type: "explore", seq: m.seq, root: m.root, dir: m.dir, text: m.text ?? "", roots: index.exploreRoots(), ...found });
+        break;
+      }
       case "preview.save":
         savePreview(m.key, m.png);
         break;

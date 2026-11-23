@@ -28,7 +28,7 @@ export {
 export { BridgeClient, BridgeError, defaultDotnetRoot, findBridge, isGameFolder } from "./bridge";
 export { applyChange, collisionKey, boxOf, centreOf, copyOf, duplicate, makeGroup, membersOf, pasteOf, pickMany, pickSelection, pruneGroups, seenFromBySize, selectionUnits, standPoint, streamingFor, ungroup, upright } from "./arrange";
 export { NpcList, PersonBounds, isRecord, npcEntry } from "./npcs";
-export { AssetIndex, IndexPrefixes, kindOf } from "./index";
+export { AssetIndex, IndexPrefixes, exploreSegments, kindOf } from "./index";
 export { Scene, forReader, quaternionToYaw, readSceneFile, yawToQuaternion } from "./scene";
 export { DefaultKinds, DoorClasses, KindLabels, doorActions, doorAfter, doorStateText, doorUnderRay, editCounts, editFor, editId, editsDiff, idText, kindOfClass, questWarnings, rayToSegment, readableEdits, registryId, sameId } from "./worldedits";
 export { cleanFolderName, fileNameOf, folderIn, freeFileName, libraryConfigFile, readLibraryRoot, refOf, scanShelf, slugOf, whereIs, writeLibraryRoot } from "./scenes";

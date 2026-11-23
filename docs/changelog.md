@@ -13,16 +13,17 @@ With each change a player or modder would notice, add a line under **Unreleased*
 **New**
 
 - Previews: the eye beside the Assets tab's result count opens the results as small 3D pictures in a drawer to the left: meshes, and entities drawn from their meshes (NPCs by name for now). The mouse on a picture turns it. A click picks it, closes the drawer and starts Drop at click. Pictures are kept, so a result's picture shows at once the next time.
+- The Explorer: the folder icon beside the search box opens the game's folders, each mod, the open REDcode project and the game's people in a wide drawer to the left, folder by folder with how many objects each holds; typing filters within the folder clicked last. A pick opens a Preview drawer beside it: the object in 3D (drag to turn it, the wheel to come nearer), its size, whether it can be solid, its appearances and more, and a Drop button that starts Drop at click.
 - The Library can leave the window: the icon at the top right of the Library tree puts it in a drawer to the left, with more room. A Library button opens the drawer again, the same icon brings the Library back, and a pick in the drawer shows the Library tab's Picked panel. EDGEbuilder remembers the choice.
 
 **Changed**
 
-- Drop at click: the cursor becomes a white crosshair, and the object's outline box shows where a click would put it (amber when nothing is under the cursor and it would land 8 m away). The help line at the bottom names what is being dropped.
-- One drawer at a time to the left of the window: Objects, the Library, Previews or a sector.
+- Drop at click: the cursor becomes a white crosshair, and the object's own outline, drawn in white lines, shows where a click would put it (amber when nothing is under the cursor and it would land 8 m away; its box while the outline is worked out, for an object with too many edges, and for a person). The help line at the bottom names what is being dropped.
+- One drawer at a time to the left of the window: Objects, the Library, Previews, the Explorer (with its Preview) or a sector.
 
 **Other**
 
-- The Previews drawer draws with three.js (MIT), loaded only when the drawer first opens.
+- Previews, the Explorer's preview and the outline are drawn with three.js (MIT), loaded only when first needed.
 
 ## 0.13.2 (2026-11-23)
 

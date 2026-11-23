@@ -71,9 +71,11 @@ export interface ViewportHooks {
   probe(seq: number, ray: { o: V3; d: V3 }): void;
 }
 
-/** What Drop at click draws while it waits: the object's box, the size of its bounds when known. */
+/** What Drop at click draws while it waits: the object's own edges once the page has them, else its box, the size of its bounds when known. */
 export interface DropOutline {
   bounds?: () => { min: number[]; max: number[] } | undefined;
+  /** Line pairs in the object's space (game axes, x y z x y z per line), from Previews' `edges`. */
+  edges?: () => Float32Array | undefined;
   /** What is being dropped, for the help line. */
   name?: string;
 }
@@ -315,9 +317,14 @@ export class Viewport {
     const ctx = this.ctx;
     const p = this.probed;
     if (p && this.cam && this.probeSeq - p.seq < 30) {
-      const b = this.outline?.bounds?.();
-      const o: SceneObject = { id: "drop-outline", kind: "mesh", transform: { position: p.position, rotation: p.rotation, scale: [1, 1, 1] }, bounds: b ? { min: b.min, max: b.max } : undefined } as SceneObject;
-      this.drawBox(o, p.hit ? "rgba(255,255,255,0.95)" : "rgba(255,204,77,0.95)", 1.5);
+      const colour = p.hit ? "rgba(255,255,255,0.9)" : "rgba(255,204,77,0.9)";
+      const lines = this.outline?.edges?.();
+      if (lines) this.drawEdges(lines, p.position, p.rotation, colour);
+      else {
+        const b = this.outline?.bounds?.();
+        const o: SceneObject = { id: "drop-outline", kind: "mesh", transform: { position: p.position, rotation: p.rotation, scale: [1, 1, 1] }, bounds: b ? { min: b.min, max: b.max } : undefined } as SceneObject;
+        this.drawBox(o, colour, 1.5);
+      }
     }
     if (!this.overView) return;
     const [x, y] = this.mouse;
@@ -632,6 +639,36 @@ export class Viewport {
       ctx.fillRect(left + (w - w / 4) * t, 52, w / 4, 4);
     }
     ctx.fillText(text, left + 12, 46);
+  }
+
+  /** Drop at click's outline: the object's own edges (line pairs in its space, game axes) placed at `at`, turned by `q`. */
+  private drawEdges(lines: Float32Array, at: V3, q: Q, colour: string): void {
+    const cam = this.cam!;
+    // The rotation as a matrix once, rather than a quaternion per point.
+    const [x, y, z, w] = q;
+    const m = [
+      1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w),
+      2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w),
+      2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y),
+    ];
+    const place = (i: number): V3 => {
+      const a = lines[i];
+      const b = lines[i + 1];
+      const c = lines[i + 2];
+      return [at[0] + m[0] * a + m[1] * b + m[2] * c, at[1] + m[3] * a + m[4] * b + m[5] * c, at[2] + m[6] * a + m[7] * b + m[8] * c];
+    };
+    const ctx = this.ctx;
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i + 5 < lines.length; i += 6) {
+      const p = project(cam, place(i));
+      const r = project(cam, place(i + 3));
+      if (!p || !r) continue;
+      ctx.moveTo(p[0], p[1]);
+      ctx.lineTo(r[0], r[1]);
+    }
+    ctx.stroke();
   }
 
   private drawBox(o: SceneObject, colour = "rgba(25,243,255,0.7)", width = 1): void {

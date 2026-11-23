@@ -206,6 +206,25 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.equal(people.search("judy", "all", 10, "mods").length, 0, "no person comes from a mod yet");
   assert.equal(people.search("character", "npc", 10).length, 0, "the record's prefix is not a match");
 
+  // The Explorer (0.14.0): folders with their counts, the files in one, a filter under one, and the people by their record's first word.
+  const ex = new AssetIndex(path.join(tmp, "index-ex"));
+  ex.entries = ["base\\environment\\crates\\crate_a.mesh", "base\\environment\\crates\\crate_b.ent", "base\\environment\\crates\\big\\crate_c.mesh", "base\\items\\can.mesh", "ep1\\environment\\sign.mesh"].map((p) => ({ path: p, kind: kindOf(p), size: 1 }));
+  ex.extra = [{ path: "mymod\\props\\chicken.mesh", kind: "mesh", size: 1, source: { kind: "mod", name: "Chicken", file: "C:\\x.archive" } }];
+  ex.npcs = [judy, rich];
+  assert.deepEqual(ex.exploreRoots().map((r) => [r.id, r.count]), [["game", 5], ["mod:Chicken", 1], ["people", 2]]);
+  assert.deepEqual(ex.explore("game", "").folders, [{ name: "base", count: 4 }, { name: "ep1", count: 1 }]);
+  const crates = ex.explore("game", "BASE\\environment\\crates");
+  assert.deepEqual(crates.folders, [{ name: "big", count: 1 }], "any case");
+  assert.deepEqual(crates.items.map((e) => e.path.split("\\").pop()), ["crate_a.mesh", "crate_b.ent"]);
+  assert.equal(crates.total, 2);
+  assert.deepEqual(ex.explore("game", "base", "crate").items.map((e) => e.path.split("\\").pop()), ["crate_c.mesh", "crate_a.mesh", "crate_b.ent"], "a filter looks under the folder, in path order");
+  assert.equal(ex.explore("game", "base", "crate").total, 3);
+  assert.equal(ex.explore("game", "ep1", "crate").total, 0);
+  assert.deepEqual(ex.explore("mod:Chicken", "mymod\\props").items.map((e) => e.path), ["mymod\\props\\chicken.mesh"]);
+  assert.deepEqual(core.exploreSegments("people", "Character.afterlife_merc_01"), ["afterlife", "Character.afterlife_merc_01"]);
+  assert.deepEqual(core.exploreSegments("people", "Character.Judy"), ["Character.Judy"]);
+  assert.equal(ex.explore("nowhere", "").total, 0);
+
   const list = new core.NpcList(path.join(tmp, "index-npc"));
   assert.equal(list.load("g"), false);
 

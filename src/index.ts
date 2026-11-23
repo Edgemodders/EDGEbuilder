@@ -5,7 +5,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Bridge } from "./bridge";
-import type { AssetEntry, AssetFrom, AssetInfo, AssetKind } from "./protocol";
+import type { AssetEntry, AssetFrom, AssetInfo, AssetKind, ExploreFolder, ExploreRoot } from "./protocol";
 
 /** The folders worth indexing for world building. Characters, weapons and UI are left out. */
 export const IndexPrefixes = ["base\\environment", "ep1\\environment", "base\\items", "ep1\\items", "base\\gameplay\\devices"];
@@ -145,6 +145,70 @@ export class AssetIndex {
     return score;
   }
 
+  /**
+   * The Explorer's places (0.14.0): the game's own files, each mod, the open project, and the game's people,
+   * with how many assets each holds.
+   */
+  exploreRoots(): ExploreRoot[] {
+    const roots: ExploreRoot[] = [];
+    if (this.entries.length) roots.push({ id: "game", label: "Game", count: this.entries.length });
+    const mods = new Map<string, number>();
+    let project: { name: string; count: number } | undefined;
+    for (const e of this.extra) {
+      if (e.source?.kind === "mod") mods.set(e.source.name, (mods.get(e.source.name) ?? 0) + 1);
+      else if (e.source?.kind === "project") project = { name: e.source.name, count: (project?.count ?? 0) + 1 };
+    }
+    if (project) roots.push({ id: "project", label: `Project ${project.name}`, count: project.count });
+    for (const [name, count] of [...mods].sort((x, y) => x[0].localeCompare(y[0]))) roots.push({ id: `mod:${name}`, label: `Mod ${name}`, count });
+    if (this.npcs.length) roots.push({ id: "people", label: "People", count: this.npcs.length });
+    return roots;
+  }
+
+  /**
+   * One folder of an Explorer place: its folders, each with how many assets are under it, and the files
+   * directly in it (the first `limit`). With `text`, every file under the folder that matches, as the search does.
+   * `dir` is the folder's path inside the place, backslashes, any case; empty for the top.
+   */
+  explore(root: string, dir: string, text = "", limit = 400): { folders: ExploreFolder[]; items: AssetEntry[]; total: number } {
+    const want = dir ? dir.toLowerCase().split("\\").filter(Boolean) : [];
+    const terms = text.toLowerCase().split(/\s+/).filter(Boolean);
+    const folders = new Map<string, ExploreFolder>();
+    const items: AssetEntry[] = [];
+    let total = 0;
+    for (const e of this.poolOf(root)) {
+      const seg = exploreSegments(root, e.path);
+      if (seg.length <= want.length) continue;
+      let under = true;
+      for (let i = 0; i < want.length && under; i++) under = seg[i].toLowerCase() === want[i];
+      if (!under) continue;
+      if (terms.length) {
+        if (this.score(e, terms) < 0) continue;
+      } else if (seg.length > want.length + 1) {
+        const key = seg[want.length].toLowerCase();
+        const f = folders.get(key);
+        if (f) f.count++;
+        else folders.set(key, { name: seg[want.length], count: 1 });
+        continue;
+      }
+      total++;
+      if (items.length < limit) items.push(e);
+    }
+    const byName = (x: string, y: string) => x.localeCompare(y, undefined, { sensitivity: "base", numeric: true });
+    items.sort((x, y) => byName(x.path, y.path));
+    return { folders: [...folders.values()].sort((x, y) => byName(x.name, y.name)), items, total };
+  }
+
+  private poolOf(root: string): AssetEntry[] {
+    if (root === "game") return this.entries;
+    if (root === "people") return this.npcs;
+    if (root === "project") return this.extra.filter((e) => e.source?.kind === "project");
+    if (root.startsWith("mod:")) {
+      const name = root.slice(4);
+      return this.extra.filter((e) => e.source?.kind === "mod" && e.source.name === name);
+    }
+    return [];
+  }
+
   /** What the bridge knows about an asset, asked once and remembered. */
   async lookAt(bridge: Bridge, assetPath: string): Promise<AssetInfo> {
     const known = this.info[assetPath];
@@ -171,6 +235,17 @@ function unique(entries: AssetEntry[]): AssetEntry[] {
     seen.add(key);
     return true;
   });
+}
+
+/**
+ * Where an asset sits in the Explorer: a file by its folders; a person (a `Character` record) in a folder named by
+ * the first word of its record, such as `afterlife` for `Character.afterlife_merc_...`.
+ */
+export function exploreSegments(root: string, assetPath: string): string[] {
+  if (root !== "people") return assetPath.split("\\");
+  const name = assetPath.replace(/^character\./i, "");
+  const cut = name.indexOf("_");
+  return cut > 0 ? [name.slice(0, cut).toLowerCase(), assetPath] : [assetPath];
 }
 
 export function kindOf(file: string): AssetKind | undefined {
