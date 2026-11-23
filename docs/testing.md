@@ -1090,7 +1090,7 @@ REDcode #32 (REDcode 0.10.15: `projects()` and `projects-changed`), asked for by
 
 ### Previews, the Explorer, the Library drawer and Drop at click's outline (0.14.0)
 
-Asked for by the owner on 2026-11-23. Built the same day; checked in REDnode's host without the game, against REDbridge 0.18.0: "crate" gave 95 tiles, meshes and entities drawn (two entities with no mesh parts say "no picture"), a picture turns under the mouse, a click closes the drawer, picks the result and starts Drop at click; the Library goes out to its drawer and back, one drawer at a time, the choice kept after a reload. The Explorer (asked for the same day, with the object's own outline for Drop at click): Game 31,601, base 28,781, containers 667 with their folders; a delivery crate picked showed in 3D with its size, collision and file size, turned by a drag and brought nearer by the wheel; a filter for `barrel` in containers found 37; Drop closed both drawers and started Drop at click, and the page made the crate's outline (482 edges). The crosshair and the outline need the game's camera, so they are untested.
+Asked for by the owner on 2026-11-23. Built the same day; checked in REDnode's host without the game, against REDbridge 0.18.0: "crate" gave 95 tiles, meshes and entities drawn (two entities with no mesh parts say "no picture"), a picture turns under the mouse, a click closes the drawer, picks the result and starts Drop at click; the Library goes out to its drawer and back, one drawer at a time, the choice kept after a reload. The Explorer (asked for the same day, with the object's own outline for Drop at click): Game 31,601, base 28,781, containers 667 with their folders; a delivery crate picked showed in 3D with its size, collision and file size, turned by a drag and brought nearer by the wheel; a filter for `barrel` in containers found 37; Drop closed both drawers and started Drop at click, and the page made the crate's outline (482 edges). The Preview switch (asked for the same day): a result clicked with it on showed in the Preview drawer beside the window; off closed it; the search box's ✕ emptied the box and the list. The crosshair and the outline need the game's camera, so they are untested.
 
 Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a scene open.
 
@@ -1120,6 +1120,10 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | 22 | Pick one and press **Drop** | Both drawers close, Edit goes on, Drop at click starts with that object's outline under the crosshair; a click drops it with the appearance picked | P3, P5 |
 | 23 | Open People, then a folder such as `afterlife` | The people grouped by the first word of their record; a pick shows its properties and says people have no 3D preview yet; Drop drops the person | P5 |
 | 24 | Open Objects (Library tab) while the Explorer is open | The Explorer and its Preview close together | P5 |
+| 25 | Assets tab: switch **Preview** on (beside the result count), search `crate`, click a result | The Preview drawer opens beside the window with that result in 3D and its properties; another click shows the next one; **Drop** starts Drop at click | P5 |
+| 26 | With the Explorer open, click a search result | It shows in the Preview beside the Explorer | P5 |
+| 27 | Switch Preview off | The Preview drawer closes; a click on a result only picks it | P5 |
+| 28 | Press the ✕ at the right of the search box | The box and the result list empty; the count says to type a name | P5 |
 
 | # | Question |
 |---|---|

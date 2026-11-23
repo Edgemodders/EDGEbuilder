@@ -2405,7 +2405,9 @@ export function serviceScenesEditing(sector: string): { name: string; file: stri
 // ---- requests from the page -------------------------------------------------------------------
 
 function runSearch(): void {
-  state.results = index.entries.length || index.extra.length ? index.search(state.query.text, state.query.kind, ResultLimit, state.query.from) : [];
+  // No text: nothing, as after the search box's ✕; Mods and Project still list all they hold.
+  const blank = !state.query.text.trim() && (state.query.from === "all" || state.query.from === "game");
+  state.results = !blank && (index.entries.length || index.extra.length) ? index.search(state.query.text, state.query.kind, ResultLimit, state.query.from) : [];
   publish();
 }
 

@@ -3695,7 +3695,8 @@ function serviceScenesEditing(sector) {
   return out;
 }
 function runSearch() {
-  state.results = index.entries.length || index.extra.length ? index.search(state.query.text, state.query.kind, ResultLimit, state.query.from) : [];
+  const blank = !state.query.text.trim() && (state.query.from === "all" || state.query.from === "game");
+  state.results = !blank && (index.entries.length || index.extra.length) ? index.search(state.query.text, state.query.kind, ResultLimit, state.query.from) : [];
   publish();
 }
 async function drop(assetPath, appearance, at) {

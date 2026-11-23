@@ -432,6 +432,8 @@ $("results").addEventListener("select", (e) => {
   lookedAt = (e as CustomEvent<{ value: string }>).detail.value;
   appearance = undefined;
   post({ type: "look", path: lookedAt });
+  // The Preview switch on: the result in 3D in the Preview drawer as well.
+  if (previewPick) previewResult(lookedAt);
   if (state) render(state);
 });
 $("appearances").addEventListener("select", (e) => {
@@ -1537,7 +1539,7 @@ function renderSectorDrawer(s: Snapshot): void {
   }
   if (v.path !== lastSector) {
     lastSector = v.path;
-    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = false;
     renderLeft();
     ($("sectorFilter") as HTMLInputElement).value = v.filter;
   }
@@ -1671,7 +1673,8 @@ for (const id of ["bakeProjects", "importProjects"]) {
 let libraryDrawerOpen = false;
 let previewsOpen = false;
 
-function openLeft(which: "objects" | "library" | "previews" | "explorer" | "none"): void {
+function openLeft(which: "objects" | "library" | "previews" | "explorer" | "preview" | "none"): void {
+  previewAlone = which === "preview";
   drawerOpen = which === "objects";
   libraryDrawerOpen = which === "library";
   previewsOpen = which === "previews";
@@ -1693,9 +1696,10 @@ function renderLeft(): void {
   $("previewsDrawer").classList.toggle("open", previewsOpen);
   $("previewsEye").setAttribute("aria-pressed", String(previewsOpen));
   $("explorerDrawer").classList.toggle("open", explorerOpen);
-  $("exPreview").classList.toggle("open", explorerOpen && !!exPicked);
+  $("exPreview").classList.toggle("open", (explorerOpen || previewAlone) && !!exPicked);
+  $("exPreview").classList.toggle("alone", !explorerOpen);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
-  if (!explorerOpen || !exPicked) stopExView();
+  if ((!explorerOpen && !previewAlone) || !exPicked) stopExView();
 }
 
 // ---- the Library out of the window (0.14.0) ------------------------------------------------------------
@@ -1949,6 +1953,41 @@ $("previewGrid").addEventListener("click", (e) => {
 // about it, and Drop, which starts Drop at click. The two open and close together.
 
 let explorerOpen = false;
+/**
+ * The Preview drawer on its own, beside the window: a search result clicked with the Preview switch on (beside the
+ * result count). With the Explorer open, a result shows beside the Explorer instead.
+ */
+let previewAlone = false;
+let previewPick = false;
+try {
+  previewPick = localStorage.getItem("edgebuilder.previewPick") === "1";
+} catch {
+  // No storage: off.
+}
+($("previewPick") as HTMLElement & { checked: boolean }).checked = previewPick;
+
+/** Shows a search result in the Preview drawer. */
+function previewResult(path: string): void {
+  const r = state?.results.find((x) => x.path === path);
+  if (!r) return;
+  exPicked = r;
+  if (explorerOpen) {
+    renderLeft();
+    renderExplorer();
+    if (state) render(state);
+  } else openLeft("preview");
+}
+
+$("previewPick").addEventListener("change", (e) => {
+  previewPick = !!(e as CustomEvent<{ checked: boolean }>).detail.checked;
+  try {
+    localStorage.setItem("edgebuilder.previewPick", previewPick ? "1" : "0");
+  } catch {
+    // No storage: for this session only.
+  }
+  if (previewPick && lookedAt) previewResult(lookedAt);
+  else if (!previewPick && previewAlone) openLeft("none");
+});
 /** The Preview drawer beside the Explorer, for the object picked there. */
 let exPicked: AssetEntry | undefined;
 let exRoots: ExploreRoot[] = [];
@@ -2058,6 +2097,7 @@ function renderExplorer(): void {
 $("explorerOpen").addEventListener("click", () => openLeft(explorerOpen ? "none" : "explorer"));
 $("explorerClose").addEventListener("click", () => openLeft("none"));
 $("exPreviewClose").addEventListener("click", () => {
+  if (previewAlone) return openLeft("none");
   exPicked = undefined;
   renderLeft();
   renderExplorer();
@@ -2157,7 +2197,7 @@ const kindOfPath = (p: string) => /\.(mesh|ent)$/i.test(p);
 
 function renderExPreview(s: Snapshot): void {
   const e = exPicked;
-  if (!e || !explorerOpen) {
+  if (!e || (!explorerOpen && !previewAlone)) {
     stopExView();
     return;
   }

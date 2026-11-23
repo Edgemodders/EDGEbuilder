@@ -1675,6 +1675,7 @@ $("results").addEventListener("select", (e) => {
   lookedAt = e.detail.value;
   appearance = void 0;
   post({ type: "look", path: lookedAt });
+  if (previewPick) previewResult(lookedAt);
   if (state) render(state);
 });
 $("appearances").addEventListener("select", (e) => {
@@ -2615,7 +2616,7 @@ function renderSectorDrawer(s) {
   }
   if (v2.path !== lastSector) {
     lastSector = v2.path;
-    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = false;
     renderLeft();
     $("sectorFilter").value = v2.filter;
   }
@@ -2721,6 +2722,7 @@ for (const id of ["bakeProjects", "importProjects"]) {
 var libraryDrawerOpen = false;
 var previewsOpen = false;
 function openLeft(which) {
+  previewAlone = which === "preview";
   drawerOpen = which === "objects";
   libraryDrawerOpen = which === "library";
   previewsOpen = which === "previews";
@@ -2741,9 +2743,10 @@ function renderLeft() {
   $("previewsDrawer").classList.toggle("open", previewsOpen);
   $("previewsEye").setAttribute("aria-pressed", String(previewsOpen));
   $("explorerDrawer").classList.toggle("open", explorerOpen);
-  $("exPreview").classList.toggle("open", explorerOpen && !!exPicked);
+  $("exPreview").classList.toggle("open", (explorerOpen || previewAlone) && !!exPicked);
+  $("exPreview").classList.toggle("alone", !explorerOpen);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
-  if (!explorerOpen || !exPicked) stopExView();
+  if (!explorerOpen && !previewAlone || !exPicked) stopExView();
 }
 var libraryOut = false;
 try {
@@ -2949,6 +2952,32 @@ $("previewGrid").addEventListener("click", (e) => {
   startDropAtClick(path, void 0);
 });
 var explorerOpen = false;
+var previewAlone = false;
+var previewPick = false;
+try {
+  previewPick = localStorage.getItem("edgebuilder.previewPick") === "1";
+} catch {
+}
+$("previewPick").checked = previewPick;
+function previewResult(path) {
+  const r = state?.results.find((x) => x.path === path);
+  if (!r) return;
+  exPicked = r;
+  if (explorerOpen) {
+    renderLeft();
+    renderExplorer();
+    if (state) render(state);
+  } else openLeft("preview");
+}
+$("previewPick").addEventListener("change", (e) => {
+  previewPick = !!e.detail.checked;
+  try {
+    localStorage.setItem("edgebuilder.previewPick", previewPick ? "1" : "0");
+  } catch {
+  }
+  if (previewPick && lookedAt) previewResult(lookedAt);
+  else if (!previewPick && previewAlone) openLeft("none");
+});
 var exPicked;
 var exRoots = [];
 var exCache = /* @__PURE__ */ new Map();
@@ -3045,6 +3074,7 @@ function renderExplorer() {
 $("explorerOpen").addEventListener("click", () => openLeft(explorerOpen ? "none" : "explorer"));
 $("explorerClose").addEventListener("click", () => openLeft("none"));
 $("exPreviewClose").addEventListener("click", () => {
+  if (previewAlone) return openLeft("none");
   exPicked = void 0;
   renderLeft();
   renderExplorer();
@@ -3134,7 +3164,7 @@ async function showExView(path) {
 var kindOfPath = (p) => /\.(mesh|ent)$/i.test(p);
 function renderExPreview(s) {
   const e = exPicked;
-  if (!e || !explorerOpen) {
+  if (!e || !explorerOpen && !previewAlone) {
     stopExView();
     return;
   }
