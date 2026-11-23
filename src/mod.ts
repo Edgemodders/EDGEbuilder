@@ -2194,6 +2194,8 @@ async function selectSectorEntry(entry: number): Promise<{ selected: boolean; st
   const item = sectorItems.find((i) => i.index === entry);
   if (!view || !item) return { selected: false, streamed: false };
   view.selected = entry;
+  // An entry past the rows shown joins them, so the drawer can show it picked.
+  if (!view.nodes.some((r) => r.entry === entry)) await showSectorRows();
   const t = await sectorThing(view, item);
   await pickThing(t);
   const n = typeof world.node === "function" ? await world.node(`${view.hash}:${entry}`).catch(() => null) : null;

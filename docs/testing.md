@@ -1039,6 +1039,8 @@ Before: the game closed; Claude deploys EDGEbuilder 0.13.0 with EDGEdeck (0.12.5
 | R4 | **Lock** again, then **Restore** on the Scene tab; call the elevator | It opens: the door is back as it was |
 | R5 | Lock V's door (not an elevator's) and try it as V | Locked as in step 5: nothing changed for other doors |
 
+**R1 to R5 passed in game on 2026-11-23 on 0.13.1 (the owner). D2 passed: steps 1 to 11 on 0.13.0, step 12 as R1 to R5 on 0.13.1.** T1 to T4 are answered yes; T1 with the rule that an elevator's door is sealed, not locked.
+
 ### S1 Sectors (0.13.0)
 
 Sector Tools' first stage ([World objects, "Sector Tools"](world-objects.md#sector-tools-s1-to-s3-edgebuilder-9), EDGEbuilder #9). Built on 2026-11-20; checked against REDbridge 0.15.0 outside the game and in REDnode's host (the sub-tabs, a grid-cell search, the drawer with V's sector's 853 entries and its filter). Run after the D2 steps, with the same deploy. Needs REDbridge 0.12.0 or later.
@@ -1066,9 +1068,11 @@ Sector Tools' first stage ([World objects, "Sector Tools"](world-objects.md#sect
 
 **Step 11, 2026-11-23, 0.13.0: passed**, run by Claude through REDnode's MCP server against the owner's game (REDcode's sector view has no Show in Game yet). `select` answered `{ selected: true, streamed: true }`: the drawer open on `exterior_-22_19_1_0`, V's door in Picked in the world and outlined. `focus` answered `{ focused: true, streamed: true }`: Edit on, the camera at the door. `scenesEditing` named one scene with one removal there. Found: the drawer's list stayed at its top, the picked row #288 out of view. **0.13.1** scrolls to the picked row, and shows it even when it is past the first 300. 
 
-**Steps 1 to 10, 2026-11-23, 0.13.0 (the owner, in game):** Q1 and Q2 "I believe so": the sectors found and the streamed-in marks looked right. Q3: pick, fly to, hide and Remove from world worked; **the outline was sometimes late**: picking wine glasses (`glass_d_wine.mesh`, a `worldInstancedDestructibleMeshNode`, so one entry that places several copies) showed no outline at first, and after a couple more picks it did. Not yet reproduced or understood: to look at with the 0.13.1 retest (does it happen only on instanced entries, and does the first pick outline a copy out of view?). Q4 was not tried from REDcode, which has no way to do it yet: step 11 above stands in for it. **S1 is partly run: it passes once the late outline is understood or fixed.**
+**Steps 1 to 10, 2026-11-23, 0.13.0 (the owner, in game):** Q1 and Q2 "I believe so": the sectors found and the streamed-in marks looked right. Q3: pick, fly to, hide and Remove from world worked; **the outline was sometimes late**: picking wine glasses (`glass_d_wine.mesh`, a `worldInstancedDestructibleMeshNode`, so one entry that places several copies) showed no outline at first, and after a couple more picks it did. Not yet reproduced or understood: to look at with the 0.13.1 retest (does it happen only on instanced entries, and does the first pick outline a copy out of view?). Q4 was not tried from REDcode, which has no way to do it yet: step 11 above stands in for it. It did not come back in the owner's later runs.
 
-**Retest on 0.13.1:** `select` with entry 288, then with entry 700: each time the picked row is in view in the drawer.
+**Retest on 0.13.1, 2026-11-23** (Claude, through the service, with pictures of the window): `select` with entry 288: **passed**, row #288 is picked and in the middle of the drawer. `select` with entry 700 (past the 300 rows shown): **failed**: the entry is in Picked in the world, but the drawer keeps its old rows, with none picked. Cause: the rows were not made again for a pick. **0.13.2** makes them again when the picked entry is not among them; built, not deployed, not tested in game.
+
+**S1 passed in game on 2026-11-23 (the owner: steps 1 to 11 all pass, on 0.13.0 and 0.13.1).** Left for 0.13.2's check: `select` with entry 700 shows its row picked. The late outline on the wine glasses was seen once and not again.
 
 ### Project picker (0.13.0)
 
