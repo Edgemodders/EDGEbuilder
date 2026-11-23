@@ -1085,3 +1085,5 @@ REDcode #32 (REDcode 0.10.15: `projects()` and `projects-changed`), asked for by
 | 3 | Click the other VS Code window, then come back to the game | Following REDcode: the Bake tab follows the window used last |
 | 4 | Pick one project by name; then click the other VS Code window | It stays the picked one; Browse's Project source and Import use it too |
 | 5 | Close the picked project's window | Back to following REDcode; with one project left the row goes |
+
+**All five steps passed in game on 2026-11-23 on 0.13.1 (the owner).** One change asked for: the Bake tab's panel "Bakes in this project" should name the project. **0.13.2** titles it "Bakes for <project>" (built, not deployed; to look at in the next round).

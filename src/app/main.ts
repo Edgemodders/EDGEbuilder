@@ -740,6 +740,7 @@ function renderBake(s: Snapshot): void {
   renderProjects("bakeProjects", s);
   renderProjects("importProjects", s);
   $("bakeInto").title = b.project?.dir ?? "";
+  $("bakeListPanel").setAttribute("title", b.project ? `Bakes for ${b.project.name}` : "Bakes in this project");
   const checks = b.checks.map((c) => `<div class="check ${c.tone}">${esc(c.text)}</div>`).join("");
   if ($("bakeChecks").innerHTML !== checks) $("bakeChecks").innerHTML = checks;
   const when = (iso?: string) => (iso ? new Date(iso).toLocaleString() : "");

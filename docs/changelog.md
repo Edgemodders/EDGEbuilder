@@ -24,6 +24,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 **Changed**
 
 - The World tab has two sub-tabs, Nearby (the doors near V) and Sectors. Look again is now Scan Doors.
+- The Bake tab's list of bakes is titled with the project's name: "Bakes for <project>".
 
 **Other**
 
