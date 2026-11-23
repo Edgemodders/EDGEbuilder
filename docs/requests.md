@@ -14,7 +14,7 @@ Feature requests that reach EDGEbuilder from people using it, and where each one
 
 **What it means for EDGEbuilder.** They do not place by hand. For them EDGEbuilder is a **file format and a bake**, and the editor is for touch-ups afterwards. That is a use the design did not plan for, and most of it is close: the scene file is already the contract, `sector.build` already runs without the game, and the bake code already runs without REDnode. What is missing is a promise about the format, a supported command line, knowledge of what happens at 5,000 objects, and a way back from hand edits to the generator.
 
-**Their sample, the same day.** The team sent one real build as scene format 1 (4,965 objects), the fields the format lacks, their collision boxes and how they bake them. It read as format 1 unchanged, and the 3,774 objects that use the game's own files baked in 9 s with the game closed. What it showed is on [Generated scenes](generated-scenes.md#the-teams-sample-2026-11-22); it moved E5 and E4 below.
+**Their sample, the same day.** The team sent one real build as scene format 1 (4,965 objects), the fields the format lacks, their collision boxes and how they bake them. It read as format 1 unchanged, and the 3,774 objects that use the game's own files baked in 9 s with the game closed. What it showed is on [Generated scenes](generated-scenes.md#the-teams-sample-2026-11-22); it moved E5 and E4 below. A second sample on 2026-11-23 added bounds for the objects on their own files, and the whole scene baked in 7.5 s.
 
 ### The requests for EDGEbuilder
 

@@ -54,8 +54,19 @@ The team that asked sent one real build the same day, rewritten by their own scr
 |---|---|
 | The whole scene, 4,965 objects | Refused before writing, as it should be: each object whose file is not in the game's archives is named, with what to do (bounds in the scene, or the mod's archive) |
 | The 3,774 objects that use the game's own files | Baked in 9.0 s after a 3.4 s start; packed in 26 ms. One sector of 368 KB, an archive of 123 KB, two warnings (two ladders with no bounds in their file) |
+| **The second sample, 2026-11-23:** the whole scene, 4,965 objects, with `bounds` on the 1,191 objects that use the team's own files | Baked in 7.5 s after a 3.1 s start; packed in 20 ms. One sector of 488 KB, an archive of 156 KB. 1,193 warnings: one for each object whose bounds came from the scene ("the game needs the mod that has it") and the two ladders |
+| The club map alone, 3,501 objects, 910 with `bounds` | Baked in 5.8 s; one sector of 337 KB, an archive of 111 KB, 912 warnings |
 
-So the bake itself is not the problem at this size. Whether the game is happy with 3,774 nodes in one sector (G-2 to G-5) is still the owner's look in the game.
+So the bake itself is not the problem at this size: **G-1 is answered for time** (memory was not measured). Whether the game is happy with 4,965 nodes in one sector (G-2 to G-5) is still the owner's look in the game.
+
+**What the second sample showed:**
+
+| Finding | What follows |
+|---|---|
+| `objects[].bounds` did what [the format](scene.md) says: the bake took the scene's box and never asked for the file. Nothing else differs from the first sample | A generator can bake against files that are not on the PC that bakes. G1's page says so, and that the game still needs the mod |
+| All but two of the bake's 1,193 warnings say the same thing | The command line's report groups warnings by kind and by file, with the ids as a list: G1 |
+| The three maps in one scene give one sector whose streaming box is 454 × 361 × 352 m | G-2's look uses the club map alone first (53 × 60 × 13 m), then all three: a box that size holds much of the city around it, so it also asks whether one scene should become one sector per group |
+| The team's meshes do not draw without their archives | The look in the game shows only the 3,774 objects on the game's files unless the team sends the archives. They offered to; the owner decides |
 
 **What the sample adds to the plan:**
 
@@ -120,7 +131,7 @@ Every command takes `--json` and then prints one JSON report: the scene's name a
 
 ## Size (G0, then G2)
 
-Nothing here is known. G0 is a probe that answers it before anything is designed: a scene of about 5,000 objects is baked, and the owner looks at it in the game. The team's own scene is that scene, once their archives or bounds are here; until then, the 3,774 objects of it that use the game's files.
+Nothing here is known. G0 is a probe that answers it before anything is designed: a scene of about 5,000 objects is baked, and the owner looks at it in the game. The team's own scene is that scene: with the bounds of the second sample (2026-11-23) all 4,965 objects bake, and the 3,774 on the game's files draw without the team's archives.
 
 | Question | What it decides |
 |---|---|
@@ -176,7 +187,7 @@ The diff is a pure function over two scene files, so it lives beside `arrange.ts
 |---|---|---|
 | `resourceVersion` | 0 | 2 |
 | `lod` | 0 | 1 |
-| `sectorHash` | 0 | A hash for the sector (they say of its path; the number in their sample is not the plain FNV-1a 64 of the path it names, so what it holds is a question) |
+| `sectorHash` | 0 | The FNV-1a 64 of the sector's path with backslashes, `mod\rogue_arena_collision\ra_owned_collision.streamingsector`. Checked on 2026-11-23: it gives the number in their sample. The first check here read two `\r` in the path as line ends, an error of ours. They have not tested whether the game reads the field |
 | `staticCollisionShapeCategories` | Absent | Five rows of six, two of them set |
 | The buffer's flags | 7471104 | 4063232 |
 | The box's turn | On the actor | On the shape, the actor unturned |
@@ -184,7 +195,7 @@ The diff is a pure function over two scene files, so it lives beside `arrange.ts
 | The buffer | Raw bytes | WolvenKit's typed collision buffer, as JSON |
 | Streaming | By the object's size | 200 m, both distances |
 
-So B5-4's probe has a short list: write the probe's box again with these values, one at a time where it is cheap, and see which one made the difference. **Clean room:** the team says World Builder's collider export was a reference for their first bake. EDGEbuilder takes none of these values on their word: each is checked against the game's own collision nodes and WolvenKit's writer before it is written, as the solid probe did.
+So B5-4's probe has a short list: write the probe's box again with these values, one at a time where it is cheap, and see which one made the difference. The team cannot shorten it (2026-11-23): their recipe worked at its first test in the game, so no field was ever tried alone. **Clean room:** the team says World Builder's collider export was a reference for their first bake. EDGEbuilder takes none of these values on their word: each is checked against the game's own collision nodes and WolvenKit's writer before it is written, as the solid probe did.
 
 ## Not in this
 
