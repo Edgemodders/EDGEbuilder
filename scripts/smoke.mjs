@@ -809,9 +809,7 @@ assert.deepEqual(yawToQuaternion(0), [0, 0, 0, 1]);
   const { checkFiles, checkSceneData, findOverlaps, groupBridgeWarnings, overlapFindings, sceneSchema, validate } = core;
   const { spawnSync } = await import("node:child_process");
   for (const format of [1, 2, 3]) {
-    const published = fs.readFileSync(path.join(here, "..", "docs", "schema", `scene-${format}.schema.json`), "utf8").replace(/
-/g, "
-");
+    const published = fs.readFileSync(path.join(here, "..", "docs", "schema", `scene-${format}.schema.json`), "utf8").replace(/\r\n/g, "\n");
     assert.equal(published, JSON.stringify(sceneSchema(format), null, 2) + "\n", `docs/schema/scene-${format}.schema.json is what the code checks against`);
   }
   const t = { position: [1, 2, 3], rotation: [0, 0, 0, 1], scale: [1, 1, 1] };
