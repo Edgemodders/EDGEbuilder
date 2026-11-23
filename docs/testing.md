@@ -29,6 +29,7 @@ Last updated 2026-10-30.
 | [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. **B4-1, the Bake tab, passed in game on 2026-11-05 on 0.7.1**, all 16 steps; released as 0.7.3. **B4-2, the Solid switch, passed in game on 2026-11-08** on 0.8.0 and 0.8.1, all 22 steps; Seen from reaches its distance with REDbridge 0.12.1 |
 | [B3c NPCs](#b3c-npcs) | In the game | B3c | 2026-11-12 (0.10.9) | Pass; released as 0.10.9 |
 | [B2d Import a model](#b2d-import-a-model) | In the game | B2d | 2026-11-18 (0.11.0, 0.11.1) | Pass: B2d-1 on 0.11.0, its retest on 0.11.1 |
+| [G0 Generated scenes: the look](#g0-generated-scenes-the-look) | In the game | G0, G1 | | Not run. Both bakes are in the EDGEdeck library; the offline half passed on 2026-11-23 |
 | [D0 Doors probe](#d0-doors-probe) | In the game, no EDGEbuilder | Doors | | Not run |
 
 ## Automated
@@ -1087,3 +1088,27 @@ REDcode #32 (REDcode 0.10.15: `projects()` and `projects-changed`), asked for by
 | 5 | Close the picked project's window | Back to following REDcode; with one project left the row goes |
 
 **All five steps passed in game on 2026-11-23 on 0.13.1 (the owner).** One change asked for: the Bake tab's panel "Bakes in this project" should name the project. **0.13.2** titles it "Bakes for <project>": **seen in game by the owner on 2026-11-23**.
+
+### G0 Generated scenes: the look
+
+For [Generated scenes](generated-scenes.md), questions G-2 to G-6, and G1's end ("a scene baked by the command line loads in the game"). Not run yet. The scene is the team's sample of 2026-11-23, never in this repo. Both bakes were made on 2026-11-23 with the command line on the `cosmic` branch (`bake --out --pack`, REDbridge 0.17.0 from its checkout) and are in the EDGEdeck library:
+
+| Mod in EDGEdeck | Holds | State |
+|---|---|---|
+| G0 club map (baked by EDGEbuilder's command line) | 3,501 objects, one sector, 111 KB | On |
+| G0 all three maps (baked by EDGEbuilder's command line) | 4,965 objects, one sector, 156 KB. It holds the club map too, so only one of the two is on at a time | Off |
+
+The club map's objects lie between x 2586 and 2638, y −1070 and −1011, z 110 and 124. Only the objects on the game's own files draw (2,591 of the club map's 3,501): the rest need the team's archives. The two scene files are in the Library, in `G0 generated scenes`.
+
+| # | Do | Expect | Answers |
+|---|---|---|---|
+| 1 | Game closed: deploy in EDGEdeck with the club map on. Start the game and load a save | The game starts as usual | G1's end, G-2 |
+| 2 | Go to x 2612, y −1041, z 118 (REDnode's teleport, or ask the session) | The club map is there: walls, props and lights from the game's files, with gaps where the team's meshes belong | G-2 |
+| 3 | Walk in and through it. Note a hitch as it comes in, and the frame rate inside against outside | No long hitch; a frame rate you would play at | G-2 |
+| 4 | Walk 200 m away and back; look along the hall from one end | Note what pops in and at what distance. Every mesh has 150 m | G-3 |
+| 5 | Walk into a wall | V walks through: the sample has no `solid`. A stretched wall draws at its stretched size | Stretched meshes |
+| 6 | In EDGEbuilder, Library tab, open `ra_hook_hall_r27` from `G0 generated scenes`. Time it; watch the frame rate and the busy bar. Stop is there if it does not end | Note the time, the frame rate, and whether the Objects drawer and the Scene tab still work. The previews stand on top of the baked objects, which is fine for this | G-4 |
+| 7 | Close the scene. With the game running, the session bakes the scene with one object moved and swaps the archive in (`archives.reload`) | Note whether the moved object shows without a restart | G-5 |
+| 8 | Game closed: turn the club map off and all three maps on, deploy, start, and repeat steps 2 to 4 | As steps 2 to 4, with two more maps beside the club | G-2: one sector of 4,965 nodes with a streaming box of 454 × 361 × 352 m |
+
+Not in this test: Mod Organizer 2 (G-6) needs an MO2 install, so it goes to the team; the team's own meshes wait on their archives.
