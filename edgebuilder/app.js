@@ -1652,6 +1652,7 @@ entity ${o.entityId}` : "\nnot in the world"}`;
 }
 var searchTimer;
 function search() {
+  $("search").classList.toggle("empty", !($("search").value ?? ""));
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => post({ type: "search", text: $("search").value ?? "", kind, from }), 120);
 }

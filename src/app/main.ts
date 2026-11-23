@@ -383,6 +383,7 @@ function renderSelected(sel: SceneObject[], s: Snapshot): void {
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 function search(): void {
+  $("search").classList.toggle("empty", !(($("search") as HTMLInputElement & { value: string }).value ?? ""));
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => post({ type: "search", text: ($("search") as HTMLInputElement & { value: string }).value ?? "", kind, from }), 120);
 }

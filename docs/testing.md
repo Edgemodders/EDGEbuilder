@@ -1123,7 +1123,7 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | 25 | Assets tab: switch **Preview** on (beside the result count), search `crate`, click a result | The Preview drawer opens beside the window with that result in 3D and its properties; another click shows the next one; **Drop** starts Drop at click | P5 |
 | 26 | With the Explorer open, click a search result | It shows in the Preview beside the Explorer | P5 |
 | 27 | Switch Preview off | The Preview drawer closes; a click on a result only picks it | P5 |
-| 28 | Press the ✕ at the right of the search box | The box and the result list empty; the count says to type a name | P5 |
+| 28 | Look at the search box, then type and press the ✕ inside it on the right | The ✕ shows dimmed while the box is empty; the folder button is a square as high as the box, flush against its right edge; the ✕ empties the box and the result list, and the count says to type a name | P5 |
 | 29 | World tab: switch **Pick under the cursor** on (in Picked in the world); Edit on; move the mouse over walls, crates, a door | What a click would pick is outlined as the mouse moves (meshes too, with the Meshes switch off); nothing is outlined over the scene's own objects | P6 |
 | 30 | Click a crate or a wall | The drawer comes in from the left edge of the screen: the object in 3D, Name, Kind (its node class), Solid, Collision, Path, Size, At, Node and Sector; the World tab shows it in Picked in the world | P6 |
 | 31 | Click something you can walk through (a hanging sign, a plant, a decal-like mesh) | Solid says no: the click's line went through it | P6 |
