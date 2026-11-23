@@ -2,7 +2,8 @@
 import { channel } from "rednode";
 import { applyChange, boxOf, centreOf, collisionKey, membersOf, seenFromBySize, SeenFromRange, pickMany, pickSelection, selectionUnits } from "../arrange";
 import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
-import type { AssetEntry, AssetFrom, AssetKind, ImportCollision, LibraryBake, ModelEntry, PageMessage, Place, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
+import type { AssetEntry, AssetFrom, AssetKind, ImportCollision, LibraryBake, ModelEntry, ModMessage, PageMessage, Place, PreviewReply, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
+import type { Part, Previews } from "./previews";
 import { held } from "./held";
 import { Viewport, busyText } from "./viewport";
 import { doorStateText } from "../worldedits";
@@ -179,6 +180,8 @@ function render(s: Snapshot): void {
   renderWorld(s);
   renderSectors(s);
   renderSectorDrawer(s);
+  renderPreviews(s);
+  renderLeft();
   renderEdits(s);
   viewport.setCamera(s.camera?.entityId);
   viewport.setPaused(!!s.camera?.paused);
@@ -430,21 +433,30 @@ $("drop").addEventListener("click", () => {
 });
 // Drop at click: Edit goes on if it is off, and the next click in the world says where.
 $("dropClick").addEventListener("click", () => {
-  const path = lookedAt;
-  const looks = appearance;
-  if (!path) return;
+  if (lookedAt) startDropAtClick(lookedAt, appearance);
+});
+
+/**
+ * Drop at click: Edit goes on, the cursor becomes a white crosshair and the object's box shows where a
+ * click would put it (its bounds once the mod has read them); the next left click drops it there.
+ */
+function startDropAtClick(path: string, looks: string | undefined): void {
   const edit = $("edit") as HTMLElement & { checked: boolean };
   if (!edit.checked) {
     edit.checked = true;
     viewport.setEdit(true);
   }
-  viewport.armDrop((ray) => {
-    dropAsked = true;
-    post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } });
-  });
-  $("message").textContent = `Click where ${labelFor(path)} should go; Esc or right-click cancels.`;
+  const name = labelFor(path);
+  viewport.armDrop(
+    (ray) => {
+      dropAsked = true;
+      post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } });
+    },
+    { name, bounds: () => (state?.looked?.path === path ? state.looked.info?.bounds : undefined) },
+  );
+  $("message").textContent = `Drop at click is on: click in the world where ${name} should go. Esc or right-click cancels.`;
   $("message").className = "message";
-});
+}
 // A panel's pin (Picked on the Assets and Library tabs, Selected on the Scene tab): pinned, the panel stays at the
 // bottom of its tab while the tab scrolls. Each panel's choice is kept in this page's storage; pinned
 // unless turned off.
@@ -929,7 +941,11 @@ function leaveSaveAs(): void {
 $("mainTabs").addEventListener("change", (e) => {
   if (e.target !== $("mainTabs")) return;
   const label = (e as CustomEvent<{ label: string }>).detail.label;
-  if (label === "Library") post({ type: "library.refresh" });
+  if (label === "Library") {
+    post({ type: "library.refresh" });
+    // Out of the window, the Library comes back into view with its tab, unless another drawer is open.
+    if (libraryOut && !drawerOpen && !previewsOpen && !state?.sectors.open) openLeft("library");
+  }
   else leaveSaveAs();
   if (label === "Bake") post({ type: "bake.refresh" });
   if (label === "World") post({ type: "world.refresh" });
@@ -950,6 +966,8 @@ $("shelves").addEventListener(
 $("shelves").addEventListener("select", (e) => {
   const value = (e as CustomEvent<{ value: string }>).detail.value;
   lbakeAsking = false;
+  // In its drawer, a pick shows the Library tab, where the Picked panel and its buttons are.
+  if (libraryOut) mainTabs().select?.(TabLabels.library);
   if (value.startsWith("f:")) picked = { kind: "scene", file: value.slice(2) };
   else if (value.startsWith("b:")) picked = { kind: "bake", dir: value.slice(2) };
   else if (value.startsWith("m:")) {
@@ -1184,8 +1202,7 @@ function goToObject(s: Snapshot, id: string): void {
 }
 
 $("pickedObjects").addEventListener("click", () => {
-  drawerOpen = !drawerOpen;
-  if (drawerOpen && state?.sectors.open) post({ type: "sectors.close" });
+  openLeft(drawerOpen ? "none" : "objects");
   peekAsked = "";
   confirming = undefined;
   if (state) render(state);
@@ -1506,7 +1523,8 @@ function renderSectorDrawer(s: Snapshot): void {
   }
   if (v.path !== lastSector) {
     lastSector = v.path;
-    drawerOpen = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = false;
+    renderLeft();
     ($("sectorFilter") as HTMLInputElement).value = v.filter;
   }
   const name = shortName(v.path).replace(/\.streamingsector$/i, "");
@@ -1631,6 +1649,274 @@ for (const id of ["bakeProjects", "importProjects"]) {
   });
 }
 
+// ---- the left drawers (0.14.0) ------------------------------------------------------------------------
+//
+// One drawer at a time to the left of the window: Objects, the Library when it is out of the window,
+// Previews, or the Sector drawer (which the mod keeps). Opening one closes the others.
+
+let libraryDrawerOpen = false;
+let previewsOpen = false;
+
+function openLeft(which: "objects" | "library" | "previews" | "none"): void {
+  drawerOpen = which === "objects";
+  libraryDrawerOpen = which === "library";
+  previewsOpen = which === "previews";
+  if (which !== "none" && state?.sectors.open) post({ type: "sectors.close" });
+  if (which === "objects") {
+    peekAsked = "";
+    confirming = undefined;
+  }
+  if (state) render(state);
+  else renderLeft();
+}
+
+function renderLeft(): void {
+  $("drawer").classList.toggle("open", drawerOpen);
+  $("libraryDrawer").classList.toggle("open", libraryOut && libraryDrawerOpen);
+  $("previewsDrawer").classList.toggle("open", previewsOpen);
+  $("previewsEye").setAttribute("aria-pressed", String(previewsOpen));
+}
+
+// ---- the Library out of the window (0.14.0) ------------------------------------------------------------
+//
+// The icon at the top right of the Library tree moves the tree into a drawer to the left, with more room;
+// a Library button and the same icon stay where it was. The Picked panel stays on the tab, and a pick in
+// the drawer shows the tab. The choice is kept in this page's storage.
+
+let libraryOut = false;
+try {
+  libraryOut = localStorage.getItem("edgebuilder.libraryOut") === "1";
+} catch {
+  // No storage: in the window.
+}
+
+function placeLibrary(): void {
+  const list = $("shelves");
+  const home = libraryOut ? $("libraryDrawerBody") : $("libraryHome");
+  if (list.parentElement !== home) home.appendChild(list);
+  $("libraryLabel").hidden = libraryOut;
+  $("libraryOpenRow").hidden = !libraryOut;
+  const icon = $("libraryOut");
+  icon.setAttribute("aria-pressed", String(libraryOut));
+  icon.title = libraryOut ? "Back into the window: the Library here again, and no drawer" : "Out of the window: the Library in a drawer to the left, with more room";
+  renderLeft();
+}
+
+function setLibraryOut(on: boolean): void {
+  libraryOut = on;
+  try {
+    localStorage.setItem("edgebuilder.libraryOut", on ? "1" : "0");
+  } catch {
+    // No storage: for this session only.
+  }
+  placeLibrary();
+  openLeft(on ? "library" : drawerOpen ? "objects" : previewsOpen ? "previews" : "none");
+}
+
+$("libraryOut").addEventListener("click", () => setLibraryOut(!libraryOut));
+$("libraryDrawerIn").addEventListener("click", () => setLibraryOut(false));
+$("libraryDrawerClose").addEventListener("click", () => openLeft("none"));
+$("libraryOpen").addEventListener("click", () => openLeft(libraryDrawerOpen ? "none" : "library"));
+placeLibrary();
+
+// ---- the Previews drawer (0.14.0) ------------------------------------------------------------------------
+//
+// The eye beside the result count opens the search results as tiles: a mesh as a small 3D picture (the mod
+// exports a plain model through REDbridge and keeps the picture), an entity or a person by its name for now.
+// Tiles are drawn as they scroll into view; the mouse on a picture turns it. A click picks the result,
+// closes the drawer and starts Drop at click.
+
+let previews: Previews | undefined;
+let previewsWhy = "";
+let previewsLoading: Promise<void> | undefined;
+/** The tiles on show, by path, and what each has: a picture, an error, or when it was asked for. */
+const tiles = new Map<string, { el: HTMLElement; drawn: boolean; picture?: string; error?: string; asked?: number }>();
+let tilesKey = "";
+/** Models this session already has, for turning a picture under the mouse (the newest few). */
+const models = new Map<string, Part[]>();
+let spinning: { path: string; stop?: () => void } | undefined;
+
+function loadPreviews(): Promise<void> {
+  previewsLoading ??= (async () => {
+    try {
+      // A path esbuild leaves alone: previews.js is its own file beside app.js, loaded only now.
+      const mod = (await import(new URL("./previews.js", import.meta.url).href)) as typeof import("./previews");
+      previews = mod.createPreviews(256);
+    } catch (err) {
+      previewsWhy = `3D pictures cannot be drawn here (${(err as Error).message || "no WebGL"}); the tiles show names.`;
+      post({ type: "log", text: `Previews: ${previewsWhy}` });
+      if (state) render(state);
+    }
+  })();
+  return previewsLoading;
+}
+
+$("previewsEye").addEventListener("click", () => {
+  openLeft(previewsOpen ? "none" : "previews");
+  if (previewsOpen) void loadPreviews().then(() => askVisible());
+});
+$("previewsClose").addEventListener("click", () => openLeft("none"));
+
+function renderPreviews(s: Snapshot): void {
+  ($("previewsEye") as HTMLButtonElement).disabled = !s.results.length;
+  if (!s.results.length && previewsOpen) previewsOpen = false;
+  if (!previewsOpen) return;
+  const people = s.results.filter((r) => r.kind === "npc").length;
+  $("previewsTitle").textContent = s.query.text ? `Previews: ${s.query.text}` : "Previews";
+  $("previewsInfo").textContent = [
+    `${s.results.length} result${s.results.length === 1 ? "" : "s"}${people ? ` (NPCs by name for now)` : ""}. The mouse on a picture turns it; a click starts Drop at click.`,
+    previewsWhy,
+    s.bridge.status !== "ready" && !previewsWhy ? "New pictures need REDbridge: those kept from before still show." : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const key = s.results.map((r) => r.path).join("\n");
+  if (key === tilesKey) return;
+  tilesKey = key;
+  stopSpin();
+  const grid = $("previewGrid");
+  for (const t of tiles.values()) seen.unobserve(t.el);
+  inView.clear();
+  grid.innerHTML = "";
+  const old = new Map(tiles);
+  tiles.clear();
+  for (const r of s.results) {
+    const el = document.createElement("div");
+    el.className = "tile";
+    el.dataset.path = r.path;
+    el.title = rowTitle(r);
+    // Meshes and entities get a picture; a person (a TweakDB record) by its name for now.
+    const drawn = r.kind !== "npc";
+    const was = old.get(r.path);
+    el.innerHTML = `<div class="pic">${was?.picture ? `<img alt="" src="${was.picture}">` : drawn ? "" : "NPC"}</div><div class="name">${esc(labelOf(r))}</div>`;
+    grid.appendChild(el);
+    tiles.set(r.path, { el, drawn, picture: was?.picture, error: was?.error });
+    seen.observe(el);
+  }
+  grid.scrollTop = 0;
+}
+
+/** Tiles that come into view are asked for, a moment after the scrolling stops. */
+const inView = new Set<string>();
+let askSoon: ReturnType<typeof setTimeout> | undefined;
+const seen = new IntersectionObserver(
+  (entries) => {
+    for (const e of entries) {
+      const p = (e.target as HTMLElement).dataset.path ?? "";
+      if (e.isIntersecting) inView.add(p);
+      else inView.delete(p);
+    }
+    clearTimeout(askSoon);
+    askSoon = setTimeout(askVisible, 150);
+  },
+  { root: document.getElementById("previewGrid"), rootMargin: "200px 0px" },
+);
+
+function askVisible(): void {
+  if (!previewsOpen || !previews) return;
+  const now = performance.now();
+  const paths = [...inView].filter((p) => {
+    const t = tiles.get(p);
+    // Asked and not answered: again after a while (REDbridge may have been busy or restarting).
+    return t && t.drawn && !t.picture && !t.error && (!t.asked || now - t.asked > 20000);
+  });
+  if (!paths.length) return;
+  for (const p of paths) {
+    const t = tiles.get(p)!;
+    t.asked = now;
+    t.el.querySelector(".pic")!.textContent = "drawing...";
+  }
+  post({ type: "preview.ask", paths });
+}
+
+const fromBase64 = (b64: string): ArrayBuffer => {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+};
+
+async function previewCame(m: PreviewReply): Promise<void> {
+  const t = tiles.get(m.path);
+  const pic = t?.el.querySelector(".pic") as HTMLElement | undefined;
+  if (m.error) {
+    if (t && !t.picture) {
+      t.error = m.error;
+      if (pic) {
+        pic.textContent = "no picture";
+        pic.title = m.error;
+      }
+    }
+    return;
+  }
+  let picture = m.png ? `data:image/png;base64,${m.png}` : undefined;
+  if (m.parts) {
+    const parts: Part[] = m.parts.map((p) => ({ glb: fromBase64(p.glb), offset: p.offset, scale: p.scale }));
+    models.set(m.path, parts);
+    while (models.size > 40) models.delete(models.keys().next().value!);
+    if (!t?.picture && previews) {
+      try {
+        picture = await previews.picture(parts);
+        post({ type: "preview.save", key: m.key, png: picture.slice(picture.indexOf(",") + 1) });
+      } catch (err) {
+        if (t) t.error = (err as Error).message;
+        if (pic) pic.textContent = "no picture";
+        return;
+      }
+    }
+    if (spinning?.path === m.path && !spinning.stop) void startSpin(m.path);
+  }
+  if (t && picture && !t.picture) {
+    t.picture = picture;
+    if (pic) pic.innerHTML = `<img alt="" src="${picture}">`;
+  }
+}
+
+// The mouse on a picture turns the model, one turn every eight seconds, until the mouse leaves.
+async function startSpin(path: string): Promise<void> {
+  const t = tiles.get(path);
+  const parts = models.get(path);
+  if (!t || !previews || spinning?.path !== path) return;
+  if (!parts) return post({ type: "preview.ask", paths: [path], glb: true });
+  const pic = t.el.querySelector(".pic") as HTMLElement;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const stop = await previews.spin(parts, canvas);
+  if (spinning?.path !== path) return stop();
+  pic.appendChild(canvas);
+  spinning.stop = () => {
+    stop();
+    canvas.remove();
+  };
+}
+
+function stopSpin(): void {
+  spinning?.stop?.();
+  spinning = undefined;
+}
+
+$("previewGrid").addEventListener("mouseover", (e) => {
+  const tile = (e.target as HTMLElement).closest?.(".tile") as HTMLElement | null;
+  const path = tile?.dataset.path;
+  if (!path || spinning?.path === path) return;
+  stopSpin();
+  if (tiles.get(path)?.picture) {
+    spinning = { path };
+    void startSpin(path);
+  }
+});
+$("previewGrid").addEventListener("mouseleave", () => stopSpin());
+$("previewGrid").addEventListener("click", (e) => {
+  const path = ((e.target as HTMLElement).closest?.(".tile") as HTMLElement | null)?.dataset.path;
+  if (!path) return;
+  lookedAt = path;
+  appearance = undefined;
+  post({ type: "look", path });
+  stopSpin();
+  openLeft("none");
+  startDropAtClick(path, undefined);
+});
+
 function status(text: string): void {
   $("message").textContent = text;
   $("message").className = "message warn";
@@ -1665,6 +1951,7 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
   log: (text) => post({ type: "log", text }),
   builderStart: (pose) => post({ type: "builder.start", pose }),
   builderStop: () => post({ type: "builder.stop" }),
+  probe: (seq, ray) => post({ type: "drop.probe", seq, origin: ray.o, dir: ray.d }),
   status(text) {
     $("message").textContent = text;
     $("message").className = "message warn";
@@ -1713,7 +2000,9 @@ $("saveSettings").addEventListener("click", () =>
   post({ type: "settings", bridgePath: ($("bridgePath") as HTMLInputElement & { value: string }).value?.trim() || undefined, gameDir: ($("gameDir") as HTMLInputElement & { value: string }).value?.trim() || undefined }),
 );
 
-channel.on<{ type: string; state?: Snapshot }>((m) => {
+channel.on<ModMessage>((m) => {
   if (m?.type === "state" && m.state) render(m.state);
+  else if (m?.type === "preview") void previewCame(m);
+  else if (m?.type === "probe") viewport.setProbe(m);
 });
 post({ type: "hello" });

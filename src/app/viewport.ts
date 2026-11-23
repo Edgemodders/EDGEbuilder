@@ -67,6 +67,15 @@ export interface ViewportHooks {
   builderStart(pose: { position: V3; rotation: Q; fov: number }): void;
   /** Edit went off. */
   builderStop(): void;
+  /** Drop at click waits: where would a click through this line put the object? The answer comes to `setProbe`. */
+  probe(seq: number, ray: { o: V3; d: V3 }): void;
+}
+
+/** What Drop at click draws while it waits: the object's box, the size of its bounds when known. */
+export interface DropOutline {
+  bounds?: () => { min: number[]; max: number[] } | undefined;
+  /** What is being dropped, for the help line. */
+  name?: string;
 }
 
 interface Drag {
@@ -151,6 +160,11 @@ export class Viewport {
   private lastTick = 0;
   /** Drop at click: what to do with the line through the next left click. */
   private placing: ((ray: Ray) => void) | undefined;
+  /** Drop at click's outline: the bounds to draw, the last line asked about, and the answer. */
+  private outline: DropOutline | undefined;
+  private probeSeq = 0;
+  private probeAt = { x: NaN, y: NaN, t: 0 };
+  private probed: { seq: number; position: V3; rotation: Q; hit: boolean } | undefined;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -260,16 +274,76 @@ export class Viewport {
   }
 
   /** Drop at click: the next left click in the world gives the line from the camera through it. */
-  armDrop(then: (ray: Ray) => void): void {
+  armDrop(then: (ray: Ray) => void, outline: DropOutline = {}): void {
     this.cancel();
     this.placing = then;
-    this.canvas.style.cursor = "crosshair";
+    this.outline = outline;
+    this.probed = undefined;
+    this.probeAt = { x: NaN, y: NaN, t: 0 };
+    // The system cursor goes: the viewport draws a white crosshair in its place, and the box where the object lands.
+    this.canvas.style.cursor = "none";
     this.kick();
   }
 
   private disarm(): void {
     this.placing = undefined;
+    this.outline = undefined;
+    this.probed = undefined;
     this.canvas.style.cursor = "";
+  }
+
+  /** The mod's answer to a probe: where a click would put the object. Older answers than the last one drawn are ignored. */
+  setProbe(p: { seq: number; position: V3; rotation: Q; hit: boolean }): void {
+    if (!this.placing || (this.probed && p.seq < this.probed.seq)) return;
+    this.probed = p;
+  }
+
+  /** While Drop at click waits: the line under the cursor, about 15 times a second while it moves, and now and then while it stays (the camera may fly). */
+  private probeIfMoved(): void {
+    if (!this.placing || !this.cam || !this.overView) return;
+    const now = performance.now();
+    const [x, y] = this.mouse;
+    const moved = x !== this.probeAt.x || y !== this.probeAt.y;
+    if (now - this.probeAt.t < (moved || this.rmb || this.keys.size ? 66 : 400)) return;
+    this.probeAt = { x, y, t: now };
+    const r = rayFrom(this.cam, x, y);
+    this.hooks.probe(++this.probeSeq, { o: r.o, d: r.d });
+  }
+
+  /** Drop at click's look: the object's box where a click would put it (white on a surface, amber 8 m along the line when nothing is there), and a white crosshair for the cursor. */
+  private drawPlacing(): void {
+    const ctx = this.ctx;
+    const p = this.probed;
+    if (p && this.cam && this.probeSeq - p.seq < 30) {
+      const b = this.outline?.bounds?.();
+      const o: SceneObject = { id: "drop-outline", kind: "mesh", transform: { position: p.position, rotation: p.rotation, scale: [1, 1, 1] }, bounds: b ? { min: b.min, max: b.max } : undefined } as SceneObject;
+      this.drawBox(o, p.hit ? "rgba(255,255,255,0.95)" : "rgba(255,204,77,0.95)", 1.5);
+    }
+    if (!this.overView) return;
+    const [x, y] = this.mouse;
+    const arm = 11;
+    const gap = 3;
+    const cross = () => {
+      ctx.beginPath();
+      ctx.moveTo(x - arm, y);
+      ctx.lineTo(x - gap, y);
+      ctx.moveTo(x + gap, y);
+      ctx.lineTo(x + arm, y);
+      ctx.moveTo(x, y - arm);
+      ctx.lineTo(x, y - gap);
+      ctx.moveTo(x, y + gap);
+      ctx.lineTo(x, y + arm);
+      ctx.stroke();
+    };
+    // A dark edge under the white, so it shows on a bright sky as on a dark floor.
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(0,0,0,0.7)";
+    ctx.lineWidth = 4;
+    cross();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    cross();
+    ctx.lineCap = "butt";
   }
 
   setScene(objects: SceneObject[], selected: string[]): void {
@@ -406,6 +480,7 @@ export class Viewport {
       }
       this.frame++;
       this.wantEscape(!!(this.drag || this.placing || this.box));
+      this.probeIfMoved();
       this.flushMove();
       this.flyWhenReady();
       this.flyAndSend();
@@ -466,9 +541,12 @@ export class Viewport {
     const at = this.gizmoAt();
     if (!cameraOk || !cam) {
       if (this.edit) this.label(`No camera yet: ${this.cameraError || "load a save"}`);
+      // The crosshair stands in for the hidden cursor even before the camera is known.
+      if (this.placing) this.drawPlacing();
       return;
     }
     for (const o of chosen) if (o.entityId) this.drawBox(o);
+    if (this.placing) this.drawPlacing();
     if (at) {
       const { origin, size, tips } = this.handleEnds(at);
       const c = project(cam, origin);
@@ -525,7 +603,7 @@ export class Viewport {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
       const n = chosen.length;
       const help = this.placing
-        ? "Click where it should go.  Esc or right-click: cancel."
+        ? `Drop at click: click where ${this.outline?.name ?? "it"} should go.  Esc or right-click: cancel.`
         : this.box
           ? "Release to select what is inside.  Ctrl: add to the selection."
           : n
@@ -556,7 +634,7 @@ export class Viewport {
     ctx.fillText(text, left + 12, 46);
   }
 
-  private drawBox(o: SceneObject): void {
+  private drawBox(o: SceneObject, colour = "rgba(25,243,255,0.7)", width = 1): void {
     const cam = this.cam!;
     const b = o.bounds ? { min: o.bounds.min as V3, max: o.bounds.max as V3 } : UNIT_BOX;
     const t = o.transform;
@@ -566,8 +644,8 @@ export class Viewport {
       corners.push(project(cam, add(t.position, qRotate(t.rotation as Q, local))));
     }
     const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
-    this.ctx.strokeStyle = "rgba(25,243,255,0.7)";
-    this.ctx.lineWidth = 1;
+    this.ctx.strokeStyle = colour;
+    this.ctx.lineWidth = width;
     this.ctx.beginPath();
     for (const [a, z] of edges) {
       const p = corners[a];

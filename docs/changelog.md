@@ -10,6 +10,20 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**New**
+
+- Previews: the eye beside the Assets tab's result count opens the results as small 3D pictures in a drawer to the left: meshes, and entities drawn from their meshes (NPCs by name for now). The mouse on a picture turns it. A click picks it, closes the drawer and starts Drop at click. Pictures are kept, so a result's picture shows at once the next time.
+- The Library can leave the window: the icon at the top right of the Library tree puts it in a drawer to the left, with more room. A Library button opens the drawer again, the same icon brings the Library back, and a pick in the drawer shows the Library tab's Picked panel. EDGEbuilder remembers the choice.
+
+**Changed**
+
+- Drop at click: the cursor becomes a white crosshair, and the object's outline box shows where a click would put it (amber when nothing is under the cursor and it would land 8 m away). The help line at the bottom names what is being dropped.
+- One drawer at a time to the left of the window: Objects, the Library, Previews or a sector.
+
+**Other**
+
+- The Previews drawer draws with three.js (MIT), loaded only when the drawer first opens.
+
 ## 0.13.2 (2026-11-23)
 
 <!-- nexus

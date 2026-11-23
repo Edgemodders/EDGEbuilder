@@ -28,6 +28,28 @@
   #sectorTitle { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rn-fg, #eee); }
   #sectorInfo { margin-bottom: 6px; word-break: normal; }
   #sectorList { --rn-list-height: 730px; margin-top: 6px; }
+  /* 0.14.0: the Library (when it is out of the window) and the Previews drawer, in the same place: one left drawer at a time. */
+  #libraryDrawer, #previewsDrawer { position: absolute; right: 656px; top: 70px; width: 420px; height: 920px; box-sizing: border-box; padding: 10px; background: var(--rn-bg, #08090d); border: 1px solid var(--rn-line, #333); border-top: 2px solid var(--rn-accent, #fcee0a); opacity: 0; visibility: hidden; transform: translateX(60px); transition: transform .16s ease-out, opacity .16s, visibility .16s; display: flex; flex-direction: column; }
+  #libraryDrawer.open, #previewsDrawer.open { opacity: 1; visibility: visible; transform: none; }
+  .drawerHead { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .drawerHead .section { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rn-fg, #eee); }
+  #libraryDrawer #shelves { --rn-list-height: 830px; }
+  #previewsInfo { margin-bottom: 6px; word-break: normal; }
+  #previewGrid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-content: start; padding-right: 2px; }
+  .tile { border: 1px solid var(--rn-line, #333); background: rgba(255, 255, 255, .02); cursor: pointer; display: flex; flex-direction: column; min-width: 0; }
+  .tile:hover { border-color: var(--rn-accent, #fcee0a); }
+  .tile .pic { position: relative; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-family: var(--rn-mono, monospace); font-size: 10px; color: var(--rn-dim, #999); text-align: center; padding: 4px; box-sizing: border-box; }
+  .tile .pic img, .tile .pic canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .tile .name { font-family: var(--rn-mono, monospace); font-size: 10px; color: var(--rn-fg, #eee); padding: 2px 4px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The small icon buttons beside a heading: the Library's out-of-the-window switch, the results' Previews. */
+  .icon { background: none; border: 1px solid transparent; color: var(--rn-dim, #999); cursor: pointer; padding: 3px; line-height: 0; }
+  .icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
+  .icon:hover { border-color: var(--rn-line, #333); color: var(--rn-fg, #eee); }
+  .icon[aria-pressed="true"] { color: var(--rn-accent, #fcee0a); }
+  .icon:focus-visible { outline: 1px solid var(--rn-accent, #fcee0a); }
+  .icon[disabled] { opacity: .35; cursor: default; }
+  .headRow { display: flex; align-items: center; gap: 6px; margin: 6px 0 2px; }
+  .headRow > .grow { flex: 1; min-width: 0; }
   .streamed { color: var(--rn-ok, #5eff8f); }
   .act.on { color: var(--rn-warn, #ffcc4d); }
   .projects { flex-wrap: wrap; align-items: center; }
@@ -101,6 +123,15 @@
     <rn-input id="sectorFilter" placeholder="Filter: a class, a file or an entry, such as door or #288"></rn-input>
     <rn-list id="sectorList"></rn-list>
   </div>
+  <div id="libraryDrawer">
+    <div class="drawerHead"><span class="section">Library</span><button id="libraryDrawerIn" class="icon" aria-pressed="true" title="Back into the EDGEbuilder window"><svg viewBox="0 0 16 16"><path d="M7 2.5h6.5v11H7M10 8H1.5M4.5 5L1.5 8l3 3"/></svg></button><button id="libraryDrawerClose" class="act" title="Close (the Library button on the Library tab opens it again)"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+    <div id="libraryDrawerBody"></div>
+  </div>
+  <div id="previewsDrawer">
+    <div class="drawerHead"><span id="previewsTitle" class="section">Previews</span><button id="previewsClose" class="act" title="Close"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+    <div id="previewsInfo" class="count"></div>
+    <div id="previewGrid"></div>
+  </div>
   <rn-window title="EDGEbuilder">
     <rn-toggle id="edit" slot="status" label="Edit"></rn-toggle>
     <div class="strip"><span id="world" class="pill">World: checking</span><span id="bridge" class="pill">REDbridge off</span><span id="index" class="pill">No index</span></div>
@@ -113,7 +144,7 @@
         <rn-tabs id="kinds"><rn-tab label="All" active></rn-tab><rn-tab label="Meshes"></rn-tab><rn-tab label="Entities"></rn-tab><rn-tab label="NPCs"></rn-tab></rn-tabs>
         <rn-tabs id="from"><rn-tab label="Everywhere" active></rn-tab><rn-tab label="Game"></rn-tab><rn-tab label="Mods"></rn-tab><rn-tab label="Project"></rn-tab></rn-tabs>
         <div id="sources" class="count"></div>
-        <div id="count" class="count"></div>
+        <div class="headRow"><div id="count" class="count grow"></div><button id="previewsEye" class="icon" aria-pressed="false" title="Previews: the results as small 3D pictures, in a drawer to the left. A click on one starts Drop at click"><svg viewBox="0 0 16 16"><path d="M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8z"/><circle cx="8" cy="8" r="2.2"/></svg></button></div>
         <rn-list id="results"></rn-list>
         <rn-panel id="pickedPanel" class="pinnable" title="Picked" data-pin-note="so the Drop buttons stay in view">
           <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
@@ -180,7 +211,8 @@
         <div id="libraryInfo" class="count"></div>
         <div class="row" id="libraryMakeRow" hidden><rn-button id="libraryMake">Make the Library</rn-button></div>
         <div class="row"><rn-input id="importPath" placeholder="Import a GLB from anywhere: its full path, then Pick" title="A .glb file (a textured glTF in one file), or a prop's .prop.asset folder"></rn-input><rn-button id="importPathGo" variant="ghost">Pick</rn-button></div>
-        <rn-list id="shelves"></rn-list>
+        <div class="headRow"><span id="libraryLabel" class="section grow">Library</span><span id="libraryOpenRow" class="grow" hidden><rn-button id="libraryOpen" variant="ghost" title="Open the Library's drawer again">Library</rn-button></span><button id="libraryOut" class="icon" aria-pressed="false" title="Out of the window: the Library in a drawer to the left, with more room"><svg viewBox="0 0 16 16"><path d="M7 2.5h6.5v11H7M10 8H1.5M4.5 5L1.5 8l3 3"/></svg></button></div>
+        <div id="libraryHome"><rn-list id="shelves"></rn-list></div>
         <rn-panel id="libraryPanel" class="pinnable" title="Picked" data-pin-note="so Open, Close, Show in world and the rest stay in view">
           <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
           <div id="pickedText" class="detail">Pick a scene or a folder</div>

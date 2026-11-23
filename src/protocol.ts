@@ -564,6 +564,41 @@ export type PageMessage =
   | { type: "stop" }
   | { type: "redo" }
   /** A line for the mod log, so the page's measurements land beside the mod's. */
-  | { type: "log"; text: string };
+  | { type: "log"; text: string }
+  /**
+   * Previews of search results (0.14.0): the meshes whose tiles are in view. The mod answers each with a
+   * `preview` message, the newest ask first; `glb` asks for the model even when a picture is kept.
+   */
+  | { type: "preview.ask"; paths: string[]; glb?: boolean }
+  /** The picture the page drew from a preview's model, kept in the data folder for next time. */
+  | { type: "preview.save"; key: string; png: string }
+  /** Drop at click, while it waits: where a click through this line would put the object. */
+  | { type: "drop.probe"; seq: number; origin: [number, number, number]; dir: [number, number, number] };
 
-export type ModMessage = { type: "state"; state: Snapshot };
+/** One model of a preview: a mesh's plain GLB (base64), and for an entity's part its offset and scale in the entity (game axes). */
+export interface PreviewPart {
+  glb: string;
+  offset?: number[];
+  scale?: number[];
+}
+
+/** One preview: a picture kept from before (`png`, base64), or the models to draw one from (a mesh: one; an entity: its mesh parts). */
+export interface PreviewReply {
+  type: "preview";
+  path: string;
+  key: string;
+  png?: string;
+  parts?: PreviewPart[];
+  error?: string;
+}
+
+/** Where a click through the probe's line would drop: on a surface (`hit`), or 8 m along it. */
+export interface ProbeReply {
+  type: "probe";
+  seq: number;
+  position: [number, number, number];
+  rotation: [number, number, number, number];
+  hit: boolean;
+}
+
+export type ModMessage = { type: "state"; state: Snapshot } | PreviewReply | ProbeReply;

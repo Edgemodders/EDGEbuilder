@@ -133,9 +133,9 @@ function lookAxes(l) {
 // src/arrange.ts
 function groupChain(id, groups) {
   const chain = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (let g = groups.find((x) => x.id === id); g && !seen.has(g.id); g = groups.find((x) => x.id === g.parent)) {
-    seen.add(g.id);
+  const seen2 = /* @__PURE__ */ new Set();
+  for (let g = groups.find((x) => x.id === id); g && !seen2.has(g.id); g = groups.find((x) => x.id === g.parent)) {
+    seen2.add(g.id);
     chain.push(g.id);
   }
   return chain;
@@ -374,6 +374,11 @@ var Viewport = class {
   lastTick = 0;
   /** Drop at click: what to do with the line through the next left click. */
   placing;
+  /** Drop at click's outline: the bounds to draw, the last line asked about, and the answer. */
+  outline;
+  probeSeq = 0;
+  probeAt = { x: NaN, y: NaN, t: 0 };
+  probed;
   /** The line through the cursor, for a paste, when the cursor is over the world in Edit. */
   cursorRay() {
     return this.edit && this.cam && this.overView ? rayFrom(this.cam, this.mouse[0], this.mouse[1]) : void 0;
@@ -420,15 +425,70 @@ var Viewport = class {
     }
   }
   /** Drop at click: the next left click in the world gives the line from the camera through it. */
-  armDrop(then) {
+  armDrop(then, outline = {}) {
     this.cancel();
     this.placing = then;
-    this.canvas.style.cursor = "crosshair";
+    this.outline = outline;
+    this.probed = void 0;
+    this.probeAt = { x: NaN, y: NaN, t: 0 };
+    this.canvas.style.cursor = "none";
     this.kick();
   }
   disarm() {
     this.placing = void 0;
+    this.outline = void 0;
+    this.probed = void 0;
     this.canvas.style.cursor = "";
+  }
+  /** The mod's answer to a probe: where a click would put the object. Older answers than the last one drawn are ignored. */
+  setProbe(p) {
+    if (!this.placing || this.probed && p.seq < this.probed.seq) return;
+    this.probed = p;
+  }
+  /** While Drop at click waits: the line under the cursor, about 15 times a second while it moves, and now and then while it stays (the camera may fly). */
+  probeIfMoved() {
+    if (!this.placing || !this.cam || !this.overView) return;
+    const now = performance.now();
+    const [x, y] = this.mouse;
+    const moved = x !== this.probeAt.x || y !== this.probeAt.y;
+    if (now - this.probeAt.t < (moved || this.rmb || this.keys.size ? 66 : 400)) return;
+    this.probeAt = { x, y, t: now };
+    const r = rayFrom(this.cam, x, y);
+    this.hooks.probe(++this.probeSeq, { o: r.o, d: r.d });
+  }
+  /** Drop at click's look: the object's box where a click would put it (white on a surface, amber 8 m along the line when nothing is there), and a white crosshair for the cursor. */
+  drawPlacing() {
+    const ctx = this.ctx;
+    const p = this.probed;
+    if (p && this.cam && this.probeSeq - p.seq < 30) {
+      const b = this.outline?.bounds?.();
+      const o = { id: "drop-outline", kind: "mesh", transform: { position: p.position, rotation: p.rotation, scale: [1, 1, 1] }, bounds: b ? { min: b.min, max: b.max } : void 0 };
+      this.drawBox(o, p.hit ? "rgba(255,255,255,0.95)" : "rgba(255,204,77,0.95)", 1.5);
+    }
+    if (!this.overView) return;
+    const [x, y] = this.mouse;
+    const arm = 11;
+    const gap = 3;
+    const cross2 = () => {
+      ctx.beginPath();
+      ctx.moveTo(x - arm, y);
+      ctx.lineTo(x - gap, y);
+      ctx.moveTo(x + gap, y);
+      ctx.lineTo(x + arm, y);
+      ctx.moveTo(x, y - arm);
+      ctx.lineTo(x, y - gap);
+      ctx.moveTo(x, y + gap);
+      ctx.lineTo(x, y + arm);
+      ctx.stroke();
+    };
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(0,0,0,0.7)";
+    ctx.lineWidth = 4;
+    cross2();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    cross2();
+    ctx.lineCap = "butt";
   }
   setScene(objects, selected) {
     this.objects = objects;
@@ -548,6 +608,7 @@ var Viewport = class {
       }
       this.frame++;
       this.wantEscape(!!(this.drag || this.placing || this.box));
+      this.probeIfMoved();
       this.flushMove();
       this.flyWhenReady();
       this.flyAndSend();
@@ -600,9 +661,11 @@ var Viewport = class {
     const at = this.gizmoAt();
     if (!cameraOk || !cam) {
       if (this.edit) this.label(`No camera yet: ${this.cameraError || "load a save"}`);
+      if (this.placing) this.drawPlacing();
       return;
     }
     for (const o of chosen) if (o.entityId) this.drawBox(o);
+    if (this.placing) this.drawPlacing();
     if (at) {
       const { origin, size, tips } = this.handleEnds(at);
       const c = project(cam, origin);
@@ -657,7 +720,7 @@ var Viewport = class {
     else if (this.edit) {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
       const n = chosen.length;
-      const help = this.placing ? "Click where it should go.  Esc or right-click: cancel." : this.box ? "Release to select what is inside.  Ctrl: add to the selection." : n ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D duplicate, Ctrl+C copy, Ctrl+X cut, Ctrl+V paste at the cursor, Ctrl+G group, Ctrl+Z undo.` : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
+      const help = this.placing ? `Drop at click: click where ${this.outline?.name ?? "it"} should go.  Esc or right-click: cancel.` : this.box ? "Release to select what is inside.  Ctrl: add to the selection." : n ? `${n > 1 ? `${n} selected. ` : ""}Drag an arrow to move, the ring to turn. G move, R turn, S scale, Ctrl+E floor, Delete. Ctrl+D duplicate, Ctrl+C copy, Ctrl+X cut, Ctrl+V paste at the cursor, Ctrl+G group, Ctrl+Z undo.` : "Click an object to select it (Alt: one out of its group, Ctrl: add). Shift+drag: select in a box.";
       this.label(help, camHelp);
     }
     if (this.busyWith) this.banner(`EDGEbuilder is busy: ${busyText(this.busyWith)}. What you do now waits its turn.`);
@@ -680,7 +743,7 @@ var Viewport = class {
     }
     ctx.fillText(text, left + 12, 46);
   }
-  drawBox(o) {
+  drawBox(o, colour = "rgba(25,243,255,0.7)", width = 1) {
     const cam = this.cam;
     const b = o.bounds ? { min: o.bounds.min, max: o.bounds.max } : UNIT_BOX;
     const t = o.transform;
@@ -690,8 +753,8 @@ var Viewport = class {
       corners.push(project(cam, add(t.position, qRotate(t.rotation, local))));
     }
     const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
-    this.ctx.strokeStyle = "rgba(25,243,255,0.7)";
-    this.ctx.lineWidth = 1;
+    this.ctx.strokeStyle = colour;
+    this.ctx.lineWidth = width;
     this.ctx.beginPath();
     for (const [a, z] of edges) {
       const p = corners[a];
@@ -1359,6 +1422,8 @@ ${looked.path}`;
   renderWorld(s);
   renderSectors(s);
   renderSectorDrawer(s);
+  renderPreviews(s);
+  renderLeft();
   renderEdits(s);
   viewport.setCamera(s.camera?.entityId);
   viewport.setPaused(!!s.camera?.paused);
@@ -1572,21 +1637,25 @@ $("drop").addEventListener("click", () => {
   }
 });
 $("dropClick").addEventListener("click", () => {
-  const path = lookedAt;
-  const looks = appearance;
-  if (!path) return;
+  if (lookedAt) startDropAtClick(lookedAt, appearance);
+});
+function startDropAtClick(path, looks) {
   const edit = $("edit");
   if (!edit.checked) {
     edit.checked = true;
     viewport.setEdit(true);
   }
-  viewport.armDrop((ray) => {
-    dropAsked = true;
-    post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } });
-  });
-  $("message").textContent = `Click where ${labelFor(path)} should go; Esc or right-click cancels.`;
+  const name = labelFor(path);
+  viewport.armDrop(
+    (ray) => {
+      dropAsked = true;
+      post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } });
+    },
+    { name, bounds: () => state?.looked?.path === path ? state.looked.info?.bounds : void 0 }
+  );
+  $("message").textContent = `Drop at click is on: click in the world where ${name} should go. Esc or right-click cancels.`;
   $("message").className = "message";
-});
+}
 for (const panel of document.querySelectorAll(".pinnable")) {
   const pin = panel.querySelector(".pin");
   if (!pin) continue;
@@ -1787,12 +1856,12 @@ ${b.error}` : b.dir)}"${isPicked({ kind: "bake", dir: b.dir }) ? " selected" : "
     if (!closedFolders.has(key)) walk("", 1);
   }
   for (const mp of s.library.modelPlaces.filter((x) => x.place !== "library")) {
-    const models = s.library.models.filter((x) => x.place === mp.place);
+    const models2 = s.library.models.filter((x) => x.place === mp.place);
     const key = `model:${mp.place}|`;
     rows.push(
-      `<rn-item value="x:${esc(key)}" title="${esc(mp.dir)}"${pad(0)}><span class="fold" data-folder="${esc(key)}">${closedFolders.has(key) ? "\u25B8" : "\u25BE"}</span><span class="section">${esc(mp.label)}</span><span slot="end">${models.length} model${models.length === 1 ? "" : "s"}</span></rn-item>`
+      `<rn-item value="x:${esc(key)}" title="${esc(mp.dir)}"${pad(0)}><span class="fold" data-folder="${esc(key)}">${closedFolders.has(key) ? "\u25B8" : "\u25BE"}</span><span class="section">${esc(mp.label)}</span><span slot="end">${models2.length} model${models2.length === 1 ? "" : "s"}</span></rn-item>`
     );
-    if (!closedFolders.has(key)) for (const m of models) rows.push(modelRow(m, 1, true));
+    if (!closedFolders.has(key)) for (const m of models2) rows.push(modelRow(m, 1, true));
   }
   return rows.join("");
   function modelRow(m, depth, withFolder = false) {
@@ -1994,8 +2063,10 @@ function leaveSaveAs() {
 $("mainTabs").addEventListener("change", (e) => {
   if (e.target !== $("mainTabs")) return;
   const label = e.detail.label;
-  if (label === "Library") post({ type: "library.refresh" });
-  else leaveSaveAs();
+  if (label === "Library") {
+    post({ type: "library.refresh" });
+    if (libraryOut && !drawerOpen && !previewsOpen && !state?.sectors.open) openLeft("library");
+  } else leaveSaveAs();
   if (label === "Bake") post({ type: "bake.refresh" });
   if (label === "World") post({ type: "world.refresh" });
 });
@@ -2015,6 +2086,7 @@ $("shelves").addEventListener(
 $("shelves").addEventListener("select", (e) => {
   const value = e.detail.value;
   lbakeAsking = false;
+  if (libraryOut) mainTabs().select?.(TabLabels.library);
   if (value.startsWith("f:")) picked = { kind: "scene", file: value.slice(2) };
   else if (value.startsWith("b:")) picked = { kind: "bake", dir: value.slice(2) };
   else if (value.startsWith("m:")) {
@@ -2227,8 +2299,7 @@ function goToObject(s, id) {
   post({ type: "scene.goTo", id });
 }
 $("pickedObjects").addEventListener("click", () => {
-  drawerOpen = !drawerOpen;
-  if (drawerOpen && state?.sectors.open) post({ type: "sectors.close" });
+  openLeft(drawerOpen ? "none" : "objects");
   peekAsked = "";
   confirming = void 0;
   if (state) render(state);
@@ -2493,7 +2564,8 @@ function renderSectorDrawer(s) {
   }
   if (v2.path !== lastSector) {
     lastSector = v2.path;
-    drawerOpen = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = false;
+    renderLeft();
     $("sectorFilter").value = v2.filter;
   }
   const name = shortName(v2.path).replace(/\.streamingsector$/i, "");
@@ -2595,6 +2667,227 @@ for (const id of ["bakeProjects", "importProjects"]) {
     post({ type: "project.pick", dir: b.dataset.dir || null });
   });
 }
+var libraryDrawerOpen = false;
+var previewsOpen = false;
+function openLeft(which) {
+  drawerOpen = which === "objects";
+  libraryDrawerOpen = which === "library";
+  previewsOpen = which === "previews";
+  if (which !== "none" && state?.sectors.open) post({ type: "sectors.close" });
+  if (which === "objects") {
+    peekAsked = "";
+    confirming = void 0;
+  }
+  if (state) render(state);
+  else renderLeft();
+}
+function renderLeft() {
+  $("drawer").classList.toggle("open", drawerOpen);
+  $("libraryDrawer").classList.toggle("open", libraryOut && libraryDrawerOpen);
+  $("previewsDrawer").classList.toggle("open", previewsOpen);
+  $("previewsEye").setAttribute("aria-pressed", String(previewsOpen));
+}
+var libraryOut = false;
+try {
+  libraryOut = localStorage.getItem("edgebuilder.libraryOut") === "1";
+} catch {
+}
+function placeLibrary() {
+  const list = $("shelves");
+  const home = libraryOut ? $("libraryDrawerBody") : $("libraryHome");
+  if (list.parentElement !== home) home.appendChild(list);
+  $("libraryLabel").hidden = libraryOut;
+  $("libraryOpenRow").hidden = !libraryOut;
+  const icon = $("libraryOut");
+  icon.setAttribute("aria-pressed", String(libraryOut));
+  icon.title = libraryOut ? "Back into the window: the Library here again, and no drawer" : "Out of the window: the Library in a drawer to the left, with more room";
+  renderLeft();
+}
+function setLibraryOut(on) {
+  libraryOut = on;
+  try {
+    localStorage.setItem("edgebuilder.libraryOut", on ? "1" : "0");
+  } catch {
+  }
+  placeLibrary();
+  openLeft(on ? "library" : drawerOpen ? "objects" : previewsOpen ? "previews" : "none");
+}
+$("libraryOut").addEventListener("click", () => setLibraryOut(!libraryOut));
+$("libraryDrawerIn").addEventListener("click", () => setLibraryOut(false));
+$("libraryDrawerClose").addEventListener("click", () => openLeft("none"));
+$("libraryOpen").addEventListener("click", () => openLeft(libraryDrawerOpen ? "none" : "library"));
+placeLibrary();
+var previews;
+var previewsWhy = "";
+var previewsLoading;
+var tiles = /* @__PURE__ */ new Map();
+var tilesKey = "";
+var models = /* @__PURE__ */ new Map();
+var spinning;
+function loadPreviews() {
+  previewsLoading ??= (async () => {
+    try {
+      const mod = await import(new URL("./previews.js", import.meta.url).href);
+      previews = mod.createPreviews(256);
+    } catch (err) {
+      previewsWhy = `3D pictures cannot be drawn here (${err.message || "no WebGL"}); the tiles show names.`;
+      post({ type: "log", text: `Previews: ${previewsWhy}` });
+      if (state) render(state);
+    }
+  })();
+  return previewsLoading;
+}
+$("previewsEye").addEventListener("click", () => {
+  openLeft(previewsOpen ? "none" : "previews");
+  if (previewsOpen) void loadPreviews().then(() => askVisible());
+});
+$("previewsClose").addEventListener("click", () => openLeft("none"));
+function renderPreviews(s) {
+  $("previewsEye").disabled = !s.results.length;
+  if (!s.results.length && previewsOpen) previewsOpen = false;
+  if (!previewsOpen) return;
+  const people = s.results.filter((r) => r.kind === "npc").length;
+  $("previewsTitle").textContent = s.query.text ? `Previews: ${s.query.text}` : "Previews";
+  $("previewsInfo").textContent = [
+    `${s.results.length} result${s.results.length === 1 ? "" : "s"}${people ? ` (NPCs by name for now)` : ""}. The mouse on a picture turns it; a click starts Drop at click.`,
+    previewsWhy,
+    s.bridge.status !== "ready" && !previewsWhy ? "New pictures need REDbridge: those kept from before still show." : ""
+  ].filter(Boolean).join(" ");
+  const key = s.results.map((r) => r.path).join("\n");
+  if (key === tilesKey) return;
+  tilesKey = key;
+  stopSpin();
+  const grid = $("previewGrid");
+  for (const t of tiles.values()) seen.unobserve(t.el);
+  inView.clear();
+  grid.innerHTML = "";
+  const old = new Map(tiles);
+  tiles.clear();
+  for (const r of s.results) {
+    const el = document.createElement("div");
+    el.className = "tile";
+    el.dataset.path = r.path;
+    el.title = rowTitle(r);
+    const drawn = r.kind !== "npc";
+    const was = old.get(r.path);
+    el.innerHTML = `<div class="pic">${was?.picture ? `<img alt="" src="${was.picture}">` : drawn ? "" : "NPC"}</div><div class="name">${esc(labelOf(r))}</div>`;
+    grid.appendChild(el);
+    tiles.set(r.path, { el, drawn, picture: was?.picture, error: was?.error });
+    seen.observe(el);
+  }
+  grid.scrollTop = 0;
+}
+var inView = /* @__PURE__ */ new Set();
+var askSoon;
+var seen = new IntersectionObserver(
+  (entries) => {
+    for (const e of entries) {
+      const p = e.target.dataset.path ?? "";
+      if (e.isIntersecting) inView.add(p);
+      else inView.delete(p);
+    }
+    clearTimeout(askSoon);
+    askSoon = setTimeout(askVisible, 150);
+  },
+  { root: document.getElementById("previewGrid"), rootMargin: "200px 0px" }
+);
+function askVisible() {
+  if (!previewsOpen || !previews) return;
+  const now = performance.now();
+  const paths = [...inView].filter((p) => {
+    const t = tiles.get(p);
+    return t && t.drawn && !t.picture && !t.error && (!t.asked || now - t.asked > 2e4);
+  });
+  if (!paths.length) return;
+  for (const p of paths) {
+    const t = tiles.get(p);
+    t.asked = now;
+    t.el.querySelector(".pic").textContent = "drawing...";
+  }
+  post({ type: "preview.ask", paths });
+}
+var fromBase64 = (b64) => {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+};
+async function previewCame(m) {
+  const t = tiles.get(m.path);
+  const pic = t?.el.querySelector(".pic");
+  if (m.error) {
+    if (t && !t.picture) {
+      t.error = m.error;
+      if (pic) {
+        pic.textContent = "no picture";
+        pic.title = m.error;
+      }
+    }
+    return;
+  }
+  let picture = m.png ? `data:image/png;base64,${m.png}` : void 0;
+  if (m.parts) {
+    const parts = m.parts.map((p) => ({ glb: fromBase64(p.glb), offset: p.offset, scale: p.scale }));
+    models.set(m.path, parts);
+    while (models.size > 40) models.delete(models.keys().next().value);
+    if (!t?.picture && previews) {
+      try {
+        picture = await previews.picture(parts);
+        post({ type: "preview.save", key: m.key, png: picture.slice(picture.indexOf(",") + 1) });
+      } catch (err) {
+        if (t) t.error = err.message;
+        if (pic) pic.textContent = "no picture";
+        return;
+      }
+    }
+    if (spinning?.path === m.path && !spinning.stop) void startSpin(m.path);
+  }
+  if (t && picture && !t.picture) {
+    t.picture = picture;
+    if (pic) pic.innerHTML = `<img alt="" src="${picture}">`;
+  }
+}
+async function startSpin(path) {
+  const t = tiles.get(path);
+  const parts = models.get(path);
+  if (!t || !previews || spinning?.path !== path) return;
+  if (!parts) return post({ type: "preview.ask", paths: [path], glb: true });
+  const pic = t.el.querySelector(".pic");
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const stop = await previews.spin(parts, canvas);
+  if (spinning?.path !== path) return stop();
+  pic.appendChild(canvas);
+  spinning.stop = () => {
+    stop();
+    canvas.remove();
+  };
+}
+function stopSpin() {
+  spinning?.stop?.();
+  spinning = void 0;
+}
+$("previewGrid").addEventListener("mouseover", (e) => {
+  const tile = e.target.closest?.(".tile");
+  const path = tile?.dataset.path;
+  if (!path || spinning?.path === path) return;
+  stopSpin();
+  if (tiles.get(path)?.picture) {
+    spinning = { path };
+    void startSpin(path);
+  }
+});
+$("previewGrid").addEventListener("mouseleave", () => stopSpin());
+$("previewGrid").addEventListener("click", (e) => {
+  const path = e.target.closest?.(".tile")?.dataset.path;
+  if (!path) return;
+  lookedAt = path;
+  appearance = void 0;
+  post({ type: "look", path });
+  stopSpin();
+  openLeft("none");
+  startDropAtClick(path, void 0);
+});
 function status(text) {
   $("message").textContent = text;
   $("message").className = "message warn";
@@ -2625,6 +2918,7 @@ var viewport = new Viewport($("view"), {
   log: (text) => post({ type: "log", text }),
   builderStart: (pose) => post({ type: "builder.start", pose }),
   builderStop: () => post({ type: "builder.stop" }),
+  probe: (seq, ray) => post({ type: "drop.probe", seq, origin: ray.o, dir: ray.d }),
   status(text) {
     $("message").textContent = text;
     $("message").className = "message warn";
@@ -2671,5 +2965,7 @@ $("saveSettings").addEventListener(
 );
 channel.on((m) => {
   if (m?.type === "state" && m.state) render(m.state);
+  else if (m?.type === "preview") void previewCame(m);
+  else if (m?.type === "probe") viewport.setProbe(m);
 });
 post({ type: "hello" });

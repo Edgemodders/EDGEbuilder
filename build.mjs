@@ -32,6 +32,20 @@ const app = {
   banner: { js: "// Built from src/app/ by build.mjs; edit the TypeScript, not this file." },
 };
 
+// 0.14.0: the Previews drawer's pictures, with three.js. The page loads it only when the drawer first opens.
+// three.js is MIT: its licence comment stays at the end of the file.
+const previews = {
+  entryPoints: ["src/app/previews.ts"],
+  outfile: "edgebuilder/previews.js",
+  bundle: true,
+  platform: "browser",
+  format: "esm",
+  target: "chrome120",
+  minify: true,
+  legalComments: "eof",
+  banner: { js: "// Built from src/app/previews.ts by build.mjs, with three.js (MIT, https://threejs.org)." },
+};
+
 // The REDnode-free parts on their own, for scripts/smoke.mjs.
 const core = {
   entryPoints: ["src/core.ts"],
@@ -70,10 +84,10 @@ const fab = {
 if (fabFrom && fs.existsSync(`${fabFrom}/dist/THIRD-PARTY-NOTICES.txt`)) fs.copyFileSync(`${fabFrom}/dist/THIRD-PARTY-NOTICES.txt`, "edgebuilder/fab-notices.txt");
 
 if (watch) {
-  const contexts = await Promise.all([esbuild.context(mod), esbuild.context(app), esbuild.context(core), esbuild.context(fab)]);
+  const contexts = await Promise.all([esbuild.context(mod), esbuild.context(app), esbuild.context(previews), esbuild.context(core), esbuild.context(fab)]);
   await Promise.all(contexts.map((c) => c.watch()));
   console.log("watching src/ ...");
 } else {
-  await Promise.all([esbuild.build(mod), esbuild.build(app), esbuild.build(core), esbuild.build(fab)]);
-  console.log(`built edgebuilder/mod.mjs and edgebuilder/app.js; edgebuilder/fab.cjs ${fabFrom ? `from ${fabFrom}` : "as a stand-in (no EDGEfab core)"}`);
+  await Promise.all([esbuild.build(mod), esbuild.build(app), esbuild.build(previews), esbuild.build(core), esbuild.build(fab)]);
+  console.log(`built edgebuilder/mod.mjs, edgebuilder/app.js and edgebuilder/previews.js; edgebuilder/fab.cjs ${fabFrom ? `from ${fabFrom}` : "as a stand-in (no EDGEfab core)"}`);
 }

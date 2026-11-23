@@ -7,6 +7,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { createHash } from "node:crypto";
 import { api, archives, channel, game, kernel, pkg, service, ui, world, type GameRef, type WorldNode } from "rednode";
 import { BridgeClient, KernelBridge, findBridge, isGameFolder, type Bridge, type SectorBuilt } from "./bridge";
 import { AssetIndex, kindOf } from "./index";
@@ -49,7 +50,7 @@ import { isTextureLine, loadFab, type BridgeCall, type FabCore, type FabPrepared
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, upright, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
-import { AnyLook, type AssetEntry, type AssetFrom, type AssetInfo, type AssetKind, type BakeRecord, type LibraryBake, type PageMessage, type Place, type PlaceRoot, type SceneObject, type SceneTransform, type Snapshot, type DoorState, type SectorView, type WorldEdit, type WorldKind, type WorldNodeRef, type WorldPicked, type WorldThing } from "./protocol";
+import { AnyLook, type PreviewPart, type AssetEntry, type AssetFrom, type AssetInfo, type AssetKind, type BakeRecord, type LibraryBake, type PageMessage, type Place, type PlaceRoot, type SceneObject, type SceneTransform, type Snapshot, type DoorState, type SectorView, type WorldEdit, type WorldKind, type WorldNodeRef, type WorldPicked, type WorldThing } from "./protocol";
 
 /** A base-game entity template that is a bare entity: no components, no appearances. The editor camera is this with a camera component attached. */
 const EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
@@ -622,6 +623,144 @@ async function dropPlace(at?: { origin: V3; dir: V3 }): Promise<Placement> {
     }
   }
   return inFrontOfPlayer();
+}
+
+// ---- Drop at click's outline (0.14.0) -----------------------------------------------------------------
+//
+// While Drop at click waits for its click, the page sends the line under the cursor a few times a second
+// and draws the object's box where a click would put it: the same raycast and rule as dropPlace. Only the
+// newest line waits; older ones are dropped.
+
+let probeNext: { seq: number; origin: V3; dir: V3 } | undefined;
+let probing = false;
+
+async function runProbes(): Promise<void> {
+  if (probing) return;
+  probing = true;
+  try {
+    while (probeNext) {
+      const m = probeNext;
+      probeNext = undefined;
+      try {
+        const { hit } = await raycast(m.origin, add(m.origin, mul(m.dir, SurfaceReach)));
+        const yaw = (Math.atan2(m.dir[0], -m.dir[1]) * 180) / Math.PI;
+        const rotation = yawToQuaternion(yaw) as [number, number, number, number];
+        channel.post({ type: "probe", seq: m.seq, position: hit ?? add(m.origin, mul(m.dir, 8)), rotation, hit: !!hit });
+      } catch {
+        // No world yet: no outline.
+      }
+    }
+  } finally {
+    probing = false;
+  }
+}
+
+// ---- previews of search results (0.14.0) ----------------------------------------------------------------
+//
+// The Previews drawer shows the search results' meshes as small pictures. For each mesh, REDbridge exports
+// a plain model (a GLB, no materials, the most detailed LOD, as REDcode's mesh viewer does: 20 to 35 ms a
+// mesh in E0) and the page draws it with three.js; the page sends the picture back and it is kept here, so
+// the next time the tile shows at once. Kept by the file it came from: a mod or a project file that changes
+// gets a new key. Only the newest ask waits: the page asks for the tiles in view.
+
+const previewDir = path.join(pkg.dataDir, "previews");
+let previewQueue: { path: string; glb: boolean }[] = [];
+let previewing = false;
+
+function previewKey(assetPath: string): { key: string; from?: AssetEntry["source"] } {
+  const from = sourceOf(assetPath)?.source;
+  let stamp = "game";
+  if (from) {
+    try {
+      const st = fs.statSync(from.file);
+      stamp = `${from.file}|${st.size}|${Math.round(st.mtimeMs)}`;
+    } catch {
+      stamp = from.file;
+    }
+  }
+  return { key: createHash("sha1").update(`${stamp}|${assetPath.toLowerCase()}`).digest("hex").slice(0, 24), from };
+}
+
+/** The plain GLB of a mesh, exported once into the data folder. */
+async function previewModel(assetPath: string, key: string, from: AssetEntry["source"]): Promise<Buffer> {
+  const glb = path.join(previewDir, "glb", `${key}.glb`);
+  if (fs.existsSync(glb)) return fs.readFileSync(glb);
+  if (!bridge?.running) throw new Error("Previews need REDbridge");
+  const work = path.join(previewDir, "work", key);
+  const archiveDir = path.join(work, "archive");
+  const rawDir = path.join(work, "raw");
+  const file = path.join(archiveDir, ...assetPath.split("\\"));
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    if (from?.kind === "project") fs.copyFileSync(from.file, file);
+    else if (from?.kind === "mod") {
+      const r = await bridge.call<{ failed?: string[] }>("archive.extractFromMod", { archivePath: from.file, items: [{ path: assetPath, outFile: file }] });
+      if (r.failed?.length || !fs.existsSync(file)) throw new Error(`not found in ${path.basename(from.file)}`);
+    } else await bridge.call("archive.extract", { path: assetPath, outFile: file });
+    const r = await bridge.call<{ ok?: boolean; written?: string[] }>("project.export", { file, archiveDir, rawDir, options: { meshBinary: true, meshMaterials: false, meshLodFilter: true } });
+    const out = path.join(rawDir, ...assetPath.replace(/\.mesh$/i, ".glb").split("\\"));
+    const made = fs.existsSync(out) ? out : r.written?.find((w) => /\.glb$/i.test(w) && fs.existsSync(w));
+    if (!made) throw new Error("REDbridge made no model from it");
+    fs.mkdirSync(path.dirname(glb), { recursive: true });
+    fs.copyFileSync(made, glb);
+    return fs.readFileSync(glb);
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+}
+
+/** An entity's mesh parts, as REDbridge's mesh.info lists them: the meshes its components draw, with their offsets. */
+const PreviewPartsMax = 16;
+
+async function previewParts(assetPath: string, key: string, from: AssetEntry["source"]): Promise<PreviewPart[]> {
+  if (kindOf(assetPath) === "mesh") return [{ glb: (await previewModel(assetPath, key, from)).toString("base64") }];
+  if (!bridge?.running) throw new Error("Previews need REDbridge");
+  const where = from?.kind === "mod" ? { archive: from.file } : from?.kind === "project" && project ? { root: project.archive } : {};
+  const info = await bridge.call<{ error?: string; parts?: { mesh: string; offset?: number[]; scale?: number[]; error?: string }[] }>("mesh.info", { path: assetPath, ...where });
+  if (info.error) throw new Error(info.error);
+  const meshes = (info.parts ?? []).filter((p) => p.mesh && !p.error).slice(0, PreviewPartsMax);
+  if (!meshes.length) throw new Error("it draws no mesh");
+  const parts: PreviewPart[] = [];
+  let why = "";
+  for (const p of meshes) {
+    try {
+      const k = previewKey(p.mesh);
+      parts.push({ glb: (await previewModel(p.mesh, k.key, k.from)).toString("base64"), offset: p.offset, scale: p.scale });
+    } catch (err) {
+      why ||= `${path.basename(p.mesh)}: ${(err as Error).message}`;
+    }
+  }
+  if (!parts.length) throw new Error(why || "none of its meshes could be read");
+  return parts;
+}
+
+async function runPreviews(): Promise<void> {
+  if (previewing) return;
+  previewing = true;
+  try {
+    for (let next = previewQueue.shift(); next; next = previewQueue.shift()) {
+      const { key, from } = previewKey(next.path);
+      const png = path.join(previewDir, "png", `${key}.png`);
+      try {
+        if (!next.glb && fs.existsSync(png)) channel.post({ type: "preview", path: next.path, key, png: fs.readFileSync(png).toString("base64") });
+        else channel.post({ type: "preview", path: next.path, key, parts: await previewParts(next.path, key, from) });
+      } catch (err) {
+        channel.post({ type: "preview", path: next.path, key, error: (err as Error).message });
+      }
+    }
+  } finally {
+    previewing = false;
+  }
+}
+
+function savePreview(key: string, png: string): void {
+  if (!/^[0-9a-f]{24}$/.test(key)) return;
+  try {
+    fs.mkdirSync(path.join(previewDir, "png"), { recursive: true });
+    fs.writeFileSync(path.join(previewDir, "png", `${key}.png`), Buffer.from(png, "base64"));
+  } catch (err) {
+    console.log(`A preview picture could not be kept: ${(err as Error).message}`);
+  }
 }
 
 /** Puts an object's preview in the world and remembers the entity. */
@@ -2978,6 +3117,21 @@ channel.on<PageMessage>((m) => {
         break;
       case "drop":
         await inTurn("Drop", () => drop(m.path, m.appearance, m.at));
+        break;
+      case "drop.probe":
+        probeNext = { seq: m.seq, origin: m.origin, dir: m.dir };
+        await runProbes();
+        break;
+      case "preview.ask":
+      {
+        // Tiles in view replace what still waits; a model asked for under the mouse goes first and keeps the rest.
+        const asked = m.paths.filter((p) => kindOf(p)).map((p) => ({ path: p, glb: !!m.glb }));
+        previewQueue = m.glb ? [...asked, ...previewQueue.filter((q) => !asked.some((a) => a.path === q.path))] : asked;
+      }
+        await runPreviews();
+        break;
+      case "preview.save":
+        savePreview(m.key, m.png);
         break;
       case "select":
         await inTurn("Select", () => select(m.ids));

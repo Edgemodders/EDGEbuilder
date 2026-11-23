@@ -1087,3 +1087,34 @@ REDcode #32 (REDcode 0.10.15: `projects()` and `projects-changed`), asked for by
 | 5 | Close the picked project's window | Back to following REDcode; with one project left the row goes |
 
 **All five steps passed in game on 2026-11-23 on 0.13.1 (the owner).** One change asked for: the Bake tab's panel "Bakes in this project" should name the project. **0.13.2** titles it "Bakes for <project>": **seen in game by the owner on 2026-11-23**.
+
+### Previews, the Library drawer and Drop at click's outline (0.14.0)
+
+Asked for by the owner on 2026-11-23. Built the same day; checked in REDnode's host without the game, against REDbridge 0.18.0: "crate" gave 95 tiles, meshes and entities drawn (two entities with no mesh parts say "no picture"), a picture turns under the mouse, a click closes the drawer, picks the result and starts Drop at click; the Library goes out to its drawer and back, one drawer at a time, the choice kept after a reload. The crosshair and the outline need the game's camera, so they are untested.
+
+Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a scene open.
+
+| # | Do | Expected | Answers |
+|---|---|---|---|
+| 1 | Assets tab: search `crate`, press the eye at the right of the result count | A **Previews** drawer to the left of the window; tiles fill in with grey pictures within a few seconds (the first time) | P1 |
+| 2 | Scroll down the drawer | Tiles further down are drawn as they come into view | P1 |
+| 3 | Rest the mouse on a picture | It turns slowly; it stops when the mouse leaves | P1 |
+| 4 | Close the drawer and open it again; search something else and back to `crate` | The pictures show at once (kept) | P1 |
+| 5 | Note the game's frame rate with the drawer open and pictures drawing, then with it closed | No large drop while it draws (say what you see) | P2 |
+| 6 | Click a crate's tile | The drawer closes, the crate is picked, Edit goes on; the message says Drop at click is on; the help line at the bottom says "Drop at click: click where ... should go" | P3 |
+| 7 | Move the mouse over the world | A white crosshair instead of the cursor; a white box the crate's size sits on the surface under it and follows the mouse | P3 |
+| 8 | Point at the sky | The box turns amber, 8 m along the line | P3 |
+| 9 | Right-drag to look around, fly with WASD | The box keeps up with what is under the crosshair | P3 |
+| 10 | Click on the floor | The crate lands where the box was | P3 |
+| 11 | Start Drop at click again (Picked's **Drop at click**), press Esc | Cancelled: the cursor comes back, no box | P3 |
+| 12 | Library tab: press the icon at the top right of the Library tree | The tree moves to a drawer on the left; a **Library** button and the icon stay in its place | P4 |
+| 13 | On the Assets tab, click a scene in the Library drawer | The Library tab comes forward with that scene in Picked | P4 |
+| 14 | Library tab's **Objects**; then the **Library** button | Objects replaces the Library drawer; the Library button brings it back | P4 |
+| 15 | Turn EDGEbuilder off and on in REDnode (or restart the game) | The Library is still out of the window; the icon in the drawer's head (or in the tab) brings it back in | P4 |
+
+| # | Question |
+|---|---|
+| P1 | Do the pictures come, quickly enough, and look like the objects? |
+| P2 | Does drawing them in the overlay cost the game's frame rate? |
+| P3 | Do the crosshair and the box show where the drop lands, and do click, Esc and right-click work as before? |
+| P4 | Does the Library work from its drawer as it did in the window? |

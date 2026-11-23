@@ -3,6 +3,7 @@
 // src/mod.ts
 import * as fs9 from "node:fs";
 import * as path11 from "node:path";
+import { createHash as createHash2 } from "node:crypto";
 import { api, archives, channel, game, kernel, pkg, service, ui, world as world2 } from "rednode";
 
 // src/bridge.ts
@@ -2184,6 +2185,118 @@ async function dropPlace(at) {
   }
   return inFrontOfPlayer();
 }
+var probeNext;
+var probing = false;
+async function runProbes() {
+  if (probing) return;
+  probing = true;
+  try {
+    while (probeNext) {
+      const m = probeNext;
+      probeNext = void 0;
+      try {
+        const { hit } = await raycast(m.origin, add(m.origin, mul(m.dir, SurfaceReach)));
+        const yaw = Math.atan2(m.dir[0], -m.dir[1]) * 180 / Math.PI;
+        const rotation = yawToQuaternion(yaw);
+        channel.post({ type: "probe", seq: m.seq, position: hit ?? add(m.origin, mul(m.dir, 8)), rotation, hit: !!hit });
+      } catch {
+      }
+    }
+  } finally {
+    probing = false;
+  }
+}
+var previewDir = path11.join(pkg.dataDir, "previews");
+var previewQueue = [];
+var previewing = false;
+function previewKey(assetPath) {
+  const from = sourceOf(assetPath)?.source;
+  let stamp = "game";
+  if (from) {
+    try {
+      const st = fs9.statSync(from.file);
+      stamp = `${from.file}|${st.size}|${Math.round(st.mtimeMs)}`;
+    } catch {
+      stamp = from.file;
+    }
+  }
+  return { key: createHash2("sha1").update(`${stamp}|${assetPath.toLowerCase()}`).digest("hex").slice(0, 24), from };
+}
+async function previewModel(assetPath, key, from) {
+  const glb = path11.join(previewDir, "glb", `${key}.glb`);
+  if (fs9.existsSync(glb)) return fs9.readFileSync(glb);
+  if (!bridge?.running) throw new Error("Previews need REDbridge");
+  const work = path11.join(previewDir, "work", key);
+  const archiveDir = path11.join(work, "archive");
+  const rawDir = path11.join(work, "raw");
+  const file = path11.join(archiveDir, ...assetPath.split("\\"));
+  try {
+    fs9.mkdirSync(path11.dirname(file), { recursive: true });
+    if (from?.kind === "project") fs9.copyFileSync(from.file, file);
+    else if (from?.kind === "mod") {
+      const r2 = await bridge.call("archive.extractFromMod", { archivePath: from.file, items: [{ path: assetPath, outFile: file }] });
+      if (r2.failed?.length || !fs9.existsSync(file)) throw new Error(`not found in ${path11.basename(from.file)}`);
+    } else await bridge.call("archive.extract", { path: assetPath, outFile: file });
+    const r = await bridge.call("project.export", { file, archiveDir, rawDir, options: { meshBinary: true, meshMaterials: false, meshLodFilter: true } });
+    const out = path11.join(rawDir, ...assetPath.replace(/\.mesh$/i, ".glb").split("\\"));
+    const made = fs9.existsSync(out) ? out : r.written?.find((w) => /\.glb$/i.test(w) && fs9.existsSync(w));
+    if (!made) throw new Error("REDbridge made no model from it");
+    fs9.mkdirSync(path11.dirname(glb), { recursive: true });
+    fs9.copyFileSync(made, glb);
+    return fs9.readFileSync(glb);
+  } finally {
+    fs9.rmSync(work, { recursive: true, force: true });
+  }
+}
+var PreviewPartsMax = 16;
+async function previewParts(assetPath, key, from) {
+  if (kindOf(assetPath) === "mesh") return [{ glb: (await previewModel(assetPath, key, from)).toString("base64") }];
+  if (!bridge?.running) throw new Error("Previews need REDbridge");
+  const where = from?.kind === "mod" ? { archive: from.file } : from?.kind === "project" && project ? { root: project.archive } : {};
+  const info = await bridge.call("mesh.info", { path: assetPath, ...where });
+  if (info.error) throw new Error(info.error);
+  const meshes = (info.parts ?? []).filter((p) => p.mesh && !p.error).slice(0, PreviewPartsMax);
+  if (!meshes.length) throw new Error("it draws no mesh");
+  const parts = [];
+  let why = "";
+  for (const p of meshes) {
+    try {
+      const k = previewKey(p.mesh);
+      parts.push({ glb: (await previewModel(p.mesh, k.key, k.from)).toString("base64"), offset: p.offset, scale: p.scale });
+    } catch (err) {
+      why ||= `${path11.basename(p.mesh)}: ${err.message}`;
+    }
+  }
+  if (!parts.length) throw new Error(why || "none of its meshes could be read");
+  return parts;
+}
+async function runPreviews() {
+  if (previewing) return;
+  previewing = true;
+  try {
+    for (let next = previewQueue.shift(); next; next = previewQueue.shift()) {
+      const { key, from } = previewKey(next.path);
+      const png = path11.join(previewDir, "png", `${key}.png`);
+      try {
+        if (!next.glb && fs9.existsSync(png)) channel.post({ type: "preview", path: next.path, key, png: fs9.readFileSync(png).toString("base64") });
+        else channel.post({ type: "preview", path: next.path, key, parts: await previewParts(next.path, key, from) });
+      } catch (err) {
+        channel.post({ type: "preview", path: next.path, key, error: err.message });
+      }
+    }
+  } finally {
+    previewing = false;
+  }
+}
+function savePreview(key, png) {
+  if (!/^[0-9a-f]{24}$/.test(key)) return;
+  try {
+    fs9.mkdirSync(path11.join(previewDir, "png"), { recursive: true });
+    fs9.writeFileSync(path11.join(previewDir, "png", `${key}.png`), Buffer.from(png, "base64"));
+  } catch (err) {
+    console.log(`A preview picture could not be kept: ${err.message}`);
+  }
+}
 async function spawnPreview(o) {
   const [x, y, z] = o.transform.position;
   const [i, j, k, r] = o.transform.rotation;
@@ -4086,6 +4199,20 @@ channel.on((m) => {
       case "drop":
         await inTurn("Drop", () => drop(m.path, m.appearance, m.at));
         break;
+      case "drop.probe":
+        probeNext = { seq: m.seq, origin: m.origin, dir: m.dir };
+        await runProbes();
+        break;
+      case "preview.ask":
+        {
+          const asked = m.paths.filter((p) => kindOf(p)).map((p) => ({ path: p, glb: !!m.glb }));
+          previewQueue = m.glb ? [...asked, ...previewQueue.filter((q) => !asked.some((a) => a.path === q.path))] : asked;
+        }
+        await runPreviews();
+        break;
+      case "preview.save":
+        savePreview(m.key, m.png);
+        break;
       case "select":
         await inTurn("Select", () => select(m.ids));
         break;
@@ -4702,7 +4829,7 @@ async function importModel(m) {
     return say(`Import is not available: ${err.message}`, "error");
   }
   const target = project;
-  const version = `EDGEbuilder ${"0.13.2"}`;
+  const version = `EDGEbuilder ${"0.14.0"}`;
   const call = (method, params) => stopAsked ? Promise.reject(new Error(ImportStopped)) : b.call(method, params);
   const began = Date.now();
   const step2 = (text) => {
@@ -4862,7 +4989,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.13.2"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.14.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs9.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {
