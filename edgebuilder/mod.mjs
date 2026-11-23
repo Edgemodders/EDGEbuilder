@@ -1606,11 +1606,14 @@ function nodeMatches(item, text) {
   const hay = [item.kind, item.resource ?? item.resourceHash ?? "", item.ref ?? "", item.appearance ?? "", `#${item.index}`].join(" ").toLowerCase();
   return t.split(/\s+/).every((w) => hay.includes(w));
 }
-function nodeRows(items, text, limit) {
+function nodeRows(items, text, limit, keep) {
   const hits = items.filter((i) => nodeMatches(i, text));
+  const shown = hits.slice(0, limit);
+  const kept = keep === void 0 ? void 0 : hits.find((i) => i.index === keep);
+  if (kept && !shown.includes(kept)) shown.push(kept);
   return {
     matching: hits.length,
-    rows: hits.slice(0, limit).map(
+    rows: shown.map(
       (i) => ({
         entry: i.index,
         node: i.node,
@@ -2735,11 +2738,12 @@ async function doorStateOf(entity) {
     const ps = await entity.GetDevicePS();
     if (!ps) return void 0;
     const ask = (p) => p.then((v2) => typeof v2 === "boolean" ? v2 : void 0).catch(() => void 0);
-    const [open, locked, sealed] = await Promise.all([ask(ps.IsOpen()), ask(ps.IsLocked()), ask(ps.IsSealed())]);
+    const [open, lock, sealed, lift] = await Promise.all([ask(ps.IsOpen()), ask(ps.IsLocked()), ask(ps.IsSealed()), ask(ps.IsLiftDoor())]);
+    const locked = lift ? sealed : lock;
     const setup = await ps.$get("doorProperties").catch(() => null);
     const initial = typeof setup?.initialDoorState === "string" ? setup.initialDoorState : void 0;
     const closesItself = typeof setup?.automaticallyClosesItself === "boolean" ? setup.automaticallyClosesItself : void 0;
-    return { open, locked, sealed, initial, closesItself };
+    return { open, locked, sealed, initial, closesItself, ...lift ? { lift } : {} };
   } catch {
     return void 0;
   }
@@ -3085,8 +3089,25 @@ async function runDoorActions(entity, now, want) {
   if (!acts.length) return 0;
   const ps = await entity.GetDevicePS();
   const persistency = await api.GameInstance.GetPersistencySystem(game.instance);
-  for (const a of acts) await persistency.QueuePSDeviceEvent(await ps[a]());
+  const run = async (a) => persistency.QueuePSDeviceEvent(await ps[a]());
+  if (!now.lift || !acts.includes("ActionToggleLock")) {
+    for (const a of acts) await run(a);
+    return acts.length;
+  }
+  const seal = want.locked === true;
+  if (seal && now.open) await run("ActionSetClosed");
+  await setSealed(ps, persistency, seal);
+  if (!seal && want.open === true && !now.open) await run("ActionSetOpened");
   return acts.length;
+}
+async function setSealed(ps, persistency, sealed) {
+  try {
+    await persistency.QueuePSDeviceEvent(await ps.ActionToggleSeal());
+  } catch (err) {
+    console.log(`A door's seal action was refused (${err.message}): its state is set instead`);
+  }
+  await new Promise((r) => setTimeout(r, 500));
+  if (await ps.IsSealed() !== sealed) await ps.SetIsSealed(sealed);
 }
 async function enforceDoor(e, entity) {
   if (!e.door) return false;
@@ -3227,7 +3248,7 @@ async function doorAction(act) {
   p.stateBy = e.id;
   for (const t of state.worldObjects.things) if (t.key === p.key) t.stateBy = e.id;
   say(
-    done ? `${p.label}: kept ${doorStateText(want)} while this scene is open in EDGEbuilder (the door's state is also in your save). Restore on the Scene tab, or Undo, puts it back as it was.` : `${p.label}: kept ${doorStateText(want)} in the scene, but the game did not take it yet (the log says why); it is tried again when the door comes into the world.`,
+    done ? `${p.label}: kept ${doorStateText(want)} while this scene is open in EDGEbuilder (the door's state is also in your save).${now.lift && want.locked ? " It is an elevator's door, so it is sealed: the elevator cannot open it." : ""} Restore on the Scene tab, or Undo, puts it back as it was.` : `${p.label}: kept ${doorStateText(want)} in the scene, but the game did not take it yet (the log says why); it is tried again when the door comes into the world.`,
     done ? "ok" : "warn"
   );
   void refreshPickedDoor();
@@ -3328,7 +3349,7 @@ async function findSectors(m) {
 async function showSectorRows() {
   const view = state.sectors.open;
   if (!view || view.status !== "ready") return;
-  const { rows, matching } = nodeRows(sectorItems, view.filter, SectorNodesShown);
+  const { rows, matching } = nodeRows(sectorItems, view.filter, SectorNodesShown, view.selected);
   view.matching = matching;
   view.loaded = await sectorLoaded(view.hash);
   for (const r of rows) {
@@ -4680,7 +4701,7 @@ async function importModel(m) {
     return say(`Import is not available: ${err.message}`, "error");
   }
   const target = project;
-  const version = `EDGEbuilder ${"0.13.0"}`;
+  const version = `EDGEbuilder ${"0.13.1"}`;
   const call = (method, params) => stopAsked ? Promise.reject(new Error(ImportStopped)) : b.call(method, params);
   const began = Date.now();
   const step2 = (text) => {
@@ -4840,7 +4861,7 @@ if (typeof ui?.onSolo === "function") {
     if (!on && builderOn) console.log("Solo mode ended from the launcher; Edit stays on");
   });
 }
-console.log(`EDGEbuilder ${"0.13.0"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
+console.log(`EDGEbuilder ${"0.13.1"} starting; data folder ${pkg.dataDir}; ${scene.file ? `scene ${scene.name} (${scene.file}), ${scene.objects.length} objects` : "no scene open"}; ${onScenes.size} other scene${onScenes.size === 1 ? "" : "s"} on; Library ${libraryRoot ?? "not set"}`);
 if (!fs9.existsSync(scene.file) && !scene.loadError) scene.save();
 scanLibrary();
 if (lastGone) {

@@ -1252,7 +1252,7 @@ const DoorButtons = ["doorOpen", "doorClose", "doorLock", "doorRestore"];
 /** A door's state in a few words: `closed, locked`. */
 function doorText(d: WorldThing["door"]): string {
   if (!d) return "";
-  return [d.open === undefined ? "" : d.open ? "open" : "closed", d.locked ? "locked" : "", d.sealed ? "sealed" : ""].filter(Boolean).join(", ");
+  return [d.open === undefined ? "" : d.open ? "open" : "closed", d.locked ? "locked" : "", d.sealed ? "sealed" : "", d.lift ? "an elevator's door" : ""].filter(Boolean).join(", ");
 }
 
 function renderWorld(s: Snapshot): void {
@@ -1433,6 +1433,8 @@ const SectorToggles: [string, string][] = [
 const SectorLevels = [null, 0, 1, 2, 3] as const;
 let sectorsHtml = "";
 let sectorRowsHtml = "";
+/** The sector and entry the drawer last scrolled to. */
+let sectorSelShown = "";
 let sectorLevel: number | null = null;
 let sectorKindsShown = false;
 let lastSector = "";
@@ -1532,6 +1534,12 @@ function renderSectorDrawer(s: Snapshot): void {
     })
     .join("");
   if (html !== sectorRowsHtml) $("sectorList").innerHTML = sectorRowsHtml = html;
+  // A newly picked entry (the service's select, a click in the world) is brought into view.
+  const sel = `${v.path}:${v.selected ?? ""}`;
+  if (sel !== sectorSelShown) {
+    sectorSelShown = sel;
+    if (v.selected !== undefined) $("sectorList").querySelector("rn-item[selected]")?.scrollIntoView({ block: "center" });
+  }
 }
 
 /** Edit on and the camera on its way to a place, a few metres back. */

@@ -2284,7 +2284,7 @@ var WorldTab = 3;
 var DoorButtons = ["doorOpen", "doorClose", "doorLock", "doorRestore"];
 function doorText(d) {
   if (!d) return "";
-  return [d.open === void 0 ? "" : d.open ? "open" : "closed", d.locked ? "locked" : "", d.sealed ? "sealed" : ""].filter(Boolean).join(", ");
+  return [d.open === void 0 ? "" : d.open ? "open" : "closed", d.locked ? "locked" : "", d.sealed ? "sealed" : "", d.lift ? "an elevator's door" : ""].filter(Boolean).join(", ");
 }
 function renderWorld(s) {
   const wo = s.worldObjects;
@@ -2437,6 +2437,7 @@ var SectorToggles = [
 var SectorLevels = [null, 0, 1, 2, 3];
 var sectorsHtml = "";
 var sectorRowsHtml = "";
+var sectorSelShown = "";
 var sectorLevel = null;
 var sectorKindsShown = false;
 var lastSector = "";
@@ -2511,6 +2512,11 @@ function renderSectorDrawer(s) {
     return `<rn-item value="${r.entry}" title="${esc(tip)}"${v2.selected === r.entry ? " selected" : ""}>${esc(label)}<span slot="end">${end}</span></rn-item>`;
   }).join("");
   if (html !== sectorRowsHtml) $("sectorList").innerHTML = sectorRowsHtml = html;
+  const sel = `${v2.path}:${v2.selected ?? ""}`;
+  if (sel !== sectorSelShown) {
+    sectorSelShown = sel;
+    if (v2.selected !== void 0) $("sectorList").querySelector("rn-item[selected]")?.scrollIntoView({ block: "center" });
+  }
 }
 function flyToPoint(position) {
   if (!state || state.world !== "ready" || state.settings.editorCamera === false) return;

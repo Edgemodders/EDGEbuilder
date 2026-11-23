@@ -1023,6 +1023,22 @@ Before: the game closed; Claude deploys EDGEbuilder 0.13.0 with EDGEdeck (0.12.5
 | T3 | Is the kept state there after a save loads and after a fast travel? |
 | T4 | Do Restore, Undo and closing the scene put the door back as it was, closing by itself too? |
 
+**Results, 2026-11-23, 0.13.0 (the owner, in game): steps 1 to 11 passed; step 12 failed.** The elevator door opened when V called the elevator, although Lock was on.
+
+| Finding | Detail | Fix |
+|---|---|---|
+| An elevator opens its doors whatever their lock | The game's scripts: an elevator's door is locked whenever the elevator is elsewhere, and the elevator's floor terminal sends each of its doors `ForceUnlockAndOpenElevator` as it arrives, which clears the lock. That action is refused only for a door that is sealed, unpowered or disabled | **0.13.1**: for an elevator's door (`IsLiftDoor`), locked means sealed. Lock closes it and seals it (`ActionToggleSeal`, and `SetIsSealed` if the game has not taken that after half a second); Unlock takes the seal off. The panel says "an elevator's door" |
+
+**Retest on 0.13.1** (step 12 alone):
+
+| # | Do | Expected |
+|---|---|---|
+| R1 | Pick the elevator door: the panel's state line | It ends "an elevator's door"; the button says **Lock** |
+| R2 | **Lock**. Edit off: call the elevator, wait for it | The door stays shut. The note says it is sealed |
+| R3 | **Unlock**, call the elevator again | It opens as before |
+| R4 | **Lock** again, then **Restore** on the Scene tab; call the elevator | It opens: the door is back as it was |
+| R5 | Lock V's door (not an elevator's) and try it as V | Locked as in step 5: nothing changed for other doors |
+
 ### S1 Sectors (0.13.0)
 
 Sector Tools' first stage ([World objects, "Sector Tools"](world-objects.md#sector-tools-s1-to-s3-edgebuilder-9), EDGEbuilder #9). Built on 2026-11-20; checked against REDbridge 0.15.0 outside the game and in REDnode's host (the sub-tabs, a grid-cell search, the drawer with V's sector's 853 entries and its filter). Run after the D2 steps, with the same deploy. Needs REDbridge 0.12.0 or later.
@@ -1047,6 +1063,12 @@ Sector Tools' first stage ([World objects, "Sector Tools"](world-objects.md#sect
 | Q2 | Are the streamed-in marks right (sectors and entries)? |
 | Q3 | Do pick, outline, fly to, hide and Remove from world work on a sector's entries, doors and meshes alike? |
 | Q4 | Does REDcode reach EDGEbuilder through the service? |
+
+**Step 11, 2026-11-23, 0.13.0: passed**, run by Claude through REDnode's MCP server against the owner's game (REDcode's sector view has no Show in Game yet). `select` answered `{ selected: true, streamed: true }`: the drawer open on `exterior_-22_19_1_0`, V's door in Picked in the world and outlined. `focus` answered `{ focused: true, streamed: true }`: Edit on, the camera at the door. `scenesEditing` named one scene with one removal there. Found: the drawer's list stayed at its top, the picked row #288 out of view. **0.13.1** scrolls to the picked row, and shows it even when it is past the first 300. 
+
+**Steps 1 to 10, 2026-11-23, 0.13.0 (the owner, in game), as the owner put it:** Q1 "I believe so" (and Q2, if the second answer was meant for it: to confirm). Q3: pick and outline mostly worked, and sometimes an entry was picked with no outline; which entries is to find out (an entry that draws nothing, such as an AI spot or a light channel volume, has nothing to outline, and the drawer does not say so). Q4 was not tried from REDcode, which has no way to do it yet: step 11 above stands in for it. **S1 is partly run: not passed until the outline finding is understood.**
+
+**Retest on 0.13.1:** `select` with entry 288, then with entry 700: each time the picked row is in view in the drawer.
 
 ### Project picker (0.13.0)
 

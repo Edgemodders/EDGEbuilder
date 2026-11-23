@@ -147,7 +147,7 @@ export interface WorldThing {
   /** Metres from V, for the list. */
   distance?: number;
   /** A door's state from its device: open, locked, sealed and how it starts. */
-  door?: { open?: boolean; locked?: boolean; sealed?: boolean; initial?: string; closesItself?: boolean };
+  door?: { open?: boolean; locked?: boolean; sealed?: boolean; initial?: string; closesItself?: boolean; lift?: boolean };
   /** The edit that removes it, when one does. */
   removedBy?: string;
   /** D2: the edit that keeps its state, when one does. */

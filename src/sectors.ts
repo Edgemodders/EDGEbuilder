@@ -139,11 +139,15 @@ export function nodeMatches(item: SectorItem, text: string): boolean {
 }
 
 /** The drawer's rows: the nodes matching the filter, in entry order, at most `limit`. */
-export function nodeRows(items: SectorItem[], text: string, limit: number): { rows: SectorNodeRow[]; matching: number } {
+export function nodeRows(items: SectorItem[], text: string, limit: number, keep?: number): { rows: SectorNodeRow[]; matching: number } {
   const hits = items.filter((i) => nodeMatches(i, text));
+  // The picked entry is shown even past the limit, so the drawer can scroll to it.
+  const shown = hits.slice(0, limit);
+  const kept = keep === undefined ? undefined : hits.find((i) => i.index === keep);
+  if (kept && !shown.includes(kept)) shown.push(kept);
   return {
     matching: hits.length,
-    rows: hits.slice(0, limit).map(
+    rows: shown.map(
       (i): SectorNodeRow => ({
         entry: i.index,
         node: i.node,

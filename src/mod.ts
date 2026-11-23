@@ -1343,12 +1343,15 @@ async function doorStateOf(entity: GameRef): Promise<WorldThing["door"]> {
     const ps = (await entity.GetDevicePS()) as GameRef | null;
     if (!ps) return undefined;
     const ask = (p: Promise<unknown>) => p.then((v) => (typeof v === "boolean" ? v : undefined)).catch(() => undefined);
-    const [open, locked, sealed] = await Promise.all([ask(ps.IsOpen()), ask(ps.IsLocked()), ask(ps.IsSealed())]);
+    const [open, lock, sealed, lift] = await Promise.all([ask(ps.IsOpen()), ask(ps.IsLocked()), ask(ps.IsSealed()), ask(ps.IsLiftDoor())]);
+    // An elevator's door is locked whenever its elevator is elsewhere, and the elevator unlocks it by force
+    // as it arrives (D2 step 12). Only a seal holds against that, so for such a door locked means sealed.
+    const locked = lift ? sealed : lock;
     // Older or other devices have no setup: the state alone.
     const setup = (await ps.$get("doorProperties").catch(() => null)) as { initialDoorState?: unknown; automaticallyClosesItself?: unknown } | null;
     const initial = typeof setup?.initialDoorState === "string" ? setup.initialDoorState : undefined;
     const closesItself = typeof setup?.automaticallyClosesItself === "boolean" ? setup.automaticallyClosesItself : undefined;
-    return { open, locked, sealed, initial, closesItself };
+    return { open, locked, sealed, initial, closesItself, ...(lift ? { lift } : {}) };
   } catch {
     return undefined;
   }
@@ -1768,13 +1771,34 @@ async function setClosesItself(entity: GameRef, value: boolean): Promise<boolean
 }
 
 /** Runs the door's own actions (as its terminals and quickhacks do) that bring it from `now` to `want`. */
-async function runDoorActions(entity: GameRef, now: DoorState, want: DoorState): Promise<number> {
+async function runDoorActions(entity: GameRef, now: DoorState & { lift?: boolean }, want: DoorState): Promise<number> {
   const acts = doorActions(now, want);
   if (!acts.length) return 0;
   const ps = (await entity.GetDevicePS()) as GameRef;
   const persistency = (await api.GameInstance.GetPersistencySystem(game.instance)) as GameRef;
-  for (const a of acts) await persistency.QueuePSDeviceEvent(await (ps[a] as () => Promise<unknown>)());
+  const run = async (a: string) => persistency.QueuePSDeviceEvent(await (ps[a] as () => Promise<unknown>)());
+  if (!now.lift || !acts.includes("ActionToggleLock")) {
+    for (const a of acts) await run(a);
+    return acts.length;
+  }
+  // An elevator's door: sealed or unsealed in place of locked. A sealed door refuses to open or close, so
+  // it is closed before the seal goes on, and opened only after the seal comes off.
+  const seal = want.locked === true;
+  if (seal && now.open) await run("ActionSetClosed");
+  await setSealed(ps, persistency, seal);
+  if (!seal && want.open === true && !now.open) await run("ActionSetOpened");
   return acts.length;
+}
+
+/** Seals or unseals a door: by its own action, and if the game has not taken that half a second later, on its state. */
+async function setSealed(ps: GameRef, persistency: GameRef, sealed: boolean): Promise<void> {
+  try {
+    await persistency.QueuePSDeviceEvent(await (ps.ActionToggleSeal as () => Promise<unknown>)());
+  } catch (err) {
+    console.log(`A door's seal action was refused (${(err as Error).message}): its state is set instead`);
+  }
+  await new Promise((r) => setTimeout(r, 500));
+  if ((await ps.IsSealed()) !== sealed) await ps.SetIsSealed(sealed);
 }
 
 /** Puts a door in the state its edit keeps. False when the door is not in the world, or has no state. */
@@ -1935,7 +1959,7 @@ async function doorAction(act: "open" | "close" | "lock" | "unlock"): Promise<vo
   for (const t of state.worldObjects.things) if (t.key === p.key) t.stateBy = e.id;
   say(
     done
-      ? `${p.label}: kept ${doorStateText(want)} while this scene is open in EDGEbuilder (the door's state is also in your save). Restore on the Scene tab, or Undo, puts it back as it was.`
+      ? `${p.label}: kept ${doorStateText(want)} while this scene is open in EDGEbuilder (the door's state is also in your save).${now.lift && want.locked ? " It is an elevator's door, so it is sealed: the elevator cannot open it." : ""} Restore on the Scene tab, or Undo, puts it back as it was.`
       : `${p.label}: kept ${doorStateText(want)} in the scene, but the game did not take it yet (the log says why); it is tried again when the door comes into the world.`,
     done ? "ok" : "warn",
   );
@@ -2056,7 +2080,7 @@ async function findSectors(m: Extract<PageMessage, { type: "sectors.find" }>): P
 async function showSectorRows(): Promise<void> {
   const view = state.sectors.open;
   if (!view || view.status !== "ready") return;
-  const { rows, matching } = nodeRows(sectorItems, view.filter, SectorNodesShown);
+  const { rows, matching } = nodeRows(sectorItems, view.filter, SectorNodesShown, view.selected);
   view.matching = matching;
   view.loaded = await sectorLoaded(view.hash);
   for (const r of rows) {
