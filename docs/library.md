@@ -147,6 +147,8 @@ A bird's-eye editor view of the whole world, wireframe: every sector's streaming
 
 ### The sector view
 
+> **2026-11-22:** REDcode has built it (REDcode 0.10.15 and 0.10.16: a sector in 3D with a flying camera, real materials, picking, box and volume selection, over the shared package `@edgemodders/world-view`, [EDGEbuilder #8](https://github.com/Edgemodders/EDGEbuilder/issues/8)). EDGEbuilder for VS Code reuses it to open a sector and adds its own content on top, so E2 below is no longer EDGEbuilder's to build. How the content gets on top is proposed below: [EDGEbuilder as a plugin of REDcode's sector view](#edgebuilder-as-a-plugin-of-redcodes-sector-view). The rest of this section is the plan as agreed on 2026-10-29.
+
 The sector drawn in 3D with a flying camera, from its nodes: meshes and instanced meshes at their transforms, entities as their meshes or as boxes, lights and other kinds as markers. Each unique mesh is exported once through REDbridge and cached, so the first visit to a sector is slow; a progress bar says how many meshes are left and about how long. Flat colours first, textures and EDGEmat's materials later; terrain and full entities later still.
 
 In it the modder can:
@@ -155,6 +157,42 @@ In it the modder can:
 - place Library assets: imported from Blender, made by EDGEfab or an AI service, with new appearances from EDGEmat;
 - pick the game's own nodes, which is easier here than in game: the sector file gives each node directly, where in game 2.5 keeps only a hash of a node's path. B3b's "add a copy to the scene" and B4b's edits get a second home here;
 - bake, open the scene in the running game (REDnode), and include a bake in a project.
+
+### EDGEbuilder as a plugin of REDcode's sector view
+
+Proposed 2026-11-22, from the owner's idea; **not agreed, and REDcode's to design.** Asked of REDcode the same day as [REDcode #35](https://github.com/Edgemodders/REDcode/issues/35). REDcode's sector view becomes the one place a modder looks at a sector outside the game, and other tools add their own features to it as plugins. EDGEbuilder is the first: its scenes drawn over the sector, edited there, and baked. REDcode is already opening the view up from its own side (its sector scripts draft, and MCP tools for sector editing), so a plugin contract fits what it is building.
+
+**One limit shapes it.** A VS Code webview runs only the scripts its own extension lets in. So EDGEbuilder cannot reach into REDcode's view: REDcode must offer the way in. Two depths:
+
+| Depth | How it works | For | Against |
+|---|---|---|---|
+| **Described** | A plugin lives in its own extension and describes what it adds, as data, through `REDcodeApi`: layers of things to draw, buttons, panel rows. REDcode's view draws them and sends events back | Small for REDcode to keep; no foreign code in its page; works the same for an assistant through MCP | A plugin can only do what the contract names |
+| **Page code** | A plugin also hands REDcode a script that the view loads, with access to the drawing package's page half | Anything is possible: a gizmo of the plugin's own, custom drawing | REDcode's page runs another tool's code; every change to the page can break a plugin |
+
+Recommended: **described first**, with the gizmo offered by the view itself. Page code only if a real need shows that data cannot meet.
+
+**What EDGEbuilder would need from the contract:**
+
+| Need | Shape that would work |
+|---|---|
+| Register | `sectorView.register({ id, name })` from EDGEbuilder's extension, giving a handle per open view; an event when a view opens, closes or changes sector |
+| Layers | Named layers of placements (id, mesh, appearance, place, tint), added, changed and removed in batches of thousands, drawn instanced; shown or hidden per layer. One layer per scene |
+| Things without a mesh | Markers and boxes: lights, decal boxes, colliders, quest places |
+| The game's own nodes | Ghost or hide a node by its entry, for a scene's world edits (a removed door). The view has ghosting already |
+| Picks and selection | Events for a pick and a selection change, saying whose thing it is (the sector's node or a plugin's); a plugin can set the selection. The view's box and volume selection take a plugin's things too |
+| Moving things | The view's own move, turn and scale handles on a plugin's things, reporting start, each step, end and cancel. The plugin owns the data |
+| Actions | Buttons in the view's bar and rows in the picked panel, for the sector's nodes too: "Add a copy to scene", "Remove in scene", "Open in game" |
+| A panel | A section in the view's side for the plugin: the scene tree, an object's numbers. As rows the view draws, or a frame the plugin fills |
+| More than one sector | A scene crosses sector borders. Open the sectors a box touches, not one file |
+
+**Open, for REDcode and the owner:**
+
+| Question | Why |
+|---|---|
+| Undo | The view's undo belongs to the sector document. A scene is another file, with EDGEbuilder's own history. One Ctrl+Z for both, or one each? |
+| What is being saved | A sector open from the game is read-only; the scene on top is not. The view must say which is unsaved |
+| Who else | EDGEquest's places, EDGEmat's materials and EDGEdir's sets could be plugins too. Their needs should shape the contract before it is fixed. The owner, 2026-11-22: the other tools are asked for their input when the time is right; not yet |
+| In the game | The drawing package's page half also runs in EDGEbuilder's Sector drawer (S2). Whether plugins mean anything there is not asked yet |
 
 ## What it needs from the other repos
 
