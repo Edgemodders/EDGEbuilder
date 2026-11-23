@@ -1112,3 +1112,12 @@ The club map's objects lie between x 2586 and 2638, y −1070 and −1011, z 110
 | 8 | Game closed: turn the club map off and all three maps on, deploy, start, and repeat steps 2 to 4 | As steps 2 to 4, with two more maps beside the club | G-2: one sector of 4,965 nodes with a streaming box of 454 × 361 × 352 m |
 
 Not in this test: Mod Organizer 2 (G-6) needs an MO2 install, so it goes to the team; the team's own meshes wait on their archives.
+
+**Results so far (2026-11-23, partly run; EDGEbuilder 0.14.0, REDnode 0.69.0):**
+
+- Steps 1 and 2 passed: the club map baked by the command line loads and draws in the game (floor, walls, trusses, chains, sofas, crates, lights, clutter, with shadows). G1's end is met.
+- The map hangs about 50 m above the desert (the ground under it is at z 62.4, the objects at z 110 to 124), and nothing in the sample is solid, so V falls through and dies. The look is done with the editor camera, not on foot; a pin (REDnode's `world.pin`) at the map's middle shows the way. Steps 3 to 5 as written (walking) do not apply.
+- The hall still draws from a few hundred metres away (one picture; no distance measured yet).
+- A copy with `solid` on every mesh was baked (15.8 s): of 3,286 meshes, 1,476 game meshes carry collision data and can be solid, 907 game meshes carry none, 903 are the team's own. Three of the four floor pieces and many wall pieces carry none, so the map cannot be walked without the team's collision boxes (B5-4).
+- Step 7 in part: that copy was swapped in with `archives.reload` while the hall was streamed in (89 ms, no crash). Whether the game then uses the new sector is not known: the owner's drops on the floor and on a bench went through, and both are mostly pieces with no collision data (six of the seven benches). A check on a piece that is solid in the new copy (a `diner_sofa_01_e`, a cargo crate) is still to do; the owner asked the session on `main` for a tool that says whether what is under the crosshair is solid.
+- Steps 3 and 4 from the camera (hitch, frame rate, pop-in), step 6 and step 8 are still to run.
