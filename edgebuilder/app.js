@@ -2916,9 +2916,11 @@ async function startSpin(path) {
   const stop = await previews.spin(parts, canvas);
   if (spinning?.path !== path) return stop();
   pic.appendChild(canvas);
+  pic.classList.add("spinning");
   spinning.stop = () => {
     stop();
     canvas.remove();
+    pic.classList.remove("spinning");
   };
 }
 function stopSpin() {

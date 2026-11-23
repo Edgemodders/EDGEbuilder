@@ -1904,10 +1904,13 @@ async function startSpin(path: string): Promise<void> {
   canvas.width = canvas.height = 256;
   const stop = await previews.spin(parts, canvas);
   if (spinning?.path !== path) return stop();
+  // The turning model's canvas is see-through: the still picture under it hides while it turns.
   pic.appendChild(canvas);
+  pic.classList.add("spinning");
   spinning.stop = () => {
     stop();
     canvas.remove();
+    pic.classList.remove("spinning");
   };
 }
 

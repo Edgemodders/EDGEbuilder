@@ -59,6 +59,7 @@
   .tile:hover { border-color: var(--rn-accent, #fcee0a); }
   .tile .pic { position: relative; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-family: var(--rn-mono, monospace); font-size: 10px; color: var(--rn-dim, #999); text-align: center; padding: 4px; box-sizing: border-box; }
   .tile .pic img, .tile .pic canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .tile .pic.spinning img { visibility: hidden; }
   .tile .name { font-family: var(--rn-mono, monospace); font-size: 10px; color: var(--rn-fg, #eee); padding: 2px 4px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* The small icon buttons beside a heading: the Library's out-of-the-window switch, the results' Previews. */
   .icon { background: none; border: 1px solid transparent; color: var(--rn-dim, #999); cursor: pointer; padding: 3px; line-height: 0; }
