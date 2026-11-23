@@ -31,6 +31,12 @@ nav:
     url: /library.html
   - title: Inspector
     url: /world-inspector.html
+  - title: Requests
+    url: /requests.html
+  - title: Generated scenes
+    url: /generated-scenes.html
+  - title: Detail
+    url: /detail.html
   - title: Scene format
     url: /scene.html
   - title: Tests
