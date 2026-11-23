@@ -54,8 +54,43 @@ A scene is the contract between EDGEbuilder's two halves and the input to REDbri
 | `objects[].bounds` | The resource's local bounding box, from the asset index, so the bake need not read the game. Read from the game when missing |
 | `objects[].group` | The group the object belongs to |
 | `objects[].props` | The kind's own fields. Lights: `type` (`point`, `spot`, `area`), `color` [r, g, b] 0 to 255, `intensity`, `radius`, `innerAngle`, `outerAngle`, `ev`, `temperature` |
+| `generator` | Optional, for a scene a program wrote: `{ "name", "version", "build" }`, only `name` required. EDGEbuilder keeps it when it saves and never reads it |
+| `objects[].meta` | Optional, the writer's own: any JSON (a room id, a rule name). Kept untouched by a save, copied to a duplicate, never read and never baked |
 
 Positions are the game's world coordinates in metres: X east, Y north, Z up. A rotation of [0, 0, 0, 1] is no rotation.
+
+## The schema, and the rule for change
+
+Each format has a JSON Schema, written from the code that checks scenes, so the two cannot differ:
+
+| Format | Schema |
+|---|---|
+| 1 | [schema/scene-1.schema.json](schema/scene-1.schema.json) |
+| 2 | [schema/scene-2.schema.json](schema/scene-2.schema.json) |
+| 3 (a draft) | [schema/scene-3.schema.json](schema/scene-3.schema.json) |
+
+The schemas allow fields they do not name, since a later EDGEbuilder may add optional ones. The [command line](generated-scenes.md#the-command-line-g1)'s `check` warns about a field this EDGEbuilder does not read, which catches a misspelt name.
+
+| Change | What happens |
+|---|---|
+| A new optional field that an older reader can ignore safely | Same format number. Listed in the format changelog below with the EDGEbuilder version that first reads it |
+| A new kind, a new list, or a field an older reader must not ignore | A new format number. EDGEbuilder writes the new number only for a scene that uses the new thing |
+| An older format | Every later EDGEbuilder reads it and bakes it the same. Promised for formats 1 and 2, which are pinned; format 3 joins when it is pinned |
+| Removing or renaming a field | Never within a format |
+
+The same rule binds the names of the tools EDGEbuilder's service offers (`scenes`, `refs`, `select`, `focus`, `scenesEditing`) and the command line's report: a name or a field is not removed or renamed without the new one beside it for at least one release, and the [changelog](changelog.md) says so under **Changed**.
+
+## Format changelog
+
+| Date | Format | Change | EDGEbuilder | REDbridge that bakes it |
+|---|---|---|---|---|
+| 2026-10-13 | 1 | Pinned: `mesh`, `entity`, `light` | 0.1.0 | 0.6.0 |
+| 2026-11-08 | 1 | `objects[].solid` | 0.8.0 | 0.12.0 |
+| 2026-11-08 | 1 | `streaming` also sets a mesh's own hide distance (Seen from) | 0.8.1 | 0.12.1 |
+| 2026-11-12 | 2 | Pinned: the `npc` kind with `record` or `resource` | 0.10.9 | Never baked |
+| 2026-11-19 | 3 (draft) | `worldEdits` with `remove` | 0.12.0 | 0.16.0 |
+| 2026-11-23 | 3 (draft) | `worldEdits` with `door` | 0.13.0 | Never baked |
+| Not released | 1, 2, 3 | `generator` and `objects[].meta`, kept and never baked | After 0.13.2 | Any |
 
 ## What the bake makes of it
 

@@ -804,6 +804,146 @@ assert.deepEqual(yawToQuaternion(0), [0, 0, 0, 1]);
   console.log("mods and project: ok");
 }
 
+// G1: the schemas, the checks on a scene a program wrote, and the command line without REDbridge.
+{
+  const { checkFiles, checkSceneData, findOverlaps, groupBridgeWarnings, overlapFindings, sceneSchema, validate } = core;
+  const { spawnSync } = await import("node:child_process");
+  for (const format of [1, 2, 3]) {
+    const published = fs.readFileSync(path.join(here, "..", "docs", "schema", `scene-${format}.schema.json`), "utf8");
+    assert.equal(published, JSON.stringify(sceneSchema(format), null, 2) + "\n", `docs/schema/scene-${format}.schema.json is what the code checks against`);
+  }
+  const t = { position: [1, 2, 3], rotation: [0, 0, 0, 1], scale: [1, 1, 1] };
+  const crate = { id: "crate_a", kind: "mesh", resource: "base\\c.mesh", transform: t, meta: { room: 7 } };
+  const good = { format: 1, name: "Gen", generator: { name: "arena-gen", version: "27", build: 1193 }, groups: [{ id: "g", name: "G", parent: null }], objects: [{ ...crate, group: "g" }, { id: "lamp", kind: "light", transform: t, props: { type: "point" } }] };
+  assert.deepEqual(validate(sceneSchema(1), good), []);
+  assert.deepEqual(checkSceneData(good), { errors: [], warnings: [], dropped: [] });
+  const bad = (change) => checkSceneData(change(JSON.parse(JSON.stringify(good))));
+  const codes = (c) => c.errors.map((e) => e.code);
+  assert.deepEqual(codes(bad((s) => ((s.format = 4), s))), ["schema"], "an unknown format");
+  assert.deepEqual(codes(bad((s) => (delete s.objects[0].resource, s))), ["schema"], "a mesh needs a resource");
+  assert.match(bad((s) => ((s.objects[0].transform.rotation = [0, 0, 1]), s)).errors[0].text, /transform\.rotation has 3 numbers, not 4/);
+  assert.deepEqual(bad((s) => ((s.objects[0].transform.rotation = [0, 0, 1]), s)).errors[0].ids, ["crate_a"], "a schema error names the object by its id");
+  assert.deepEqual(codes(bad((s) => ((s.objects[0].id = "has space"), s))), ["schema"], "an id's characters");
+  assert.deepEqual(codes(bad((s) => ((s.objects[0].kind = "npc"), s))), ["schema"], "format 1 has no people");
+  assert.deepEqual(codes(bad((s) => (s.objects.push({ ...crate }), s))), ["duplicate-id"]);
+  assert.deepEqual(codes(bad((s) => (s.objects.push({ ...crate, id: "other", ref: "edgebuilder/gen/crate_a" }), s))), ["duplicate-ref"]);
+  assert.deepEqual(codes(bad((s) => ((s.objects = []), s))), ["nothing-to-bake"]);
+  const many = bad((s) => {
+    for (let i = 0; i < 500; i++) s.objects.push({ id: `x${i}`, kind: "mesh", transform: t });
+    return s;
+  });
+  assert.equal(many.errors.length, 1, "the same fault on many objects is one finding");
+  assert.equal(many.errors[0].ids.length, 200, "up to the validator's limit");
+  const warned = bad((s) => ((s.extra = 1), (s.objects[0].apperance = "x"), (s.objects[0].group = "nope"), (s.objects[1].solid = true), (s.objects[0].transform.rotation = [0, 0, 1, 1]), s));
+  assert.deepEqual(warned.errors, []);
+  assert.deepEqual(warned.warnings.map((w) => w.code).sort(), ["rotation-length", "solid-not-mesh", "unknown-field", "unknown-field", "unknown-group"]);
+  const people = checkSceneData({ format: 2, name: "P", objects: [crate, { id: "p", kind: "npc", record: "Character.X", transform: t }] });
+  assert.deepEqual(people.errors, []);
+  assert.deepEqual(people.dropped.map((d) => d.id), ["p"], "a person is left out of a bake, and the report says so");
+  assert.deepEqual(codes(checkSceneData({ format: 2, name: "P", objects: [{ id: "p", kind: "npc", record: "Character.X", resource: "a.ent", transform: t }] })), ["schema"], "a person has a record or a resource, not both");
+  const edit = { id: "r", action: "remove", what: "door", label: "Door", node: { sector: "base\\s.streamingsector", sectorHash: "0x1", entry: 3, node: 2, type: "worldEntityNode" }, fingerprint: { position: [0, 0, 0] } };
+  const withEdits = checkSceneData({ format: 3, name: "E", objects: [], worldEdits: [edit, { ...edit, id: "d", action: "door", door: { open: true } }, { ...edit, id: "u", node: { ...edit.node, sector: "" } }] });
+  assert.deepEqual(withEdits.errors, [], "removals alone are something to bake");
+  assert.deepEqual(withEdits.dropped.map((d) => d.kind), ["door state", "removal"]);
+  assert.deepEqual(codes(checkSceneData({ format: 3, name: "E", objects: [], worldEdits: [{ ...edit, action: "door" }] })), ["schema"], "a door edit needs its state");
+
+  // The files, as REDbridge answers for them.
+  const info = (over) => ({ path: "", type: "mesh", bounds: { min: [-1, -1, 0], max: [1, 1, 2] }, appearances: ["default", "red"], hasCollision: true, error: null, ...over });
+  const objs = [
+    { ...crate, id: "ok", appearance: "red" },
+    { ...crate, id: "look", appearance: "blue" },
+    { ...crate, id: "soft", resource: "base/soft.mesh", solid: true },
+    { ...crate, id: "theirs", resource: "mod\\a.mesh", bounds: { min: [0, 0, 0], max: [1, 1, 1] } },
+    { ...crate, id: "theirs2", resource: "mod\\a.mesh", bounds: { min: [0, 0, 0], max: [1, 1, 1] } },
+    { ...crate, id: "lost", resource: "mod\\b.mesh" },
+  ];
+  const infos = new Map([["base\\c.mesh", info({})], ["base\\soft.mesh", info({ hasCollision: false })], ["mod\\a.mesh", info({ error: "not in the loaded archives" })], ["mod\\b.mesh", info({ error: "not in the loaded archives" })]]);
+  const files = checkFiles(objs, infos, "the game's archives");
+  assert.deepEqual(files.errors.map((e) => [e.code, e.ids, e.files]), [["file-missing", ["lost"], ["mod\\b.mesh"]]]);
+  assert.deepEqual(files.warnings.map((w) => [w.code, w.ids]), [["appearance", ["look"]], ["no-collision", ["soft"]], ["file-not-here", ["theirs", "theirs2"]]]);
+  assert.deepEqual(files.warnings[2].files, ["mod\\a.mesh"], "a file is named once however many objects use it");
+  assert.deepEqual(files.needs, ["mod\\a.mesh", "mod\\b.mesh"]);
+  assert.deepEqual([...files.noCollision], ["base\\soft.mesh"]);
+
+  // Overlaps: the same box counts, a prop inside a room's box does not.
+  const at = (id, x, bounds, more = {}) => ({ id, kind: "mesh", resource: "base\\c.mesh", transform: { ...t, position: [x, 0, 0] }, bounds, ...more });
+  const unit = { min: [0, 0, 0], max: [1, 1, 1] };
+  const room = { min: [-10, -10, 0], max: [10, 10, 5] };
+  const set = [at("a", 0, unit), at("twin", 0, unit), at("near", 0.005, unit, { resource: "base\\d.mesh" }), at("far", 5, unit), at("room", 0, room), at("lamp", 0, undefined, { kind: "light" })];
+  const pairs = findOverlaps(set, (o) => o.bounds, 0.98);
+  assert.deepEqual(pairs.map((p) => [p.a, p.b].sort().join("+")).sort(), ["a+near", "a+twin", "near+twin"]);
+  const found = overlapFindings(pairs, set, 0.98);
+  assert.deepEqual(found.map((f) => [f.code, f.ids.length]), [["same-place", 1], ["overlap", 2]]);
+  assert.equal(findOverlaps(set, (o) => o.bounds, 0.5).length, 3, "a looser share finds no more here");
+
+  // REDbridge's warnings, grouped.
+  const grouped = groupBridgeWarnings([
+    "object 4 (crate_a): 'mod/a.mesh' is not in the game's archives; the scene's bounds are used, and the game needs the mod that has it",
+    "object 9 (crate_b): 'mod/a.mesh' is not in the game's archives; the scene's bounds are used, and the game needs the mod that has it",
+    "base/ladder.ent: no bounds in the file; a 1 m box is used",
+    "No game loaded: resources were not checked",
+  ]);
+  assert.deepEqual(grouped.map((g) => [g.file, g.ids]), [["mod/a.mesh", ["crate_a", "crate_b"]], ["base/ladder.ent", undefined], [undefined, undefined]]);
+  assert.equal(grouped[1].text, "No bounds in the file; a 1 m box is used");
+
+  // The writer's fields: kept by a save, copied to a duplicate, never baked.
+  const file = path.join(tmp, "gen", "gen.scene.json");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(good));
+  const s = new Scene(file);
+  assert.equal(s.load(), true);
+  s.objects[0].transform.position = [4, 5, 6];
+  s.save();
+  const saved = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.deepEqual(saved.generator, good.generator, "the generator is kept by a save");
+  assert.deepEqual(saved.objects[0].meta, { room: 7 }, "an object's meta is kept by a save");
+  assert.deepEqual(validate(sceneSchema(1), saved), [], "what EDGEbuilder saves is valid");
+  assert.deepEqual(duplicate(["crate_a"], s.objects, s.groups).objects[0].meta, { room: 7 }, "a duplicate has its meta");
+  assert.equal(bakeInput("Gen", undefined, [], s.objects).scene.objects[0].meta, undefined, "meta is never baked");
+  const fresh = new Scene(path.join(tmp, "gen", "other.scene.json"));
+  fresh.take({ format: 1, name: "Other", groups: [], objects: [] });
+  assert.equal(fresh.data().generator, undefined, "a hand-made scene has no generator");
+
+  // The command line, as far as it goes without REDbridge.
+  const cli = path.join(here, "..", "edgebuilder", "cli.mjs");
+  const run = (...args) => spawnSync(process.execPath, [cli, ...args], { encoding: "utf8" });
+  assert.equal(run().status, 2, "no command");
+  assert.equal(run("bake", file).status, 2, "a bake needs --out or --project");
+  assert.equal(run("check", file, "--pack").status, 2);
+  assert.equal(run("check", file, "--archive", "a", "--archive", "b").status, 2);
+  const off = run("check", file, "--offline", "--json");
+  assert.equal(off.status, 0, off.stdout + off.stderr);
+  const report = JSON.parse(off.stdout);
+  assert.equal(report.ok, true);
+  assert.deepEqual([report.scene.name, report.scene.slug, report.scene.format, report.counts.mesh, report.counts.light, report.checked], ["Gen", "gen", 1, 1, 1, "file"]);
+  assert.equal(report.scene.hash, bakeHash(saved.objects), "the report's hash is the bake's");
+  const broken = path.join(tmp, "gen", "broken.scene.json");
+  fs.writeFileSync(broken, JSON.stringify({ ...good, objects: [{ id: "x", kind: "mesh", transform: t }] }));
+  const no = run("check", broken, "--offline", "--json");
+  assert.equal(no.status, 1);
+  assert.equal(JSON.parse(no.stdout).errors[0].code, "schema");
+  assert.equal(run("check", path.join(tmp, "gen", "none.scene.json"), "--offline").status, 1, "no such file");
+  console.log("generated scenes (G1): ok");
+}
+
+// Every scene file the tests above wrote is valid by the published schema of its format.
+{
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith(".scene.json") ? [path.join(dir, e.name)] : []));
+  let n = 0;
+  for (const f of walk(tmp)) {
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(f, "utf8"));
+    } catch {
+      continue; // the tests write a damaged file on purpose
+    }
+    if (![1, 2, 3].includes(data?.format) || !Array.isArray(data.objects) || f.endsWith("broken.scene.json")) continue;
+    assert.deepEqual(core.validate(core.sceneSchema(data.format), data), [], `${f} is valid`);
+    n++;
+  }
+  console.log(`schemas: ok (${n} scene files the tests wrote)`);
+}
+
 // The bridge and the index, against the real thing when it is here.
 const exe = process.env.EDGEBUILDER_BRIDGE || findBridge() || [path.join(here, "..", "..", "REDbridge", "dist", "publish", "REDbridge.exe"), path.join(here, "..", "..", "REDbridge", "src", "REDbridge", "bin", "Release", "net10.0", "REDbridge.exe")].find((p) => fs.existsSync(p));
 const game = [process.env.EDGEBUILDER_GAME, "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Cyberpunk 2077"].find(isGameFolder);
@@ -913,6 +1053,46 @@ if (!exe || !game) {
   assert.ok(bad.error);
   console.log(`search: ok (${crates.length} cargo crate meshes; first ${crates[0].path}, ${info1.appearances.length} appearances)`);
   bridge.stop();
+
+  // G1: the command line through REDbridge: check, a dry run, a bake into a plain folder, packed.
+  {
+    const { spawnSync } = await import("node:child_process");
+    const cli = path.join(here, "..", "edgebuilder", "cli.mjs");
+    const run = (...args) => spawnSync(process.execPath, [cli, ...args, "--json", "--bridge", exe, "--game", game], { encoding: "utf8" });
+    const t = (x) => ({ position: [x, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
+    const file = path.join(tmp, "cli", "cli_yard.scene.json");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const sceneOf = (objects) => fs.writeFileSync(file, JSON.stringify({ format: 1, name: "CLI Yard", generator: { name: "smoke" }, groups: [], objects }));
+    sceneOf([
+      { id: "a", kind: "mesh", resource: crates[0].path, transform: t(0), meta: { n: 1 } },
+      { id: "b", kind: "mesh", resource: crates[0].path, appearance: "no_such_look", transform: t(5) },
+      { id: "theirs", kind: "mesh", resource: "smoke_mod\\not_here.mesh", transform: t(10), bounds: { min: [0, 0, 0], max: [1, 1, 1] } },
+      { id: "lost", kind: "mesh", resource: "smoke_mod\\lost.mesh", transform: t(15) },
+    ]);
+    const refused = run("check", file);
+    assert.equal(refused.status, 1, refused.stdout + refused.stderr);
+    assert.deepEqual(JSON.parse(refused.stdout).errors.map((e) => [e.code, e.ids]), [["file-missing", ["lost"]]]);
+    sceneOf(JSON.parse(fs.readFileSync(file, "utf8")).objects.filter((o) => o.id !== "lost"));
+    const checked = JSON.parse(run("check", file).stdout);
+    assert.equal(checked.ok, true, JSON.stringify(checked.errors));
+    assert.deepEqual(checked.warnings.map((w) => w.code).sort(), ["appearance", "file-not-here"]);
+    assert.deepEqual(checked.needs, ["smoke_mod\\not_here.mesh"]);
+    const out = path.join(tmp, "cli", "out");
+    const dry = JSON.parse(run("bake", file, "--out", out, "--dry-run").stdout);
+    assert.equal(dry.ok && dry.dryRun, true);
+    assert.equal(dry.written.length, 4);
+    assert.equal(fs.existsSync(out), false, "a dry run writes nothing");
+    const baked = run("bake", file, "--out", out, "--pack");
+    assert.equal(baked.status, 0, baked.stdout + baked.stderr);
+    const done = JSON.parse(baked.stdout);
+    assert.equal(done.nodes, 3);
+    for (const f of done.written) assert.ok(fs.existsSync(f), `${f} was written`);
+    assert.deepEqual(done.written.slice(0, 4).map((f) => path.relative(out, f).replace(/\\/g, "/")), dry.written.map((f) => path.relative(out, f).replace(/\\/g, "/")), "a dry run names what a bake writes");
+    assert.deepEqual(fs.readdirSync(path.join(out, "packed", "archive", "pc", "mod")).sort(), ["cli_yard.archive", "cli_yard.archive.xl"]);
+    assert.equal(done.warnings.filter((w) => w.code === "redbridge" && /bounds are used/.test(w.text)).length, 0, "REDbridge does not repeat what the check said");
+    assert.equal(bakesIn({ name: "out", dir: out, archive: path.join(out, "source", "archive"), raw: path.join(out, "source", "raw"), resources: path.join(out, "source", "resources") })[0].hash, done.scene.hash, "the bake's record is the Bake tab's");
+    console.log(`command line through REDbridge: ok (3 objects baked and packed in ${done.ms.total} ms)`);
+  }
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

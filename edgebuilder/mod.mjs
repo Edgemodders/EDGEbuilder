@@ -984,7 +984,8 @@ function bakeInput(name, game2, groups, objects) {
       name,
       ...game2 ? { game: game2 } : {},
       groups,
-      objects: kept.map(({ entityId: _entityId, ...o }) => o)
+      // A writer's own `meta` (G1) is never baked.
+      objects: kept.map(({ entityId: _entityId, meta: _meta, ...o }) => o)
     },
     skipped: objects.filter((o) => !Bakeable.has(o.kind)).map((o) => ({ id: o.id, kind: o.kind }))
   };
@@ -1403,6 +1404,8 @@ var Scene = class {
   name = "Working scene";
   /** The game version the file says it was made against; kept, not set (B3-2). */
   game;
+  /** The program that wrote the file, when one did (G1); kept, not set. */
+  generator;
   objects = [];
   groups = [];
   /** D1: the game's own objects this scene removes. */
@@ -1438,6 +1441,7 @@ var Scene = class {
     this.file = file;
     this.name = data.name || path7.basename(file).replace(/\.scene\.json$/i, "");
     this.game = typeof data.game === "string" ? data.game : void 0;
+    this.generator = data.generator && typeof data.generator === "object" ? JSON.parse(JSON.stringify(data.generator)) : void 0;
     this.objects = data.objects.map((o) => ({ ...o }));
     this.groups = Array.isArray(data.groups) ? data.groups.map((g) => ({ id: g.id, name: g.name, parent: g.parent ?? null })) : [];
     for (const o of this.objects) if (o.group && !this.groups.some((g) => g.id === o.group)) delete o.group;
@@ -1449,6 +1453,7 @@ var Scene = class {
       format: this.worldEdits.length ? 3 : this.objects.some((o) => o.kind === "npc") ? 2 : 1,
       name: this.name,
       ...this.game ? { game: this.game } : {},
+      ...this.generator ? { generator: this.generator } : {},
       groups: this.groups,
       objects: this.objects.map(({ entityId: _live, ...rest }) => rest),
       ...this.worldEdits.length ? { worldEdits: this.worldEdits } : {}

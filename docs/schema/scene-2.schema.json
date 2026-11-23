@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://edgemodders.github.io/EDGEbuilder/schema/scene-2.schema.json",
+  "title": "EDGEbuilder scene, format 2",
+  "description": "A scene file as EDGEbuilder reads, writes and bakes it. Fields the schema does not name are allowed: a later EDGEbuilder may add optional ones within a format. https://edgemodders.github.io/EDGEbuilder/scene.html",
+  "type": "object",
+  "required": [
+    "format",
+    "name",
+    "objects"
+  ],
+  "properties": {
+    "format": {
+      "const": 2
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "game": {
+      "type": "string",
+      "description": "The game version the scene was made against, for information."
+    },
+    "generator": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "build": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "description": "The program that wrote the file. Kept by EDGEbuilder when it saves."
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/object"
+      }
+    }
+  },
+  "$defs": {
+    "object": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "transform"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "Unique in the scene. The writer's own: EDGEbuilder never renames it."
+        },
+        "kind": {
+          "enum": [
+            "mesh",
+            "entity",
+            "light",
+            "npc"
+          ]
+        },
+        "resource": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The game path of the mesh or entity template. Forward or backward slashes."
+        },
+        "record": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A person's TweakDB record, Character.*"
+        },
+        "appearance": {
+          "type": "string"
+        },
+        "solid": {
+          "type": "boolean",
+          "description": "A mesh that stops V, bullets and cars once baked. Absent means not solid."
+        },
+        "transform": {
+          "type": "object",
+          "required": [
+            "position",
+            "rotation",
+            "scale"
+          ],
+          "properties": {
+            "position": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3,
+              "description": "x, y, z in metres, world space: X east, Y north, Z up"
+            },
+            "rotation": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 4,
+              "maxItems": 4,
+              "description": "A quaternion x, y, z, w"
+            },
+            "scale": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3,
+              "description": "x, y, z"
+            }
+          }
+        },
+        "streaming": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "secondary": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "description": "How far off the baked object is seen, in metres. The game hides it beyond either distance."
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The node reference, unique in the scene. edgebuilder/<scene>/<id> when missing."
+        },
+        "bounds": {
+          "type": "object",
+          "required": [
+            "min",
+            "max"
+          ],
+          "properties": {
+            "min": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3,
+              "description": "The file's local box, lowest corner"
+            },
+            "max": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3,
+              "description": "The file's local box, highest corner"
+            }
+          },
+          "description": "The resource's local bounding box. With it, a bake does not need the file on the PC that bakes."
+        },
+        "group": {
+          "type": "string"
+        },
+        "props": {
+          "type": "object",
+          "description": "The kind's own fields."
+        },
+        "meta": {
+          "description": "The writer's own. Kept untouched, copied to a duplicate, never read, never baked."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "mesh",
+                  "entity"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "resource"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "npc"
+              }
+            }
+          },
+          "then": {
+            "oneOf": [
+              {
+                "required": [
+                  "record"
+                ]
+              },
+              {
+                "required": [
+                  "resource"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

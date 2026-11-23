@@ -10,6 +10,12 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**New**
+
+- A command line that checks and bakes a scene file with the game closed: `node edgebuilder/cli.mjs check <scene>` and `bake <scene> --out <folder>` or `--project <path>`, with `--pack`, `--dry-run` and a `--json` report of what was left out, what is wrong and what was written. For scenes a program writes: https://edgemodders.github.io/EDGEbuilder/generated-scenes.html
+- A JSON Schema for each scene format, a rule for how the format may change, and a format changelog: https://edgemodders.github.io/EDGEbuilder/scene.html
+- A scene file can say which program wrote it (`generator`) and carry the writer's own data on each object (`meta`). EDGEbuilder keeps both when it saves, copies `meta` to a duplicate, and never bakes them.
+
 ## 0.13.2 (2026-11-23)
 
 <!-- nexus
