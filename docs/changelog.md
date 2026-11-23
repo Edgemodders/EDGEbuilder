@@ -10,6 +10,19 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+## 0.13.2 (2026-11-23)
+
+<!-- nexus
+New: Open, Close, Lock and Unlock a picked door; the scene keeps it that way after a load or a fast travel
+New: A door kept open no longer closes by itself; Lock on an elevator's door seals it against the elevator
+New: World > Sectors finds the game's streaming sectors near V, the camera, or by name or grid cell
+New: A Sector drawer lists a sector's entries: pick one, fly to it, hide it, or remove it from the world
+New: With several REDcode projects open, pick which one the Bake tab and Import use
+Changed: The World tab has two sub-tabs, Nearby and Sectors; Look again is now Scan Doors
+Changed: The Bake tab's list of bakes is titled with the project's name
+Other: A bake leaves door states out, since the game's files cannot set them
+-->
+
 **New**
 
 - Open, Close, Lock and Unlock a picked door on the World tab. The scene keeps the door that way while it is open in EDGEbuilder: after a save loads, after a fast travel, and each time the door comes back into the world. Restore and Undo put the door back as it was.
