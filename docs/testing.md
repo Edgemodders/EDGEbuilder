@@ -1072,7 +1072,7 @@ Sector Tools' first stage ([World objects, "Sector Tools"](world-objects.md#sect
 
 **Retest on 0.13.1, 2026-11-23** (Claude, through the service, with pictures of the window): `select` with entry 288: **passed**, row #288 is picked and in the middle of the drawer. `select` with entry 700 (past the 300 rows shown): **failed**: the entry is in Picked in the world, but the drawer keeps its old rows, with none picked. Cause: the rows were not made again for a pick. **0.13.2** makes them again when the picked entry is not among them; built, not deployed, not tested in game.
 
-**S1 passed in game on 2026-11-23 (the owner: steps 1 to 11 all pass, on 0.13.0 and 0.13.1).** Left for 0.13.2's check: `select` with entry 700 shows its row picked. The late outline on the wine glasses was seen once and not again.
+**S1 passed in game on 2026-11-23 (the owner: steps 1 to 11 all pass, on 0.13.0 and 0.13.1).** **0.13.2's check passed on 2026-11-23** (Claude, through the service, with a picture of the window): `select` with entry 700 shows row #700 picked and in view, after #299, and the drawer says "the first 301 shown". The late outline on the wine glasses was seen once and not again.
 
 ### Project picker (0.13.0)
 
@@ -1086,4 +1086,4 @@ REDcode #32 (REDcode 0.10.15: `projects()` and `projects-changed`), asked for by
 | 4 | Pick one project by name; then click the other VS Code window | It stays the picked one; Browse's Project source and Import use it too |
 | 5 | Close the picked project's window | Back to following REDcode; with one project left the row goes |
 
-**All five steps passed in game on 2026-11-23 on 0.13.1 (the owner).** One change asked for: the Bake tab's panel "Bakes in this project" should name the project. **0.13.2** titles it "Bakes for <project>" (built, not deployed; to look at in the next round).
+**All five steps passed in game on 2026-11-23 on 0.13.1 (the owner).** One change asked for: the Bake tab's panel "Bakes in this project" should name the project. **0.13.2** titles it "Bakes for <project>": **seen in game by the owner on 2026-11-23**.
