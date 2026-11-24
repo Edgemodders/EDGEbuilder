@@ -325,8 +325,8 @@ export class Viewport {
     this.probed = undefined;
     this.placeSeen = false;
     this.probeAt = { x: NaN, y: NaN, t: 0 };
-    // The system cursor goes: the viewport draws a white crosshair in its place, and the box where the object lands.
-    this.canvas.style.cursor = "none";
+    // REDnode's plugin draws the cursor in the game and a page cannot hide it, so the cursor stays the pointer;
+    // the viewport draws only the outline where the object lands.
     this.kick();
   }
 
@@ -378,11 +378,10 @@ export class Viewport {
     this.hooks.hoverWorld(own ? null : { o: ray.o, d: ray.d });
   }
 
-  /** Drop at click's look: the object's box where a click would put it (white on a surface, amber 8 m along the line when nothing is there), and a white crosshair for the cursor. */
+  /** Drop at click's look: the object's box where a click would put it (white on a surface, amber 8 m along the line when nothing is there). The cursor is REDnode's own. */
   private drawPlacing(): void {
     // Not until the mouse has moved over the world: the place known before is where it was, not where it is.
     if (!this.placeSeen) return;
-    const ctx = this.ctx;
     const p = this.probed;
     if (p && this.cam && this.probeSeq - p.seq < 30) {
       const colour = p.hit ? "rgba(255,255,255,0.9)" : "rgba(255,204,77,0.9)";
@@ -395,31 +394,6 @@ export class Viewport {
         this.drawBox(o, colour, 1.5);
       }
     }
-    if (!this.overView) return;
-    const [x, y] = this.mouse;
-    const arm = 11;
-    const gap = 3;
-    const cross = () => {
-      ctx.beginPath();
-      ctx.moveTo(x - arm, y);
-      ctx.lineTo(x - gap, y);
-      ctx.moveTo(x + gap, y);
-      ctx.lineTo(x + arm, y);
-      ctx.moveTo(x, y - arm);
-      ctx.lineTo(x, y - gap);
-      ctx.moveTo(x, y + gap);
-      ctx.lineTo(x, y + arm);
-      ctx.stroke();
-    };
-    // A dark edge under the white, so it shows on a bright sky as on a dark floor.
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "rgba(0,0,0,0.7)";
-    ctx.lineWidth = 4;
-    cross();
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    cross();
-    ctx.lineCap = "butt";
   }
 
   setScene(objects: SceneObject[], selected: string[]): void {
@@ -618,8 +592,6 @@ export class Viewport {
     const at = this.gizmoAt();
     if (!cameraOk || !cam) {
       if (this.edit) this.label(`No camera yet: ${this.cameraError || "load a save"}`);
-      // The crosshair stands in for the hidden cursor even before the camera is known.
-      if (this.placing) this.drawPlacing();
       return;
     }
     for (const o of chosen) if (o.entityId) this.drawBox(o);
@@ -1120,7 +1092,7 @@ export class Viewport {
     if (e.button === 2) {
       if (this.drag) this.cancel();
       else if (this.placing && this.camEntity) {
-        // A tap cancels on release; a hold looks around (the outline follows the crosshair as the camera turns).
+        // A tap cancels on release; a hold looks around (the outline follows what is under the cursor as the camera turns).
         this.rightTap = { at: performance.now(), moved: 0 };
         this.rmb = true;
         this.canvas.setPointerCapture(e.pointerId);

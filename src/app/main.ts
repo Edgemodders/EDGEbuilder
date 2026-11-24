@@ -454,7 +454,7 @@ $("dropClick").addEventListener("click", () => {
 });
 
 /**
- * Drop at click: Edit goes on, the cursor becomes a white crosshair and the object's outline shows where a
+ * Drop at click: Edit goes on and the object's outline shows where a
  * click would put it (its own edges once the page has its model, its box until then); the next left click drops it there.
  */
 function startDropAtClick(path: string, looks: string | undefined, label?: string, like?: DropLike): void {
@@ -2370,7 +2370,7 @@ function renderWorldPreview(s: Snapshot): void {
   $("exAppLabel").hidden = true;
   $("exDrop").textContent = "Drop a copy";
   $("exDrop").toggleAttribute("disabled", !res);
-  $("exDrop").title = res ? "A copy of it in the open scene: Drop at click starts with its outline under the crosshair" : "Its file is not known";
+  $("exDrop").title = res ? "A copy of it in the open scene: Drop at click starts with its outline under the cursor" : "Its file is not known";
 }
 try {
   previewPick = localStorage.getItem("edgebuilder.previewPick") === "1";
