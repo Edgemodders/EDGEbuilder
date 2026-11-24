@@ -1,11 +1,11 @@
 // The editor page: shows the mod's state and sends requests. No truth lives here.
 import { channel } from "rednode";
 import { applyChange, boxOf, centreOf, collisionKey, membersOf, seenFromBySize, SeenFromRange, pickMany, pickSelection, selectionUnits } from "../arrange";
-import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
+import { AXES, add, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
 import type { AssetEntry, AssetFrom, AssetKind, DropLike, ImportCollision, LibraryBake, ModelEntry, ExploreReply, ExploreRoot, FilesReply, ModMessage, PageMessage, Place, PreviewReply, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
 import type { Part, Previews } from "./previews";
 import { held } from "./held";
-import { Viewport, busyText } from "./viewport";
+import { Viewport, busyText, type WorldTip } from "./viewport";
 import { doorStateText } from "../worldedits";
 import { exploreSegments } from "../explore";
 import helpHtml from "./help.md";
@@ -1302,6 +1302,7 @@ function doorText(d: WorldThing["door"]): string {
 
 function renderWorld(s: Snapshot): void {
   const wo = s.worldObjects;
+  viewport.setWorldTip(worldTip && wo.picked ? tipFor(wo.picked) : undefined);
   for (const [id, k] of KindToggles) ($(id) as HTMLElement & { checked: boolean }).checked = wo.kinds.includes(k);
   const n = wo.things.length;
   const what =
@@ -2225,6 +2226,78 @@ $("freePick").addEventListener("change", (e) => {
     post({ type: "world.hoverRay", ray: null });
   }
 });
+
+/** Show tooltip (the World tab's switch, beside Pick under the cursor): the picked object's details beside it in the world. */
+let worldTip = false;
+try {
+  worldTip = localStorage.getItem("edgebuilder.worldTip") === "1";
+} catch {
+  // No storage: off.
+}
+($("worldTip") as HTMLElement & { checked: boolean }).checked = worldTip;
+$("worldTip").addEventListener("change", (e) => {
+  worldTip = !!(e as CustomEvent<{ checked: boolean }>).detail.checked;
+  try {
+    localStorage.setItem("edgebuilder.worldTip", worldTip ? "1" : "0");
+  } catch {
+    // No storage: for this session only.
+  }
+  if (state) render(state);
+});
+
+/**
+ * The tooltip for a thing picked in the world: its box's corners (REDnode's box for a mesh, in the world or, when the
+ * node's place is not inside it, in the mesh's own space; a door-sized box at a door's place) and its details.
+ */
+function tipFor(p: WorldThing): WorldTip {
+  const at = p.position as V3;
+  let corners: V3[];
+  const box = p.box;
+  const near = box && at.every((v, i) => v >= box.min[i] - 1 && v <= box.max[i] + 1);
+  const cornersOf = (min: number[], max: number[]): V3[] => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [k & 1 ? max[0] : min[0], k & 2 ? max[1] : min[1], k & 4 ? max[2] : min[2]] as V3);
+  if (box && near) corners = cornersOf(box.min, box.max);
+  else if (box) {
+    // The mesh's own space: scaled, turned and moved to the node's place.
+    const q = (p.orientation ?? [0, 0, 0, 1]) as Q;
+    const sc = p.scale ?? [1, 1, 1];
+    corners = cornersOf(box.min, box.max).map((c) => add(at, qRotateV(q, [c[0] * sc[0], c[1] * sc[1], c[2] * sc[2]])));
+  } else corners = cornersOf([at[0] - 0.8, at[1] - 0.8, at[2]], [at[0] + 0.8, at[1] + 0.8, at[2] + 2.3]);
+  const xs = corners.map((c) => c[0]);
+  const ys = corners.map((c) => c[1]);
+  const zs = corners.map((c) => c[2]);
+  const size = [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), Math.max(...zs) - Math.min(...zs)];
+  const lines = [
+    `${p.className}${p.what === "door" ? ", a door" : p.what === "fakeDoor" ? ", a painted-on door" : ""}`,
+    box ? `about ${size.map((v) => v.toFixed(1)).join(" × ")} m` : "",
+    p.ray ? (p.ray.solid ? "solid where you clicked" : "not solid where you clicked") : "",
+    p.door ? doorText(p.door) : "",
+    p.removedBy ? `removed by this scene (${p.removedBy})` : "",
+  ].filter(Boolean);
+  return { corners, title: p.resource ? shortName(p.resource) : p.label, lines, area: freeArea };
+}
+
+/** The screen between the open drawers: those beside the window on the right, the picked thing's drawer on the left. */
+function freeArea(): { left: number; right: number } {
+  let left = 0;
+  let right = window.innerWidth - 24 - 624;
+  for (const id of ["drawer", "sectorDrawer", "libraryDrawer", "previewsDrawer", "explorerDrawer", "exPreview", "fileDrawer"]) {
+    const el = document.getElementById(id);
+    if (!el?.classList.contains("open")) continue;
+    const b = el.getBoundingClientRect();
+    if (b.left < window.innerWidth / 3) left = Math.max(left, b.right);
+    else right = Math.min(right, b.left);
+  }
+  return { left, right };
+}
+
+/** A vector turned by a quaternion. */
+function qRotateV(q: Q, v: V3): V3 {
+  const [x, y, z, w] = q;
+  const tx = 2 * (y * v[2] - z * v[1]);
+  const ty = 2 * (z * v[0] - x * v[2]);
+  const tz = 2 * (x * v[1] - y * v[0]);
+  return [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)];
+}
 
 /** Opens the Preview drawer at the screen's left for the thing picked in the world; the other left drawers close. */
 function showWorldPreview(): void {

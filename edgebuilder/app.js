@@ -386,6 +386,8 @@ var Viewport = class {
    * cancels, a hold looks and flies as anywhere else. Set while the right button is down during Drop at click.
    */
   rightTap;
+  /** The tooltip beside the object picked in the world (the World tab's Show tooltip). */
+  worldTip;
   /** The line through the cursor, for a paste, when the cursor is over the world in Edit. */
   cursorRay() {
     return this.edit && this.cam && this.overView ? rayFrom(this.cam, this.mouse[0], this.mouse[1]) : void 0;
@@ -430,6 +432,11 @@ var Viewport = class {
       this.look = void 0;
       if (this.edit && this.builderAsked) this.builderAsked = false;
     }
+  }
+  /** The tooltip beside the object picked in the world, or none. */
+  setWorldTip(tip) {
+    this.worldTip = tip;
+    this.kick();
   }
   /** Drop at click: the next left click in the world gives the line from the camera through it. */
   armDrop(then, outline = {}) {
@@ -750,6 +757,7 @@ var Viewport = class {
       ctx.fillStyle = "rgba(252,238,10,0.06)";
       ctx.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
     }
+    if (this.worldTip && this.edit && !this.paused) this.drawWorldTip(this.worldTip);
     if (this.drag) this.label(...this.dragText(this.drag).split("   "));
     else if (this.edit) {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
@@ -838,6 +846,67 @@ var Viewport = class {
    * Each part starts a new line, and a part too wide to stay clear of the EDGEbuilder window wraps
    * at word breaks; lines stack upwards.
    */
+  /**
+   * The picked object's tooltip, beside its box on screen and never over it: to its right, else its left,
+   * else above or below; a thin line joins them. Only the world left of EDGEbuilder's window is used.
+   */
+  drawWorldTip(tip) {
+    const cam = this.cam;
+    if (!cam) return;
+    const pts = tip.corners.map((c) => project(cam, c)).filter((p) => !!p);
+    if (!pts.length) return;
+    const r = { l: Math.min(...pts.map((p) => p[0])), r: Math.max(...pts.map((p) => p[0])), t: Math.min(...pts.map((p) => p[1])), b: Math.max(...pts.map((p) => p[1])) };
+    const free = tip.area?.() ?? { left: 0, right: this.canvas.width - 24 - 624 };
+    const L = free.left + 8;
+    const W = free.right - 16;
+    const H = this.canvas.height;
+    if (r.r < L || r.l > W || r.b < 0 || r.t > H) return;
+    const middle = tip.corners.reduce((a, c) => add(a, mul(c, 1 / tip.corners.length)), [0, 0, 0]);
+    const far = this.lastPos ? Math.hypot(...sub(middle, this.lastPos)) : void 0;
+    const lines = [...tip.lines, ...far !== void 0 ? [`${far.toFixed(1)} m from the camera`] : []];
+    const ctx = this.ctx;
+    ctx.font = "bold 13px 'JetBrains Mono', Consolas, monospace";
+    const titleW = ctx.measureText(tip.title).width;
+    ctx.font = "12px 'JetBrains Mono', Consolas, monospace";
+    const w = Math.ceil(Math.max(titleW, ...lines.map((l) => ctx.measureText(l).width))) + 22;
+    const h = 30 + lines.length * 17;
+    const gap = 22;
+    const clampY = (y2) => Math.max(8, Math.min(H - h - 8, y2));
+    const clampX = (x2) => Math.max(L, Math.min(W - w, x2));
+    let x;
+    let y;
+    if (r.r + gap + w <= W) [x, y] = [r.r + gap, clampY((r.t + r.b) / 2 - h / 2)];
+    else if (r.l - gap - w >= L) [x, y] = [r.l - gap - w, clampY((r.t + r.b) / 2 - h / 2)];
+    else if (r.t - gap - h >= 8) [x, y] = [clampX((r.l + r.r) / 2 - w / 2), r.t - gap - h];
+    else if (r.b + gap + h <= H - 8) [x, y] = [clampX((r.l + r.r) / 2 - w / 2), r.b + gap];
+    else [x, y] = [L, 8];
+    const ax = x > r.r ? x : x + w < r.l ? x + w : x + w / 2;
+    const ay = y > r.b ? y : y + h < r.t ? y + h : y + h / 2;
+    const bx = Math.max(r.l, Math.min(r.r, ax));
+    const by = Math.max(r.t, Math.min(r.b, ay));
+    ctx.strokeStyle = "rgba(252,238,10,0.7)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.fillStyle = "#fcee0a";
+    ctx.beginPath();
+    ctx.arc(bx, by, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(8,9,13,0.9)";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = "#fcee0a";
+    ctx.fillRect(x, y, 2, h);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.font = "bold 13px 'JetBrains Mono', Consolas, monospace";
+    ctx.fillText(tip.title, x + 12, y + 8);
+    ctx.font = "12px 'JetBrains Mono', Consolas, monospace";
+    ctx.fillStyle = "#e8e8e8";
+    lines.forEach((l, i) => ctx.fillText(l, x + 12, y + 28 + i * 17));
+    ctx.textBaseline = "alphabetic";
+  }
   label(...parts) {
     const ctx = this.ctx;
     ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
@@ -1367,7 +1436,7 @@ function exploreSegments(root, assetPath) {
 }
 
 // src/app/help.md
-var help_default = '<h1>EDGEbuilder</h1>\n<p class="version">Version 0.14.0, for Cyberpunk 2077 2.5</p>\n\n<p>A world builder that runs inside the game. You find a model, drop it into the world, move it until it sits right, arrange a scene, and bake the scene into a mod, so the objects are part of Night City for anyone who installs it.</p>\n<p>Two words you will meet everywhere:</p>\n<ul>\n<li>A <strong>preview</strong> is an object you placed that is not baked yet. Only you see it, and only while EDGEbuilder runs.</li>\n<li>To <strong>bake</strong> a scene is to turn it into a mod: its objects then stand in the world without EDGEbuilder.</li>\n</ul>\n<h2>Before you start</h2>\n<p>The three pills at the top say whether everything is ready:</p>\n<table>\n<thead>\n<tr>\n<th>Pill</th>\n<th>Ready when it says</th>\n<th>If not</th>\n</tr>\n</thead>\n<tbody><tr>\n<td>World</td>\n<td><strong>World ready</strong></td>\n<td>Load a save</td>\n</tr>\n<tr>\n<td>REDbridge</td>\n<td><strong>REDbridge</strong> and its version, in green</td>\n<td>Hover it for why. It reads the game&#39;s files and bakes</td>\n</tr>\n<tr>\n<td>Index</td>\n<td>About <strong>31,600 assets</strong></td>\n<td>It says <strong>Indexing...</strong> for a few seconds the first time</td>\n</tr>\n</tbody></table>\n<h2>First scene in five steps</h2>\n<ol>\n<li><strong>Library</strong> tab: type a name in <strong>Name</strong>, pick a folder in the tree, press <strong>New scene here</strong>. The scene is saved after every change from now on.</li>\n<li><strong>Assets</strong> tab: type <code>crate</code>. Typing anywhere on the tab goes into the search box.</li>\n<li>Click a result. <strong>Picked</strong> shows its size and its looks (appearances): click one.</li>\n<li>Press <strong>Drop where I look</strong>, or <strong>Drop at click</strong> and click the spot in the world.</li>\n<li>Switch <strong>Edit</strong> on (top right of this window), click the crate, and drag its arrows.</li>\n</ol>\n<h2>Find something</h2>\n<ul>\n<li><strong>Search</strong> finds the game&#39;s meshes, entities and people by name. The tabs under the box narrow it by kind (<strong>Meshes</strong>, <strong>Entities</strong>, <strong>NPCs</strong>) and by where it comes from (<strong>Game</strong>, <strong>Mods</strong>, <strong>Project</strong>). The \u2715 in the box clears it.</li>\n<li><strong>Explorer</strong>: the folder button beside the search box. The game&#39;s own folders, each mod, the open REDcode project and the game&#39;s people, opened one folder at a time. Typing filters the folder clicked last; its arrows make it wider. A search result you click is found in it too. A pick shows the model in 3D beside it: drag to turn it, the wheel zooms. <strong>Drop</strong> starts Drop at click.</li>\n<li><strong>Preview</strong> switch, beside the result count: with it on, a click on a result shows it in that same 3D drawer.</li>\n<li><strong>Previews</strong>, the eye beside it: the results as small 3D pictures. Rest the mouse on one to turn it; a click shows its details beside them, with <strong>Drop</strong>. In Settings, <strong>A picture&#39;s details before Drop</strong> off makes a click start Drop at click at once.</li>\n</ul>\n<p>A <strong>mesh</strong> is a plain 3D model. An <strong>entity</strong> is a model with parts and behaviour, such as a device. A <strong>person</strong> (NPC) stands friendly and idle.</p>\n<h2>Drop it</h2>\n<ul>\n<li><strong>Drop where I look</strong> puts it in front of you, on what the camera looks at.</li>\n<li><strong>Drop at click</strong>: the cursor becomes a crosshair and the object&#39;s outline sits where a click would put it (amber over the sky). Click to drop. <kbd>Esc</kbd> or a quick tap of the right button cancels; hold the right button to look and fly as usual, and the outline follows the crosshair.</li>\n</ul>\n<h2>Edit mode and the camera</h2>\n<p>Switch <strong>Edit</strong> on to work in the world: the mouse works in the world, the game&#39;s HUD hides and EDGEbuilder looks through a camera of its own. V stays where V stood. Both can be switched off in <strong>Settings</strong>.</p>\n<table>\n<thead>\n<tr>\n<th>To</th>\n<th>Do</th>\n</tr>\n</thead>\n<tbody><tr>\n<td>Look around</td>\n<td>Hold the right mouse button and move the mouse</td>\n</tr>\n<tr>\n<td>Fly</td>\n<td>Right button held, <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>, <kbd>Q</kbd> down, <kbd>E</kbd> up; <kbd>Shift</kbd> faster, the wheel sets the speed</td>\n</tr>\n<tr>\n<td>Orbit the selection</td>\n<td>Middle button; with <kbd>Shift</kbd> it pans; the wheel moves closer</td>\n</tr>\n<tr>\n<td>Frame the selection</td>\n<td><kbd>F</kbd></td>\n</tr>\n</tbody></table>\n<p>A help line at the bottom of the screen always says what you can do next. <kbd>F10</kbd> hands the mouse back to the game: V\u2019s view and the HUD come back, and Edit picks up where it was at the next <kbd>F10</kbd>.</p>\n<h2>Position</h2>\n<p>Click an object to select it. Its <strong>gizmo</strong> has red, green and blue arrows (drag one to move along it) and a yellow ring (drag it to turn).</p>\n<table>\n<thead>\n<tr>\n<th>Key</th>\n<th>Does</th>\n</tr>\n</thead>\n<tbody><tr>\n<td><kbd>G</kbd> <kbd>R</kbd> <kbd>S</kbd></td>\n<td>Move, turn, scale (meshes) with the mouse</td>\n</tr>\n<tr>\n<td>then <kbd>X</kbd> <kbd>Y</kbd> <kbd>Z</kbd></td>\n<td>Lock to one axis; type a number for an exact amount</td>\n</tr>\n<tr>\n<td><kbd>Enter</kbd> or a click</td>\n<td>Keep it</td>\n</tr>\n<tr>\n<td><kbd>Esc</kbd> or a right-click</td>\n<td>Put it back</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd> while dragging</td>\n<td>Snap to steps</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>E</kbd></td>\n<td>Drop to the floor</td>\n</tr>\n<tr>\n<td><kbd>Delete</kbd></td>\n<td>Remove it from the scene</td>\n</tr>\n</tbody></table>\n<p><strong>Selected</strong> on the Scene tab takes exact numbers: X, Y, Z, Heading, Scale, and <strong>Seen from</strong>, how far off it is seen once baked. <strong>Solid</strong> makes a mesh stop V once baked, when its mesh carries collision data.</p>\n<h2>Arrange</h2>\n<table>\n<thead>\n<tr>\n<th>Keys</th>\n<th>Does</th>\n</tr>\n</thead>\n<tbody><tr>\n<td><kbd>Ctrl</kbd>+click, <kbd>Shift</kbd>+drag, <kbd>Ctrl</kbd>+<kbd>A</kbd></td>\n<td>Add to the selection, select in a box, select all</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>G</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></td>\n<td>Group, ungroup. A click selects the whole group, <kbd>Alt</kbd>+click one object</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>D</kbd></td>\n<td>Duplicate: the copy follows the mouse until a click puts it down</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Ctrl</kbd>+<kbd>X</kbd>, <kbd>Ctrl</kbd>+<kbd>V</kbd></td>\n<td>Copy, cut, paste where the cursor points</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>+<kbd>Y</kbd></td>\n<td>Undo, redo (the last 100 changes)</td>\n</tr>\n</tbody></table>\n<p>A move, turn or scale acts on the whole selection, around its middle.</p>\n<h2>Scenes and the Library</h2>\n<ul>\n<li>The open scene is saved after every change. <kbd>Ctrl</kbd>+<kbd>S</kbd> confirms it, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves a copy under a new name. Its name is at the top of the <strong>Scene</strong> tab (Enter renames it).</li>\n<li>The <strong>Library</strong> tab lists every scene: in the <strong>Library</strong> (your own folders, shared by the EDGE tools, <code>Documents\\EDGE Library</code> unless you choose another in Settings), in the open REDcode project, and on <strong>This PC</strong>.</li>\n<li>Pick a scene to <strong>Open</strong> it, <strong>Close</strong> it, or <strong>Show in world</strong> beside the one you are editing (shown, not editable). <strong>Objects</strong> lists a scene&#39;s objects in a drawer: two clicks fly the camera to one.</li>\n<li>The icon at the top right of the tree moves the Library out of the window into a drawer. The drawer&#39;s arrows make it wider or narrower. <strong>Objects</strong>: the eye on a row shows the object in 3D beside the drawer, with <strong>Drop a copy</strong> (its look, scale and settings kept).</li>\n<li>EDGEbuilder opens the last scene again when it starts.</li>\n</ul>\n<h2>Import a model of your own</h2>\n<ol>\n<li>Library tab: type the path of a <code>.glb</code> file in the box at the top, or press the folder button beside it to find it on your disk. Models in the Library, in the project&#39;s <code>source\\raw</code> and on EDGEfab&#39;s Desk are listed in the tree too.</li>\n<li>Pick it. The Import box asks for a <strong>Name</strong>, a <strong>Height</strong> (for a model with no real size) and how solid it is.</li>\n<li>Press <strong>Import</strong>. It goes into the open REDcode project, is packed and comes into the running game. Making textures takes most of the time; <strong>Stop</strong> ends it.</li>\n<li>It is then picked on the Assets tab, ready to drop.</li>\n</ol>\n<h2>The game&#39;s own objects</h2>\n<p>The <strong>World</strong> tab:</p>\n<ul>\n<li><strong>Nearby</strong> finds the doors near V (<strong>Scan Doors</strong>). With <strong>Edit</strong> on, a click picks a door. The switches choose what a click picks: doors, painted-on doors, meshes.</li>\n<li><strong>Pick under the cursor</strong> (in Picked in the world): what a click would pick is outlined as the mouse moves, and a click picks any mesh or door. Its details open in a drawer at the left of the screen: the model in 3D, its kind, size, place, node and sector, and whether it is <strong>solid</strong> where you clicked. <strong>Drop a copy</strong> puts a copy in your scene.</li>\n<li><strong>Remove from world</strong> takes a door, a painted-on door or a mesh out, kept in the scene. <strong>Restore</strong> or Undo brings it back. A bake removes it for good.</li>\n<li><strong>Open</strong>, <strong>Close</strong>, <strong>Lock</strong> keep a door that way while the scene is open.</li>\n<li><strong>Sectors</strong> lists the pieces the game streams the world in: near V, near the camera, or by name. A sector&#39;s drawer lists every entry in it: pick, fly to, hide for the session or remove.</li>\n</ul>\n<h2>Bake</h2>\n<ol>\n<li>Open a project in REDcode (VS Code). The <strong>Bake</strong> tab names it, and checks the scene.</li>\n<li>Press <strong>Bake</strong>. The scene becomes a streaming sector of its own in the project.</li>\n<li>In REDcode, <strong>Pack and Install</strong> (or add it in EDGEdeck and deploy), then start the game again: a bake comes in as the game starts.</li>\n</ol>\n<p>The previews of a scene whose bake is in the game stay off, so nothing stands twice. <strong>Bake into Library</strong>, on the Library tab, keeps a bake there that can hold several scenes; <strong>Include in project</strong> copies it into a project. People are not baked yet.</p>\n<h2>Settings</h2>\n<p>The REDbridge and game folders (found by themselves when empty), the editor camera and HUD switches, a picture&#39;s details before Drop, the Library folder, <strong>Rebuild asset index</strong> and <strong>Restart REDbridge</strong>.</p>\n<h2>More help</h2>\n<p>The full guide, with pictures: <code>edgemodders.ai/wiki/edgebuilder</code></p>\n<p>Questions and bugs: <code>github.com/Edgemodders/EDGEbuilder/issues</code></p>\n<p>EDGEbuilder is inspired by World Builder by keanuWheeze. It is its own design and uses none of World Builder&#39;s code, files or data.</p>\n';
+var help_default = '<h1>EDGEbuilder</h1>\n<p class="version">Version 0.14.0, for Cyberpunk 2077 2.5</p>\n\n<p>A world builder that runs inside the game. You find a model, drop it into the world, move it until it sits right, arrange a scene, and bake the scene into a mod, so the objects are part of Night City for anyone who installs it.</p>\n<p>Two words you will meet everywhere:</p>\n<ul>\n<li>A <strong>preview</strong> is an object you placed that is not baked yet. Only you see it, and only while EDGEbuilder runs.</li>\n<li>To <strong>bake</strong> a scene is to turn it into a mod: its objects then stand in the world without EDGEbuilder.</li>\n</ul>\n<h2>Before you start</h2>\n<p>The three pills at the top say whether everything is ready:</p>\n<table>\n<thead>\n<tr>\n<th>Pill</th>\n<th>Ready when it says</th>\n<th>If not</th>\n</tr>\n</thead>\n<tbody><tr>\n<td>World</td>\n<td><strong>World ready</strong></td>\n<td>Load a save</td>\n</tr>\n<tr>\n<td>REDbridge</td>\n<td><strong>REDbridge</strong> and its version, in green</td>\n<td>Hover it for why. It reads the game&#39;s files and bakes</td>\n</tr>\n<tr>\n<td>Index</td>\n<td>About <strong>31,600 assets</strong></td>\n<td>It says <strong>Indexing...</strong> for a few seconds the first time</td>\n</tr>\n</tbody></table>\n<h2>First scene in five steps</h2>\n<ol>\n<li><strong>Library</strong> tab: type a name in <strong>Name</strong>, pick a folder in the tree, press <strong>New scene here</strong>. The scene is saved after every change from now on.</li>\n<li><strong>Assets</strong> tab: type <code>crate</code>. Typing anywhere on the tab goes into the search box.</li>\n<li>Click a result. <strong>Picked</strong> shows its size and its looks (appearances): click one.</li>\n<li>Press <strong>Drop where I look</strong>, or <strong>Drop at click</strong> and click the spot in the world.</li>\n<li>Switch <strong>Edit</strong> on (top right of this window), click the crate, and drag its arrows.</li>\n</ol>\n<h2>Find something</h2>\n<ul>\n<li><strong>Search</strong> finds the game&#39;s meshes, entities and people by name. The tabs under the box narrow it by kind (<strong>Meshes</strong>, <strong>Entities</strong>, <strong>NPCs</strong>) and by where it comes from (<strong>Game</strong>, <strong>Mods</strong>, <strong>Project</strong>). The \u2715 in the box clears it.</li>\n<li><strong>Explorer</strong>: the folder button beside the search box. The game&#39;s own folders, each mod, the open REDcode project and the game&#39;s people, opened one folder at a time. Typing filters the folder clicked last; its arrows make it wider. A search result you click is found in it too. A pick shows the model in 3D beside it: drag to turn it, the wheel zooms. <strong>Drop</strong> starts Drop at click.</li>\n<li><strong>Preview</strong> switch, beside the result count: with it on, a click on a result shows it in that same 3D drawer.</li>\n<li><strong>Previews</strong>, the eye beside it: the results as small 3D pictures. Rest the mouse on one to turn it; a click shows its details beside them, with <strong>Drop</strong>. In Settings, <strong>A picture&#39;s details before Drop</strong> off makes a click start Drop at click at once.</li>\n</ul>\n<p>A <strong>mesh</strong> is a plain 3D model. An <strong>entity</strong> is a model with parts and behaviour, such as a device. A <strong>person</strong> (NPC) stands friendly and idle.</p>\n<h2>Drop it</h2>\n<ul>\n<li><strong>Drop where I look</strong> puts it in front of you, on what the camera looks at.</li>\n<li><strong>Drop at click</strong>: the cursor becomes a crosshair and the object&#39;s outline sits where a click would put it (amber over the sky). Click to drop. <kbd>Esc</kbd> or a quick tap of the right button cancels; hold the right button to look and fly as usual, and the outline follows the crosshair.</li>\n</ul>\n<h2>Edit mode and the camera</h2>\n<p>Switch <strong>Edit</strong> on to work in the world: the mouse works in the world, the game&#39;s HUD hides and EDGEbuilder looks through a camera of its own. V stays where V stood. Both can be switched off in <strong>Settings</strong>.</p>\n<table>\n<thead>\n<tr>\n<th>To</th>\n<th>Do</th>\n</tr>\n</thead>\n<tbody><tr>\n<td>Look around</td>\n<td>Hold the right mouse button and move the mouse</td>\n</tr>\n<tr>\n<td>Fly</td>\n<td>Right button held, <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>, <kbd>Q</kbd> down, <kbd>E</kbd> up; <kbd>Shift</kbd> faster, the wheel sets the speed</td>\n</tr>\n<tr>\n<td>Orbit the selection</td>\n<td>Middle button; with <kbd>Shift</kbd> it pans; the wheel moves closer</td>\n</tr>\n<tr>\n<td>Frame the selection</td>\n<td><kbd>F</kbd></td>\n</tr>\n</tbody></table>\n<p>A help line at the bottom of the screen always says what you can do next. <kbd>F10</kbd> hands the mouse back to the game: V\u2019s view and the HUD come back, and Edit picks up where it was at the next <kbd>F10</kbd>.</p>\n<h2>Position</h2>\n<p>Click an object to select it. Its <strong>gizmo</strong> has red, green and blue arrows (drag one to move along it) and a yellow ring (drag it to turn).</p>\n<table>\n<thead>\n<tr>\n<th>Key</th>\n<th>Does</th>\n</tr>\n</thead>\n<tbody><tr>\n<td><kbd>G</kbd> <kbd>R</kbd> <kbd>S</kbd></td>\n<td>Move, turn, scale (meshes) with the mouse</td>\n</tr>\n<tr>\n<td>then <kbd>X</kbd> <kbd>Y</kbd> <kbd>Z</kbd></td>\n<td>Lock to one axis; type a number for an exact amount</td>\n</tr>\n<tr>\n<td><kbd>Enter</kbd> or a click</td>\n<td>Keep it</td>\n</tr>\n<tr>\n<td><kbd>Esc</kbd> or a right-click</td>\n<td>Put it back</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd> while dragging</td>\n<td>Snap to steps</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>E</kbd></td>\n<td>Drop to the floor</td>\n</tr>\n<tr>\n<td><kbd>Delete</kbd></td>\n<td>Remove it from the scene</td>\n</tr>\n</tbody></table>\n<p><strong>Selected</strong> on the Scene tab takes exact numbers: X, Y, Z, Heading, Scale, and <strong>Seen from</strong>, how far off it is seen once baked. <strong>Solid</strong> makes a mesh stop V once baked, when its mesh carries collision data.</p>\n<h2>Arrange</h2>\n<table>\n<thead>\n<tr>\n<th>Keys</th>\n<th>Does</th>\n</tr>\n</thead>\n<tbody><tr>\n<td><kbd>Ctrl</kbd>+click, <kbd>Shift</kbd>+drag, <kbd>Ctrl</kbd>+<kbd>A</kbd></td>\n<td>Add to the selection, select in a box, select all</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>G</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></td>\n<td>Group, ungroup. A click selects the whole group, <kbd>Alt</kbd>+click one object</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>D</kbd></td>\n<td>Duplicate: the copy follows the mouse until a click puts it down</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Ctrl</kbd>+<kbd>X</kbd>, <kbd>Ctrl</kbd>+<kbd>V</kbd></td>\n<td>Copy, cut, paste where the cursor points</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>+<kbd>Y</kbd></td>\n<td>Undo, redo (the last 100 changes)</td>\n</tr>\n</tbody></table>\n<p>A move, turn or scale acts on the whole selection, around its middle.</p>\n<h2>Scenes and the Library</h2>\n<ul>\n<li>The open scene is saved after every change. <kbd>Ctrl</kbd>+<kbd>S</kbd> confirms it, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves a copy under a new name. Its name is at the top of the <strong>Scene</strong> tab (Enter renames it).</li>\n<li>The <strong>Library</strong> tab lists every scene: in the <strong>Library</strong> (your own folders, shared by the EDGE tools, <code>Documents\\EDGE Library</code> unless you choose another in Settings), in the open REDcode project, and on <strong>This PC</strong>.</li>\n<li>Pick a scene to <strong>Open</strong> it, <strong>Close</strong> it, or <strong>Show in world</strong> beside the one you are editing (shown, not editable). <strong>Objects</strong> lists a scene&#39;s objects in a drawer: two clicks fly the camera to one.</li>\n<li>The icon at the top right of the tree moves the Library out of the window into a drawer. The drawer&#39;s arrows make it wider or narrower. <strong>Objects</strong>: the eye on a row shows the object in 3D beside the drawer, with <strong>Drop a copy</strong> (its look, scale and settings kept).</li>\n<li>EDGEbuilder opens the last scene again when it starts.</li>\n</ul>\n<h2>Import a model of your own</h2>\n<ol>\n<li>Library tab: type the path of a <code>.glb</code> file in the box at the top, or press the folder button beside it to find it on your disk. Models in the Library, in the project&#39;s <code>source\\raw</code> and on EDGEfab&#39;s Desk are listed in the tree too.</li>\n<li>Pick it. The Import box asks for a <strong>Name</strong>, a <strong>Height</strong> (for a model with no real size) and how solid it is.</li>\n<li>Press <strong>Import</strong>. It goes into the open REDcode project, is packed and comes into the running game. Making textures takes most of the time; <strong>Stop</strong> ends it.</li>\n<li>It is then picked on the Assets tab, ready to drop.</li>\n</ol>\n<h2>The game&#39;s own objects</h2>\n<p>The <strong>World</strong> tab:</p>\n<ul>\n<li><strong>Nearby</strong> finds the doors near V (<strong>Scan Doors</strong>). With <strong>Edit</strong> on, a click picks a door. The switches choose what a click picks: doors, painted-on doors, meshes.</li>\n<li><strong>Pick under the cursor</strong> (in Picked in the world): what a click would pick is outlined as the mouse moves, and a click picks any mesh or door. Its details open in a drawer at the left of the screen: the model in 3D, its kind, size, place, node and sector, and whether it is <strong>solid</strong> where you clicked. <strong>Drop a copy</strong> puts a copy in your scene. <strong>Show tooltip</strong>, beside it, puts the picked object&#39;s name, kind, size and distance in a tooltip next to it in the world.</li>\n<li><strong>Remove from world</strong> takes a door, a painted-on door or a mesh out, kept in the scene. <strong>Restore</strong> or Undo brings it back. A bake removes it for good.</li>\n<li><strong>Open</strong>, <strong>Close</strong>, <strong>Lock</strong> keep a door that way while the scene is open.</li>\n<li><strong>Sectors</strong> lists the pieces the game streams the world in: near V, near the camera, or by name. A sector&#39;s drawer lists every entry in it: pick, fly to, hide for the session or remove.</li>\n</ul>\n<h2>Bake</h2>\n<ol>\n<li>Open a project in REDcode (VS Code). The <strong>Bake</strong> tab names it, and checks the scene.</li>\n<li>Press <strong>Bake</strong>. The scene becomes a streaming sector of its own in the project.</li>\n<li>In REDcode, <strong>Pack and Install</strong> (or add it in EDGEdeck and deploy), then start the game again: a bake comes in as the game starts.</li>\n</ol>\n<p>The previews of a scene whose bake is in the game stay off, so nothing stands twice. <strong>Bake into Library</strong>, on the Library tab, keeps a bake there that can hold several scenes; <strong>Include in project</strong> copies it into a project. People are not baked yet.</p>\n<h2>Settings</h2>\n<p>The REDbridge and game folders (found by themselves when empty), the editor camera and HUD switches, a picture&#39;s details before Drop, the Library folder, <strong>Rebuild asset index</strong> and <strong>Restart REDbridge</strong>.</p>\n<h2>More help</h2>\n<p>The full guide, with pictures: <code>edgemodders.ai/wiki/edgebuilder</code></p>\n<p>Questions and bugs: <code>github.com/Edgemodders/EDGEbuilder/issues</code></p>\n<p>EDGEbuilder is inspired by World Builder by keanuWheeze. It is its own design and uses none of World Builder&#39;s code, files or data.</p>\n';
 
 // src/app/main.ts
 var $ = (id) => document.getElementById(id);
@@ -2474,6 +2543,7 @@ function doorText(d) {
 }
 function renderWorld(s) {
   const wo = s.worldObjects;
+  viewport.setWorldTip(worldTip && wo.picked ? tipFor(wo.picked) : void 0);
   for (const [id, k] of KindToggles) $(id).checked = wo.kinds.includes(k);
   const n = wo.things.length;
   const what = s.world !== "ready" ? "Load a save: the doors near V are listed here." : wo.status === "looking" ? "Looking for the doors near V..." : !wo.kinds.length ? "Switch a kind on to pick the game's own objects." : `${n} near V, within 30 m${n ? ", nearest first" : ""}. With Edit on, a click on one in the world picks it.`;
@@ -3225,6 +3295,64 @@ $("freePick").addEventListener("change", (e) => {
     post({ type: "world.hoverRay", ray: null });
   }
 });
+var worldTip = false;
+try {
+  worldTip = localStorage.getItem("edgebuilder.worldTip") === "1";
+} catch {
+}
+$("worldTip").checked = worldTip;
+$("worldTip").addEventListener("change", (e) => {
+  worldTip = !!e.detail.checked;
+  try {
+    localStorage.setItem("edgebuilder.worldTip", worldTip ? "1" : "0");
+  } catch {
+  }
+  if (state) render(state);
+});
+function tipFor(p) {
+  const at = p.position;
+  let corners;
+  const box = p.box;
+  const near = box && at.every((v2, i) => v2 >= box.min[i] - 1 && v2 <= box.max[i] + 1);
+  const cornersOf = (min, max) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [k & 1 ? max[0] : min[0], k & 2 ? max[1] : min[1], k & 4 ? max[2] : min[2]]);
+  if (box && near) corners = cornersOf(box.min, box.max);
+  else if (box) {
+    const q = p.orientation ?? [0, 0, 0, 1];
+    const sc = p.scale ?? [1, 1, 1];
+    corners = cornersOf(box.min, box.max).map((c) => add(at, qRotateV(q, [c[0] * sc[0], c[1] * sc[1], c[2] * sc[2]])));
+  } else corners = cornersOf([at[0] - 0.8, at[1] - 0.8, at[2]], [at[0] + 0.8, at[1] + 0.8, at[2] + 2.3]);
+  const xs = corners.map((c) => c[0]);
+  const ys = corners.map((c) => c[1]);
+  const zs = corners.map((c) => c[2]);
+  const size = [Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), Math.max(...zs) - Math.min(...zs)];
+  const lines = [
+    `${p.className}${p.what === "door" ? ", a door" : p.what === "fakeDoor" ? ", a painted-on door" : ""}`,
+    box ? `about ${size.map((v2) => v2.toFixed(1)).join(" \xD7 ")} m` : "",
+    p.ray ? p.ray.solid ? "solid where you clicked" : "not solid where you clicked" : "",
+    p.door ? doorText(p.door) : "",
+    p.removedBy ? `removed by this scene (${p.removedBy})` : ""
+  ].filter(Boolean);
+  return { corners, title: p.resource ? shortName(p.resource) : p.label, lines, area: freeArea };
+}
+function freeArea() {
+  let left = 0;
+  let right = window.innerWidth - 24 - 624;
+  for (const id of ["drawer", "sectorDrawer", "libraryDrawer", "previewsDrawer", "explorerDrawer", "exPreview", "fileDrawer"]) {
+    const el = document.getElementById(id);
+    if (!el?.classList.contains("open")) continue;
+    const b = el.getBoundingClientRect();
+    if (b.left < window.innerWidth / 3) left = Math.max(left, b.right);
+    else right = Math.min(right, b.left);
+  }
+  return { left, right };
+}
+function qRotateV(q, v2) {
+  const [x, y, z, w] = q;
+  const tx = 2 * (y * v2[2] - z * v2[1]);
+  const ty = 2 * (z * v2[0] - x * v2[2]);
+  const tz = 2 * (x * v2[1] - y * v2[0]);
+  return [v2[0] + w * tx + (y * tz - z * ty), v2[1] + w * ty + (z * tx - x * tz), v2[2] + w * tz + (x * ty - y * tx)];
+}
 function showWorldPreview() {
   drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = filesOpen = false;
   previewWorld = true;

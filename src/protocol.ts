@@ -167,6 +167,9 @@ export interface WorldThing {
   ray?: { solid: boolean; distance?: number };
   /** Its scale in the world, for a mesh from the node registry. */
   scale?: [number, number, number];
+  /** A mesh node's box from REDnode's registry, and its orientation: for the tooltip, placed beside it on screen. */
+  box?: { min: [number, number, number]; max: [number, number, number] };
+  orientation?: [number, number, number, number];
 }
 
 /** The thing picked in the world, with its node once found and what to warn about. */

@@ -1662,6 +1662,8 @@ async function pickMesh(n: WorldNode, physicsHit?: { distance: number } | null):
     // The game's physics stopped the line inside its bounds: solid there.
     ray: { solid: !!n.holdsHit, distance: n.holdsHit ? physicsHit?.distance : undefined },
     scale: n.scale,
+    box: n.bounds,
+    orientation: n.orientation,
     key: n.id,
     what: "mesh",
     className: n.kind,

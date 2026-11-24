@@ -74,6 +74,15 @@ export interface ViewportHooks {
 }
 
 /** What Drop at click draws while it waits: the object's own edges once the page has them, else its box, the size of its bounds when known. */
+/** The picked world object's tooltip: the corners of its box in the world, a title and lines of details. */
+export interface WorldTip {
+  corners: V3[];
+  title: string;
+  lines: string[];
+  /** The screen between the open drawers, left and right, which the tooltip keeps to. */
+  area?: () => { left: number; right: number };
+}
+
 export interface DropOutline {
   bounds?: () => { min: number[]; max: number[] } | undefined;
   /** Line pairs in the object's space (game axes, x y z x y z per line), from Previews' `edges`. */
@@ -180,6 +189,8 @@ export class Viewport {
    * cancels, a hold looks and flies as anywhere else. Set while the right button is down during Drop at click.
    */
   private rightTap: { at: number; moved: number } | undefined;
+  /** The tooltip beside the object picked in the world (the World tab's Show tooltip). */
+  private worldTip: WorldTip | undefined;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -286,6 +297,12 @@ export class Viewport {
       // Builder mode ended without Edit going off (a save loaded, or the camera failed): ask again on the next frame.
       if (this.edit && this.builderAsked) this.builderAsked = false;
     }
+  }
+
+  /** The tooltip beside the object picked in the world, or none. */
+  setWorldTip(tip: WorldTip | undefined): void {
+    this.worldTip = tip;
+    this.kick();
   }
 
   /** Drop at click: the next left click in the world gives the line from the camera through it. */
@@ -643,6 +660,7 @@ export class Viewport {
       ctx.fillStyle = "rgba(252,238,10,0.06)";
       ctx.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
     }
+    if (this.worldTip && this.edit && !this.paused) this.drawWorldTip(this.worldTip);
     if (this.drag) this.label(...this.dragText(this.drag).split("   "));
     else if (this.edit) {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
@@ -737,6 +755,69 @@ export class Viewport {
    * Each part starts a new line, and a part too wide to stay clear of the EDGEbuilder window wraps
    * at word breaks; lines stack upwards.
    */
+  /**
+   * The picked object's tooltip, beside its box on screen and never over it: to its right, else its left,
+   * else above or below; a thin line joins them. Only the world left of EDGEbuilder's window is used.
+   */
+  private drawWorldTip(tip: WorldTip): void {
+    const cam = this.cam;
+    if (!cam) return;
+    const pts = tip.corners.map((c) => project(cam, c)).filter((p): p is [number, number] => !!p);
+    if (!pts.length) return;
+    const r = { l: Math.min(...pts.map((p) => p[0])), r: Math.max(...pts.map((p) => p[0])), t: Math.min(...pts.map((p) => p[1])), b: Math.max(...pts.map((p) => p[1])) };
+    const free = tip.area?.() ?? { left: 0, right: this.canvas.width - 24 - 624 };
+    const L = free.left + 8;
+    const W = free.right - 16;
+    const H = this.canvas.height;
+    if (r.r < L || r.l > W || r.b < 0 || r.t > H) return;
+    const middle = tip.corners.reduce((a, c) => add(a, mul(c, 1 / tip.corners.length)), [0, 0, 0] as V3);
+    const far = this.lastPos ? Math.hypot(...sub(middle, this.lastPos)) : undefined;
+    const lines = [...tip.lines, ...(far !== undefined ? [`${far.toFixed(1)} m from the camera`] : [])];
+    const ctx = this.ctx;
+    ctx.font = "bold 13px 'JetBrains Mono', Consolas, monospace";
+    const titleW = ctx.measureText(tip.title).width;
+    ctx.font = "12px 'JetBrains Mono', Consolas, monospace";
+    const w = Math.ceil(Math.max(titleW, ...lines.map((l) => ctx.measureText(l).width))) + 22;
+    const h = 30 + lines.length * 17;
+    const gap = 22;
+    const clampY = (y: number) => Math.max(8, Math.min(H - h - 8, y));
+    const clampX = (x: number) => Math.max(L, Math.min(W - w, x));
+    let x: number;
+    let y: number;
+    if (r.r + gap + w <= W) [x, y] = [r.r + gap, clampY((r.t + r.b) / 2 - h / 2)];
+    else if (r.l - gap - w >= L) [x, y] = [r.l - gap - w, clampY((r.t + r.b) / 2 - h / 2)];
+    else if (r.t - gap - h >= 8) [x, y] = [clampX((r.l + r.r) / 2 - w / 2), r.t - gap - h];
+    else if (r.b + gap + h <= H - 8) [x, y] = [clampX((r.l + r.r) / 2 - w / 2), r.b + gap];
+    else [x, y] = [L, 8]; // The object fills the view: a corner.
+    // The line from the tooltip's nearest edge to the box.
+    const ax = x > r.r ? x : x + w < r.l ? x + w : x + w / 2;
+    const ay = y > r.b ? y : y + h < r.t ? y + h : y + h / 2;
+    const bx = Math.max(r.l, Math.min(r.r, ax));
+    const by = Math.max(r.t, Math.min(r.b, ay));
+    ctx.strokeStyle = "rgba(252,238,10,0.7)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.fillStyle = "#fcee0a";
+    ctx.beginPath();
+    ctx.arc(bx, by, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(8,9,13,0.9)";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = "#fcee0a";
+    ctx.fillRect(x, y, 2, h);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.font = "bold 13px 'JetBrains Mono', Consolas, monospace";
+    ctx.fillText(tip.title, x + 12, y + 8);
+    ctx.font = "12px 'JetBrains Mono', Consolas, monospace";
+    ctx.fillStyle = "#e8e8e8";
+    lines.forEach((l, i) => ctx.fillText(l, x + 12, y + 28 + i * 17));
+    ctx.textBaseline = "alphabetic";
+  }
+
   private label(...parts: string[]): void {
     const ctx = this.ctx;
     ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
