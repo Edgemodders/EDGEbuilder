@@ -1,6 +1,9 @@
 // What the editor page and the Node mod say to each other over REDnode's channel.
 // The page asks; the mod answers with a full state snapshot, so the page never keeps its own truth.
 
+import type { ToolInfo } from "./tools";
+export type { ToolInfo };
+
 /** `npc`: a `Character` record from TweakDB (B3c); its `path` is the record, such as `Character.Judy`. */
 export type AssetKind = "mesh" | "entity" | "npc";
 
@@ -396,6 +399,8 @@ export interface Snapshot {
   settings: { bridgePath?: string; gameDir?: string; hideHud?: boolean; editorCamera?: boolean; settingsFile: string };
   /** What is in use when a setting is left empty: the REDbridge found or shared, and the game folder found. */
   inUse: { bridge?: string; gameDir?: string };
+  /** Tools (T0, docs/tools.md): installed packages that provide "edgebuilder-tool", from REDnode's package folders. */
+  tools: ToolInfo[];
 }
 
 /** One streaming sector on the Sectors sub-tab, from REDbridge's sector.find. */
@@ -602,7 +607,11 @@ export type PageMessage =
    */
   | { type: "explore"; seq: number; root: string; dir: string; text?: string }
   // The Import file picker (0.14.0): one folder on the disk; no `dir`, the first place.
-  | { type: "files"; seq: number; dir?: string };
+  | { type: "files"; seq: number; dir?: string }
+  /** Tools (T0): look through REDnode's package folders again. */
+  | { type: "tools.scan" }
+  /** Tools (T0): a line in EDGEbuilder's log from a tool's drawer (its say, or what it threw). */
+  | { type: "tools.log"; id: string; text: string; tone?: "info" | "warn" | "error" };
 
 /** One model of a preview: a mesh's plain GLB (base64), and for an entity's part its offset and scale in the entity (game axes). */
 export interface PreviewPart {

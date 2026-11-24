@@ -47,6 +47,7 @@ import { SectorKinds, bridgeKinds, editsInSector, levelsOf, nodeRows, placesEnti
 import { DefaultKinds, KindLabels, MeshNodeKinds, doorActions, doorAfter, doorStateText, doorUnderRay, editFor, editId, idText, kindOfClass, questWarnings, readableEdits, registryId, sameId } from "./worldedits";
 import { movePreview, sameTransform } from "./move";
 import { checkModelPath, deskDir, filePlaces, listFolder, scanModels } from "./models";
+import { findTools } from "./tools";
 import { isTextureLine, loadFab, type BridgeCall, type FabCore, type FabPrepared } from "./fab";
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, upright, type Clip } from "./arrange";
@@ -141,6 +142,7 @@ const state: Snapshot = {
   history: { undo: 0, redo: 0 },
   settings: { ...settings, settingsFile },
   inUse: {},
+  tools: [],
 };
 
 function publish(): void {
@@ -341,6 +343,44 @@ async function refreshMods(): Promise<void> {
     modsBusy = false;
   }
 }
+
+// ---- tools (T0, docs/tools.md) -----------------------------------------------------------------------
+//
+// Packages that provide "edgebuilder-tool", found in REDnode's package folders (pkg.appsDirs) until REDnode
+// can list a role's providers. Each tool's folder is watched: a change looks again, so a changed module has
+// a new URL and the page mounts it again.
+
+const toolWatchers = new Map<string, fs.FSWatcher>();
+
+function scanTools(): void {
+  let dirs: readonly string[] = [];
+  try {
+    dirs = pkg.appsDirs ?? [];
+  } catch {
+    // An older REDnode: no package folders known.
+  }
+  if (!dirs.length) dirs = [path.dirname(pkg.dir)];
+  state.tools = findTools(dirs, pkg.dir);
+  const want = new Set(state.tools.map((t) => t.dir));
+  for (const [dir, w] of toolWatchers) {
+    if (want.has(dir)) continue;
+    w.close();
+    toolWatchers.delete(dir);
+  }
+  for (const dir of want) {
+    if (toolWatchers.has(dir)) continue;
+    try {
+      toolWatchers.set(dir, fs.watch(dir, { recursive: true }, toolsChanged));
+    } catch {
+      // A folder that cannot be watched: Look again finds its changes.
+    }
+  }
+}
+
+const toolsChanged = debounced(() => {
+  scanTools();
+  publish();
+}, 300);
 
 function sourcesChanged(): void {
   index.extra = sources.entries();
@@ -3219,6 +3259,18 @@ channel.on<PageMessage>((m) => {
         channel.post({ type: "explore", seq: m.seq, root: m.root, dir: m.dir, text: m.text ?? "", roots: index.exploreRoots(), ...found });
         break;
       }
+      case "tools.scan":
+        scanTools();
+        publish();
+        break;
+      case "tools.log": {
+        const t = state.tools.find((x) => x.id === m.id);
+        const line = `Tool "${t?.label ?? m.id}": ${m.text}`;
+        if (m.tone === "error") console.error(line);
+        else if (m.tone === "warn") console.warn(line);
+        else console.log(line);
+        break;
+      }
       case "files": {
         // The Import file picker (0.14.0): one folder of the disk, its folders and GLB files.
         const places = filePlaces(state.library.modelPlaces.map((p) => ({ label: p.label, dir: p.dir })));
@@ -4153,6 +4205,7 @@ if (index.loadNewest()) {
   state.index = { status: "ready", count: index.entries.length, file: index.file, progress: "From the last time REDbridge read the game" };
   runSearch();
 }
+scanTools();
 publish();
 // Before a save loads, so the registry knows the sectors that load with it (D0, step 1).
 void startRegistry();

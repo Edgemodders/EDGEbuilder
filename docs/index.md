@@ -46,6 +46,6 @@ As of 2026-10-30 (design draft 4): B2b passed in game on 2.31, the 0.3.4 check o
 | B4b Edit the world | Agreed with B3b: the game's own objects hidden or changed, baked as ArchiveXL sector edits |
 | B4c Quest places | Planned for EDGEquest's Q4 ([issue #3](https://github.com/Edgemodders/EDGEbuilder/issues/3)): spots, trigger areas, map markers and NPC spawns with refs, listed through EDGEbuilder's service |
 | B5 Lights and more kinds | Not started. Split by kind on 2026-11-22: B5-1 lights, B5-2 decals, B5-3 particles, effects and fog volumes, B5-4 colliders, B5-5 sounds |
-| Tools (T0 to T3) | Agreed 2026-11-24, not yet placed in the order: a Tools tab, plugins in a drawer, an API for them ([Tools](tools.md)) |
+| Tools (T0 to T3) | Agreed 2026-11-24; **T0 built the same day** ([results](tools.md#t0-results)), its game check pending: a Tools tab, plugins in a drawer, an API for them ([Tools](tools.md)) |
 | B6 Comfort | Not started |
 | B7 Project builder | Not started |

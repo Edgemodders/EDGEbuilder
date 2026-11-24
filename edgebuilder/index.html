@@ -92,6 +92,16 @@
   /* The Import file picker: a very wide drawer, the places on its left, one folder's contents on its right. */
   #fileDrawer { position: absolute; right: 656px; top: 70px; width: 1000px; height: 920px; box-sizing: border-box; padding: 10px; background: var(--rn-bg, #08090d); border: 1px solid var(--rn-line, #333); border-top: 2px solid var(--rn-accent, #fcee0a); opacity: 0; visibility: hidden; transform: translateX(60px); transition: transform .16s ease-out, opacity .16s, visibility .16s; display: flex; flex-direction: column; }
   #fileDrawer.open { opacity: 1; visibility: visible; transform: none; }
+  /* Tools (T0): a tool's own drawer; its width comes from its manifest. */
+  #toolDrawer { position: absolute; right: 656px; top: 70px; width: 420px; height: 920px; box-sizing: border-box; padding: 10px; background: var(--rn-bg, #08090d); border: 1px solid var(--rn-line, #333); border-top: 2px solid var(--rn-accent, #fcee0a); opacity: 0; visibility: hidden; transform: translateX(60px); transition: transform .16s ease-out, opacity .16s, visibility .16s; display: flex; flex-direction: column; }
+  #toolDrawer.open { opacity: 1; visibility: visible; transform: none; }
+  #toolBody { flex: 1; min-height: 0; overflow: auto; }
+  .toolStatus { font-family: var(--rn-mono, monospace); font-size: 11px; color: var(--rn-muted, #9aa); margin: 0 0 8px; min-height: 16px; overflow-wrap: anywhere; }
+  .toolStatus.warn { color: var(--rn-warn, #f5a623); }
+  .toolStatus.error { color: var(--rn-danger, #ff5a5a); }
+  .toolRow { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .toolRow .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toolRow .why { color: var(--rn-danger, #ff5a5a); font-size: 12px; }
   #fileBody { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px 1fr; gap: 10px; }
   #filePlaces { --rn-list-height: 820px; }
   #fileMain { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -212,6 +222,11 @@
   <div id="libraryDrawer">
     <div class="drawerHead"><span class="section">Library</span><button id="libraryShrink" class="icon" title="Narrower"><svg viewBox="0 0 16 16"><path d="M14 2.5v11M2 8h8M7 5l3 3-3 3"/></svg></button><button id="libraryGrow" class="icon" title="Wider: the drawer grows to the left"><svg viewBox="0 0 16 16"><path d="M14 2.5v11M11 8H2M5 5L2 8l3 3"/></svg></button><button id="libraryDrawerIn" class="icon" aria-pressed="true" title="Back into the EDGEbuilder window"><svg viewBox="0 0 16 16"><path d="M7 2.5h6.5v11H7M10 8H1.5M4.5 5L1.5 8l3 3"/></svg></button><button id="libraryDrawerClose" class="act" title="Close (the Library button on the Library tab opens it again)"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
     <div id="libraryDrawerBody"></div>
+  </div>
+  <div id="toolDrawer">
+    <div class="drawerHead"><span id="toolTitle" class="section">Tool</span><button id="toolReload" class="icon" title="Mount it again: its module is loaded afresh"><svg viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/></svg></button><button id="toolClose" class="act" title="Close (Settings, Tools, opens it again)"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+    <div id="toolStatus" class="toolStatus"></div>
+    <div id="toolBody"></div>
   </div>
   <div id="fileDrawer">
     <div class="drawerHead"><span class="section">Find a model to import</span><button id="fileClose" class="act" title="Close (the folder button beside the Import path opens it again)"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
@@ -442,6 +457,13 @@
         <rn-panel title="Previews">
           <rn-toggle id="tileDetails" label="A picture's details before Drop" checked title="On: a click on a picture in the Previews drawer opens its details beside it (the model in 3D, its size, looks and a Drop button). Off: a click starts Drop at click at once"></rn-toggle>
         </rn-panel>
+        <div id="toolsBox" hidden>
+          <rn-panel title="Tools (T0 probe)">
+            <div id="toolsList"></div>
+            <div class="row"><rn-button id="toolsScan" variant="ghost" title="Look through REDnode's package folders again">Look again</rn-button></div>
+            <div class="detail">Packages that add a tool to EDGEbuilder. Open shows one in a drawer to the left. The Tools tab comes in T1 (docs/tools.md).</div>
+          </rn-panel>
+        </div>
         <rn-panel title="Library">
           <rn-input id="libraryRoot" label="Library folder"></rn-input>
           <div class="row"><rn-button id="setLibrary" variant="ghost">Use this folder</rn-button></div>

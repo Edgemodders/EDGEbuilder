@@ -304,6 +304,42 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   console.log("models: ok");
 }
 
+{
+  // Tools (T0): packages that provide "edgebuilder-tool", one level down in REDnode's package folders.
+  const dev = fs.mkdtempSync(path.join(os.tmpdir(), "eb-tools-dev-"));
+  const apps = fs.mkdtempSync(path.join(os.tmpdir(), "eb-tools-apps-"));
+  const pack = (root, dir, manifest, files = {}) => {
+    fs.mkdirSync(path.join(root, dir), { recursive: true });
+    fs.writeFileSync(path.join(root, dir, "rednode-app.json"), JSON.stringify(manifest));
+    for (const [f, body] of Object.entries(files)) fs.writeFileSync(path.join(root, dir, f), body);
+  };
+  const tool = (id, extra = {}) => ({ id, name: id, version: "1.0.0", service: "service.mjs", provides: ["edgebuilder-tool"], edgebuilderTool: { label: id.toUpperCase(), ui: "tool.js", width: 2000, wants: ["scene.read", 7] }, ...extra });
+  pack(dev, "align", tool("align"), { "tool.js": "export function mount() {}" });
+  pack(apps, "align", tool("align", { version: "0.9.0" }), { "tool.js": "" });
+  pack(apps, "grid", tool("grid", { edgebuilderTool: { ui: "missing.js" } }));
+  pack(apps, "outside", tool("outside", { edgebuilderTool: { ui: "../x.js" } }));
+  pack(apps, "plain", { id: "plain", name: "Plain", main: "mod.mjs" });
+  pack(apps, "noblock", { id: "noblock", provides: ["edgebuilder-tool"], service: "s.mjs" });
+  fs.mkdirSync(path.join(apps, "empty"));
+  const found = core.findTools([dev, apps, path.join(apps, "gone")]);
+  assert.deepEqual(found.map((t) => t.id), ["align", "grid", "noblock", "outside"], "tools only, sorted by label, the first of an id wins");
+  const align = found[0];
+  assert.equal(align.version, "1.0.0", "a development folder comes before the apps folder");
+  assert.equal(align.label, "ALIGN");
+  assert.equal(align.width, core.ToolWidths.max, "the width is kept within the drawer's");
+  assert.deepEqual(align.wants, ["scene.read"]);
+  assert.match(align.url, /^file:\/\/\/.*\/align\/tool\.js\?v=\d+$/);
+  assert.ok(!align.problem);
+  assert.match(found[1].problem, /not there/);
+  assert.equal(found[1].label, "grid", "no label: the package's name");
+  assert.match(found[2].problem, /no "edgebuilderTool"/);
+  assert.match(found[3].problem, /outside its own folder/);
+  assert.deepEqual(core.findTools([dev], path.join(dev, "align")), [], "EDGEbuilder's own folder is skipped");
+  fs.rmSync(dev, { recursive: true, force: true });
+  fs.rmSync(apps, { recursive: true, force: true });
+  console.log("tools: ok");
+}
+
 // Scene store: add, select ids, remove, save and load round trip, previews forgotten.
 {
   const scene = new Scene(path.join(tmp, "scenes", "working.scene.json"));

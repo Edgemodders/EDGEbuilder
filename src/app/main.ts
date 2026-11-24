@@ -5,7 +5,8 @@ import { AXES, add, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "
 import type { AssetEntry, AssetFrom, AssetKind, DropLike, ImportCollision, LibraryBake, ModelEntry, ExploreReply, ExploreRoot, FilesReply, ModMessage, PageMessage, Place, PreviewReply, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
 import type { Part, Previews } from "./previews";
 import { held } from "./held";
-import { Viewport, busyText, type WorldTip } from "./viewport";
+import { Viewport, busyText, fieldFocused, type WorldTip } from "./viewport";
+import { ToolDrawer } from "./tools";
 import { doorStateText } from "../worldedits";
 import { exploreSegments } from "../explore";
 import helpHtml from "./help.md";
@@ -184,6 +185,7 @@ function render(s: Snapshot): void {
   renderSectorDrawer(s);
   renderPreviews(s);
   explorerFresh(s);
+  renderTools(s);
   renderLeft();
   renderExPreview(s);
   renderEdits(s);
@@ -400,8 +402,8 @@ window.addEventListener(
   "keydown",
   (e) => {
     if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) return;
-    const tag = document.activeElement?.tagName;
-    if (tag === "INPUT" || tag === "RN-INPUT") return;
+    // A field, or anything in a tool's drawer, keeps what is typed.
+    if (fieldFocused() || document.activeElement?.closest("#toolDrawer")) return;
     if (lastDownInWorld && ($("edit") as HTMLElement & { checked: boolean }).checked) return;
     // With the Explorer or the Import file picker open, typing filters it.
     if (explorerOpen || filesOpen) {
@@ -1694,6 +1696,15 @@ let libraryDrawerOpen = false;
 let previewsOpen = false;
 /** The Import file picker, opened by the folder button beside the Import path. */
 let filesOpen = false;
+/** Tools (T0): a tool's drawer, and the tool mounted in it. */
+let toolOpen = false;
+const toolDrawer = new ToolDrawer({
+  body: $("toolBody"),
+  status: $("toolStatus"),
+  state: () => state,
+  log: (id, text, tone) => post({ type: "tools.log", id, text, tone }),
+  close: () => openLeft("none"),
+});
 /** The Preview drawer beside the Previews drawer, for a picture clicked there (Settings: "A picture's details before Drop"). */
 let tileDetail = false;
 /** The Preview drawer beside the Objects drawer, for an object's eye there; the object it shows. */
@@ -1704,7 +1715,10 @@ let exWidth = 480;
 /** The Previews drawer's pictures, by path (declared here: renderLeft marks the picked one). */
 const tiles = new Map<string, { el: HTMLElement; drawn: boolean; picture?: string; error?: string; asked?: number }>();
 
-function openLeft(which: "objects" | "library" | "previews" | "explorer" | "preview" | "world" | "files" | "none"): void {
+function openLeft(which: "objects" | "library" | "previews" | "explorer" | "preview" | "world" | "files" | "tool" | "none"): void {
+  // A tool runs only while its drawer is open.
+  toolOpen = which === "tool";
+  if (!toolOpen) toolDrawer.unmount();
   const wasFiles = filesOpen;
   filesOpen = which === "files";
   tileDetail = false;
@@ -1745,6 +1759,7 @@ function renderLeft(): void {
   $("exPreview").classList.toggle("world", previewWorld);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
   $("fileDrawer").classList.toggle("open", filesOpen);
+  $("toolDrawer").classList.toggle("open", toolOpen);
   $("importBrowse").setAttribute("aria-pressed", String(filesOpen));
   if (!worldOpen && ((!explorerOpen && !previewAlone && !besideTiles && !besideObjects) || !exPicked)) stopExView();
 }
@@ -1924,6 +1939,48 @@ function useFile(file: string): void {
   openLeft("none");
   pickTyped();
 }
+
+// ---- tools (T0, docs/tools.md) ---------------------------------------------------------------------------
+//
+// Installed tools are listed in Settings until T1's Tools tab; Open mounts one in a drawer to the left.
+
+
+function renderTools(s: Snapshot): void {
+  const tools = s.tools ?? [];
+  $("toolsBox").hidden = !tools.length;
+  const html = tools
+    .map(
+      (t) =>
+        `<div class="toolRow" title="${esc(`${t.description}${t.wants.length ? `\nWants: ${t.wants.join(", ")}` : ""}\n${t.dir}`)}"><span class="name">${esc(t.label)} <span class="dim">${esc(t.version)}</span>${t.problem ? `<br><span class="why">${esc(t.problem)}</span>` : ""}</span><rn-button variant="ghost" data-tool="${esc(t.id)}"${toolOpen && toolDrawer.id === t.id ? ' aria-pressed="true"' : ""}>${toolOpen && toolDrawer.id === t.id ? "Close" : "Open"}</rn-button></div>`,
+    )
+    .join("");
+  const list = $("toolsList");
+  if (list.dataset.html !== html) {
+    list.innerHTML = html;
+    list.dataset.html = html;
+  }
+  toolDrawer.sync(tools);
+}
+
+function openTool(id: string): void {
+  const t = state?.tools.find((x) => x.id === id);
+  if (!t) return;
+  if (toolOpen && toolDrawer.id === id) return openLeft("none");
+  $("toolTitle").textContent = t.label;
+  $("toolTitle").title = `${t.name} ${t.version}: ${t.description}`;
+  ($("toolDrawer") as HTMLElement).style.width = `${t.width}px`;
+  openLeft("tool");
+  void toolDrawer.open(t);
+  if (state) renderTools(state);
+}
+
+$("toolsList").addEventListener("click", (e) => {
+  const b = (e.target as HTMLElement).closest<HTMLElement>("[data-tool]");
+  if (b?.dataset.tool) openTool(b.dataset.tool);
+});
+$("toolsScan").addEventListener("click", () => post({ type: "tools.scan" }));
+$("toolReload").addEventListener("click", () => toolDrawer.reload());
+$("toolClose").addEventListener("click", () => openLeft("none"));
 
 $("importBrowse").addEventListener("click", () => openLeft(filesOpen ? "none" : "files"));
 $("fileClose").addEventListener("click", () => openLeft("none"));
@@ -2873,8 +2930,7 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
 // typing in a field (the field undoes its own text), and not in the middle of a drag or a box.
 window.addEventListener("keydown", (e) => {
   if (!e.ctrlKey || e.altKey || e.metaKey) return;
-  const tag = document.activeElement?.tagName;
-  if (tag === "INPUT" || tag === "RN-INPUT" || viewport.busy) return;
+  if (fieldFocused() || viewport.busy) return;
   const key = e.key.toLowerCase();
   const ids = selection();
   if (key === "z" && !e.shiftKey) post({ type: "undo" });

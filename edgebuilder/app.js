@@ -287,6 +287,16 @@ function busyText(b) {
 }
 var RightTapMs = 250;
 var RightTapPx = 6;
+function fieldFocused() {
+  let el = document.activeElement;
+  for (; ; ) {
+    if (!el) return false;
+    if (el.tagName === "INPUT" || el.tagName === "RN-INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable) return true;
+    const inner = el.shadowRoot?.activeElement;
+    if (!inner) return false;
+    el = inner;
+  }
+}
 var Viewport = class {
   constructor(canvas, hooks) {
     this.canvas = canvas;
@@ -757,10 +767,10 @@ var Viewport = class {
     if (this.busyWith) this.banner(`EDGEbuilder is busy: ${busyText(this.busyWith)}. What you do now waits its turn.`);
   }
   /** A line at the top centre of the view, for the busy state. */
-  banner(text) {
+  banner(text2) {
     const ctx = this.ctx;
     ctx.font = "16px 'JetBrains Mono', Consolas, monospace";
-    const w = ctx.measureText(text).width + 24;
+    const w = ctx.measureText(text2).width + 24;
     const left = this.canvas.width / 2 - w / 2;
     ctx.fillStyle = "rgba(8,9,13,0.9)";
     ctx.fillRect(left, 24, w, 32);
@@ -772,7 +782,7 @@ var Viewport = class {
       const t = performance.now() / 1200 % 1;
       ctx.fillRect(left + (w - w / 4) * t, 52, w / 4, 4);
     }
-    ctx.fillText(text, left + 12, 46);
+    ctx.fillText(text2, left + 12, 46);
   }
   /** Drop at click's outline: the object's own edges (line pairs in its space, game axes) placed at `at`, turned by `q`. */
   drawEdges(lines, at, q, colour, s = [1, 1, 1]) {
@@ -932,11 +942,11 @@ var Viewport = class {
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.fillStyle = "rgba(8,9,13,0.85)";
-    const text = "Picking...";
-    const w = ctx.measureText(text).width + 12;
+    const text2 = "Picking...";
+    const w = ctx.measureText(text2).width + 12;
     ctx.fillRect(cx - w / 2, cy + 24, w, 18);
     ctx.fillStyle = "#fcee0a";
-    ctx.fillText(text, cx, cy + 27);
+    ctx.fillText(text2, cx, cy + 27);
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
     this.kick();
@@ -1407,8 +1417,7 @@ var Viewport = class {
   }
   onKey(e) {
     if (!this.edit) return;
-    const el = document.activeElement;
-    if (el && (el.tagName === "INPUT" || el.tagName === "RN-INPUT" || el.isContentEditable)) return;
+    if (fieldFocused()) return;
     const key = e.key.toLowerCase();
     if (this.rmb && "wasdqe".includes(key)) return;
     if (key === "escape" && this.placing) {
@@ -1456,6 +1465,161 @@ var Viewport = class {
     else if (key === "delete") this.hooks.remove(this.selected);
   }
 };
+
+// src/app/tools.ts
+var BaseStyle = `:host { display: block; color: var(--rn-fg, #eee); font: inherit; }
+.tool-root { display: flex; flex-direction: column; gap: 8px; }`;
+var ToolDrawer = class {
+  constructor(host) {
+    this.host = host;
+    window.addEventListener("error", (e) => {
+      if (this.isMine(e.filename) || this.isMine(e.error?.stack)) this.failed(e.error ?? e.message, "threw");
+    });
+    window.addEventListener("unhandledrejection", (e) => {
+      const r = e.reason;
+      if (this.isMine(r?.stack)) this.failed(e.reason, "failed");
+    });
+  }
+  mounted;
+  /** Each mount's number: a slow import that finishes after another mount began is dropped. */
+  turn = 0;
+  /** The tool shown, if any. */
+  get id() {
+    return this.mounted?.tool.id;
+  }
+  /** Mounts the tool shown again, its module loaded afresh. */
+  reload() {
+    const m = this.mounted;
+    if (m) void this.open(m.tool, true);
+  }
+  /** Mounts a tool, after unmounting the one before; `fresh` loads its module again even when unchanged. */
+  async open(tool, fresh = false) {
+    this.unmount();
+    const turn = ++this.turn;
+    this.say(tool.problem ? "" : `Loading ${tool.label}...`);
+    const body = this.host.body;
+    const host = document.createElement("div");
+    host.className = "toolHost";
+    body.replaceChildren(host);
+    const m = { tool, url: tool.url, host, listeners: /* @__PURE__ */ new Set() };
+    this.mounted = m;
+    if (tool.problem) {
+      this.say(`${tool.label} cannot open: ${tool.problem}.`, "error");
+      return;
+    }
+    const shadow = host.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    style.textContent = BaseStyle;
+    const root = document.createElement("div");
+    root.className = "tool-root";
+    shadow.append(style, root);
+    const started = performance.now();
+    try {
+      const mod = await /* a tool's own file, never bundled */
+      (fresh ? import(`${tool.url}&r=${Date.now()}`) : import(tool.url));
+      if (turn !== this.turn) return;
+      const mount = typeof mod.default === "function" ? mod.default : mod.mount;
+      if (typeof mount !== "function") throw new Error("its module exports no mount(el, api) function, as its default export or by name");
+      const handle = await mount(root, this.api(m));
+      if (turn !== this.turn) return;
+      m.unmount = typeof handle === "function" ? handle : typeof handle?.unmount === "function" ? () => handle.unmount() : mod.unmount;
+      const ms = Math.round(performance.now() - started);
+      this.say(`${tool.label} ${tool.version}, mounted in ${ms} ms.`);
+      this.host.log(tool.id, `mounted in ${ms} ms from ${tool.url}`);
+    } catch (err) {
+      if (turn === this.turn) this.failed(err, "did not mount");
+    }
+  }
+  /** After each snapshot: a changed module mounts again (hot reload); a tool that went away closes. */
+  sync(tools) {
+    const m = this.mounted;
+    for (const fn of m?.listeners ?? []) this.guard(fn);
+    if (!m) return;
+    const now = tools.find((t) => t.id === m.tool.id);
+    if (!now) {
+      this.unmount();
+      this.host.body.replaceChildren();
+      this.say(`${m.tool.label} is not installed any more.`, "warn");
+      return;
+    }
+    if (now.url !== m.url || now.problem !== m.tool.problem) void this.open(now);
+  }
+  /** Unmounts the tool shown, if any. */
+  unmount() {
+    const m = this.mounted;
+    if (!m) return;
+    this.mounted = void 0;
+    this.turn++;
+    m.listeners.clear();
+    try {
+      m.unmount?.();
+    } catch (err) {
+      this.host.log(m.tool.id, `unmount threw: ${text(err)}`, "warn");
+    }
+    m.host.remove();
+  }
+  api(m) {
+    const live = () => this.mounted === m;
+    return {
+      apiVersion: 0,
+      tool: { id: m.tool.id, name: m.tool.name, version: m.tool.version, label: m.tool.label },
+      selection: () => {
+        const s = this.host.state();
+        if (!s) return [];
+        return s.selected.map((id) => s.scene.objects.find((o) => o.id === id)).filter((o) => !!o).map((o) => {
+          const name = o.resource ?? o.record ?? o.id;
+          return { id: o.id, label: name.slice(name.lastIndexOf("\\") + 1), kind: o.kind, resource: o.resource, record: o.record };
+        });
+      },
+      scene: () => {
+        const s = this.host.state();
+        return { name: s?.scene.name ?? "", objects: s?.scene.objects.length ?? 0 };
+      },
+      onChange: (fn) => {
+        if (!live()) return () => void 0;
+        m.listeners.add(fn);
+        return () => m.listeners.delete(fn);
+      },
+      say: (t, tone = "info") => {
+        if (!live()) return;
+        this.say(`${m.tool.label}: ${t}`, tone);
+        this.host.log(m.tool.id, String(t), tone);
+      },
+      close: () => {
+        if (live()) this.host.close();
+      }
+    };
+  }
+  guard(fn) {
+    try {
+      fn();
+    } catch (err) {
+      this.failed(err, "threw");
+    }
+  }
+  isMine(where) {
+    const m = this.mounted;
+    if (!m || !where) return false;
+    const dir = m.url.slice(0, m.url.lastIndexOf("/") + 1).toLowerCase();
+    const at = where.toLowerCase();
+    return at.includes(dir) || at.includes(decodeURI(dir));
+  }
+  failed(err, what) {
+    const m = this.mounted;
+    if (!m) return;
+    const line = `${m.tool.label} ${what}: ${text(err)}`;
+    this.say(line, "error");
+    this.host.log(m.tool.id, `${what}: ${err instanceof Error && err.stack ? err.stack : text(err)}`, "error");
+  }
+  say(line, tone = "info") {
+    const el = this.host.status;
+    el.textContent = line;
+    el.className = `toolStatus ${tone}`;
+  }
+};
+function text(err) {
+  return err instanceof Error ? err.message : String(err);
+}
 
 // src/worldedits.ts
 function doorStateText(d) {
@@ -1621,6 +1785,7 @@ ${looked.path}`;
   renderSectorDrawer(s);
   renderPreviews(s);
   explorerFresh(s);
+  renderTools(s);
   renderLeft();
   renderExPreview(s);
   renderEdits(s);
@@ -1731,15 +1896,15 @@ function renderSeenFrom(sel) {
 }
 function applySeenFrom() {
   if (!state) return;
-  const text = $("seenFrom").value.trim();
-  if (text === seenShown) return;
-  const n = Number(text);
-  if (text && (!Number.isFinite(n) || n <= 0)) {
+  const text2 = $("seenFrom").value.trim();
+  if (text2 === seenShown) return;
+  const n = Number(text2);
+  if (text2 && (!Number.isFinite(n) || n <= 0)) {
     $("seenFrom").value = seenShown;
     return status(`Seen from takes metres, ${SeenFromRange[0]} to ${SeenFromRange[1]}, or empty for a distance by size.`);
   }
-  seenShown = text;
-  post({ type: "seenFrom", ids: state.selected, metres: text ? n : null });
+  seenShown = text2;
+  post({ type: "seenFrom", ids: state.selected, metres: text2 ? n : null });
 }
 function renderSelected(sel, s) {
   renderSolid(sel, s);
@@ -1800,8 +1965,7 @@ window.addEventListener(
   "keydown",
   (e) => {
     if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) return;
-    const tag = document.activeElement?.tagName;
-    if (tag === "INPUT" || tag === "RN-INPUT") return;
+    if (fieldFocused() || document.activeElement?.closest("#toolDrawer")) return;
     if (lastDownInWorld && $("edit").checked) return;
     if (explorerOpen || filesOpen) {
       e.preventDefault();
@@ -2106,8 +2270,8 @@ function propSlugOf(name) {
 }
 var bakeHtml = "";
 function bakeHolds(r, short = false) {
-  const text = holds(r.objects ?? 0, r.removals ?? 0, short);
-  return r.standIns && !short ? `${text} (and ${r.standIns === 1 ? "its stand-in" : `their ${r.standIns} stand-ins`})` : text;
+  const text2 = holds(r.objects ?? 0, r.removals ?? 0, short);
+  return r.standIns && !short ? `${text2} (and ${r.standIns === 1 ? "its stand-in" : `their ${r.standIns} stand-ins`})` : text2;
 }
 var bakeConfirm;
 function renderBake(s) {
@@ -2750,9 +2914,9 @@ function sectorKinds() {
   return SectorToggles.filter(([id]) => $(id).checked).map(([, k]) => k);
 }
 function findSectors(around) {
-  const text = ($("sectorsText").value ?? "").trim();
+  const text2 = ($("sectorsText").value ?? "").trim();
   const at = around === "camera" ? viewport.cameraAt() : void 0;
-  post({ type: "sectors.find", around, ...at ? { at } : {}, ...around === "text" ? { text } : {}, kinds: sectorKinds(), level: sectorLevel });
+  post({ type: "sectors.find", around, ...at ? { at } : {}, ...around === "text" ? { text: text2 } : {}, kinds: sectorKinds(), level: sectorLevel });
 }
 function renderSectors(s) {
   const sx = s.sectors;
@@ -2897,12 +3061,22 @@ for (const id of ["bakeProjects", "importProjects"]) {
 var libraryDrawerOpen = false;
 var previewsOpen = false;
 var filesOpen = false;
+var toolOpen = false;
+var toolDrawer = new ToolDrawer({
+  body: $("toolBody"),
+  status: $("toolStatus"),
+  state: () => state,
+  log: (id, text2, tone) => post({ type: "tools.log", id, text: text2, tone }),
+  close: () => openLeft("none")
+});
 var tileDetail = false;
 var objectPreview = false;
 var objectLike;
 var exWidth = 480;
 var tiles = /* @__PURE__ */ new Map();
 function openLeft(which) {
+  toolOpen = which === "tool";
+  if (!toolOpen) toolDrawer.unmount();
   const wasFiles = filesOpen;
   filesOpen = which === "files";
   tileDetail = false;
@@ -2942,6 +3116,7 @@ function renderLeft() {
   $("exPreview").classList.toggle("world", previewWorld);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
   $("fileDrawer").classList.toggle("open", filesOpen);
+  $("toolDrawer").classList.toggle("open", toolOpen);
   $("importBrowse").setAttribute("aria-pressed", String(filesOpen));
   if (!worldOpen && (!explorerOpen && !previewAlone && !besideTiles && !besideObjects || !exPicked)) stopExView();
 }
@@ -3060,8 +3235,8 @@ function renderFiles() {
     $("fileInfo").textContent = "";
     return;
   }
-  const text = fileFilter.toLowerCase();
-  const match = (name) => !text || name.toLowerCase().includes(text);
+  const text2 = fileFilter.toLowerCase();
+  const match = (name) => !text2 || name.toLowerCase().includes(text2);
   const folders = f.folders.filter((d) => !d.prop && match(d.name));
   const props = f.folders.filter((d) => d.prop && match(`${d.name} ${d.prop}`));
   const glbs = f.files.filter((x) => match(x.name));
@@ -3069,10 +3244,10 @@ function renderFiles() {
   for (const d of folders) rows.push(`<rn-item value="d:${esc(d.path)}" title="${esc(d.path)}"><span class="fold">\u25B8</span>${esc(d.name)}<span slot="end"><span class="when">${esc(fileWhen(d.changed))}</span></span></rn-item>`);
   for (const d of props) rows.push(`<rn-item value="f:${esc(d.path)}" title="${esc(d.path)}"${fileChosen === d.path ? " selected" : ""}><span class="fold"></span>${esc(d.prop ?? d.name)}<span slot="end">prop<span class="when">${esc(fileWhen(d.changed))}</span></span></rn-item>`);
   for (const x of glbs) rows.push(`<rn-item value="f:${esc(x.path)}" title="${esc(x.path)}"${fileChosen === x.path ? " selected" : ""}><span class="fold"></span>${esc(x.name)}<span slot="end"><span class="size">${esc(fileSize(x.bytes))}</span><span class="when">${esc(fileWhen(x.changed))}</span></span></rn-item>`);
-  if (!rows.length) rows.push(`<rn-item disabled>${esc(f.why ?? (text ? "nothing here matches" : "no folders or GLB files here"))}</rn-item>`);
+  if (!rows.length) rows.push(`<rn-item disabled>${esc(f.why ?? (text2 ? "nothing here matches" : "no folders or GLB files here"))}</rn-item>`);
   $("fileList").innerHTML = rows.join("");
   const n = (k, one, many) => `${k.toLocaleString()} ${k === 1 ? one : many}`;
-  $("fileInfo").textContent = f.why ?? `${n(folders.length, "folder", "folders")}, ${n(glbs.length, "GLB file", "GLB files")}${props.length ? `, ${n(props.length, "prop", "props")}` : ""}${text ? " match" : ""}${f.more ? " (a very big folder: only the first 3,000 entries)" : ""}. A click opens a folder or picks a file; a double-click on a file uses it.`;
+  $("fileInfo").textContent = f.why ?? `${n(folders.length, "folder", "folders")}, ${n(glbs.length, "GLB file", "GLB files")}${props.length ? `, ${n(props.length, "prop", "props")}` : ""}${text2 ? " match" : ""}${f.more ? " (a very big folder: only the first 3,000 entries)" : ""}. A click opens a folder or picks a file; a double-click on a file uses it.`;
   $("fileChosen").textContent = fileChosen ?? "Pick a .glb file, or a prop from EDGEfab's Desk";
   $("fileUse").toggleAttribute("disabled", !fileChosen);
 }
@@ -3081,6 +3256,39 @@ function useFile(file) {
   openLeft("none");
   pickTyped();
 }
+function renderTools(s) {
+  const tools = s.tools ?? [];
+  $("toolsBox").hidden = !tools.length;
+  const html = tools.map(
+    (t) => `<div class="toolRow" title="${esc(`${t.description}${t.wants.length ? `
+Wants: ${t.wants.join(", ")}` : ""}
+${t.dir}`)}"><span class="name">${esc(t.label)} <span class="dim">${esc(t.version)}</span>${t.problem ? `<br><span class="why">${esc(t.problem)}</span>` : ""}</span><rn-button variant="ghost" data-tool="${esc(t.id)}"${toolOpen && toolDrawer.id === t.id ? ' aria-pressed="true"' : ""}>${toolOpen && toolDrawer.id === t.id ? "Close" : "Open"}</rn-button></div>`
+  ).join("");
+  const list = $("toolsList");
+  if (list.dataset.html !== html) {
+    list.innerHTML = html;
+    list.dataset.html = html;
+  }
+  toolDrawer.sync(tools);
+}
+function openTool(id) {
+  const t = state?.tools.find((x) => x.id === id);
+  if (!t) return;
+  if (toolOpen && toolDrawer.id === id) return openLeft("none");
+  $("toolTitle").textContent = t.label;
+  $("toolTitle").title = `${t.name} ${t.version}: ${t.description}`;
+  $("toolDrawer").style.width = `${t.width}px`;
+  openLeft("tool");
+  void toolDrawer.open(t);
+  if (state) renderTools(state);
+}
+$("toolsList").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tool]");
+  if (b?.dataset.tool) openTool(b.dataset.tool);
+});
+$("toolsScan").addEventListener("click", () => post({ type: "tools.scan" }));
+$("toolReload").addEventListener("click", () => toolDrawer.reload());
+$("toolClose").addEventListener("click", () => openLeft("none"));
 $("importBrowse").addEventListener("click", () => openLeft(filesOpen ? "none" : "files"));
 $("fileClose").addEventListener("click", () => openLeft("none"));
 $("fileUp").addEventListener("click", () => files?.parent && askFiles(files.parent));
@@ -3833,8 +4041,8 @@ async function makeEdges(path) {
   }
   while (edgeCache.size > 20) edgeCache.delete(edgeCache.keys().next().value);
 }
-function status(text) {
-  $("message").textContent = text;
+function status(text2) {
+  $("message").textContent = text2;
   $("message").className = "message warn";
 }
 var showSceneTab = () => document.getElementById("mainTabs").select?.(1);
@@ -3862,7 +4070,7 @@ var viewport = new Viewport($("view"), {
   remove: (ids) => ids.length ? post({ type: "delete", ids }) : state?.worldObjects.picked && !state.worldObjects.picked.removedBy ? post({ type: "world.remove" }) : void 0,
   floor: (ids) => post({ type: "floor", ids }),
   undo: () => post({ type: "undo" }),
-  log: (text) => post({ type: "log", text }),
+  log: (text2) => post({ type: "log", text: text2 }),
   builderStart: (pose) => post({ type: "builder.start", pose }),
   builderStop: () => post({ type: "builder.stop" }),
   probe: (seq, ray) => post({ type: "drop.probe", seq, origin: ray.o, dir: ray.d }),
@@ -3873,15 +4081,14 @@ var viewport = new Viewport($("view"), {
     post({ type: "world.hoverRay", ray: want && ray ? { origin: ray.o, dir: ray.d } : null, free: freePick, outline: freePick });
     if (!hoverSent) viewport.setWorldTip(void 0);
   },
-  status(text) {
-    $("message").textContent = text;
+  status(text2) {
+    $("message").textContent = text2;
     $("message").className = "message warn";
   }
 });
 window.addEventListener("keydown", (e) => {
   if (!e.ctrlKey || e.altKey || e.metaKey) return;
-  const tag = document.activeElement?.tagName;
-  if (tag === "INPUT" || tag === "RN-INPUT" || viewport.busy) return;
+  if (fieldFocused() || viewport.busy) return;
   const key = e.key.toLowerCase();
   const ids = selection();
   if (key === "z" && !e.shiftKey) post({ type: "undo" });

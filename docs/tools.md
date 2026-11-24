@@ -4,7 +4,7 @@ title: Tools
 
 # Tools: plugins for EDGE<span class="y">builder</span>
 
-Draft 1, 2026-11-24. **Agreed with the owner on 2026-11-24**, with every recommendation below; not yet placed in the build order. Asked for by the owner on 2026-11-24: a **Tools** tab before About, with a button for each installed tool. A tool is a REDnode package written in JavaScript or TypeScript with REDnode's UI kit. It opens in a drawer of EDGEbuilder's and works on EDGEbuilder's scene through an API EDGEbuilder offers.
+Draft 1, 2026-11-24. **Agreed with the owner on 2026-11-24**, with every recommendation below. **T0 built the same day** (see [T0 results](#t0-results)); its in-game check is [T0 Tools probe](testing.md#t0-tools-probe). Asked for by the owner on 2026-11-24: a **Tools** tab before About, with a button for each installed tool. A tool is a REDnode package written in JavaScript or TypeScript with REDnode's UI kit. It opens in a drawer of EDGEbuilder's and works on EDGEbuilder's scene through an API EDGEbuilder offers.
 
 ## What a player sees
 
@@ -122,7 +122,7 @@ EDGEbuilder needs every installed package that provides `edgebuilder-tool`, with
 
 | Phase | Builds | Its test shows |
 |---|---|---|
-| **T0 Probe** | A sample tool's `tool.js` loaded from another package's folder into EDGEbuilder's page, using the UI kit and `service.connect` to its own Node half; the manifests found | A module from another package mounts in a drawer, its UI kit elements work, it reaches its own service, hot reload of the tool remounts it |
+| **T0 Probe** (built 2026-11-24) | A sample tool's `tool.js` loaded from another package's folder into EDGEbuilder's page, using the UI kit and `service.connect` to its own Node half; the manifests found | A module from another package mounts in a drawer, its UI kit elements work, it reaches its own service, hot reload of the tool remounts it |
 | **T1 Tools tab** | The tab and its buttons, the drawer, first-use question, failure handling; the read API, `say`, `select`; one sample tool (Align: line up and space out the selection) | A tool installed with EDGEdeck shows in the tab, opens, reads the selection and selects; a tool that throws shows red and does not upset EDGEbuilder |
 | **T2 Changes** | `change` with one undo step, `dropAtClick`, `raycast`, `pickPoint`, `draw`; the same through EDGEbuilder's service; two more sample tools (Grid array, Scatter on a surface) | A grid of crates made and undone in one step; a scatter drawn in the viewport before it is made |
 | **T3 For modders** | The npm types and template, a page in EDGEbuilder's wiki, `apiVersion` 1 pinned | A modder's tool from the template, written without reading EDGEbuilder's source |
@@ -142,3 +142,22 @@ Answered on 2026-11-24: the owner agreed the design with each recommendation. Th
 | File the REDnode request for `service.providers(role)` | Yes, with T0 |
 
 Clean room: World Builder has nothing like this to copy from; the design follows REDnode's own services and roles, and how code editors load extensions.
+
+## T0 results
+
+Built on 2026-11-24 and checked in REDnode's host (0.70.0) with real clicks and keys; the game check is [T0 Tools probe](testing.md#t0-tools-probe). The probe is `probes/tool-probe` (EDGEbuilder tool probe 0.1.0): a package with only a service file, `provides: ["edgebuilder-tool"]` and a `tool.js`. EDGEbuilder lists the tools it finds in Settings, under **Tools (T0 probe)**, and only when one is installed, until T1's tab.
+
+| Question | Answer |
+|---|---|
+| Can EDGEbuilder's page load a module from another package's folder? | Yes. `import()` of its `file://` URL works from EDGEbuilder's `file://` page; it mounts in 3 to 6 ms |
+| Where does the tool's markup live? | In a shadow root of its own, inside the drawer. Its ids and styles do not meet EDGEbuilder's (the probe has an element with the id `results`, as EDGEbuilder's result list has). The UI kit's elements look and work as in EDGEbuilder, and the theme's colours come through. The kit finds title tooltips through `composedPath()`, so they should work there too (a step in the game check) |
+| Does `import { service } from "rednode"` work in a tool? | Yes: the page's import map applies to every module in it, so the tool shares EDGEbuilder's copy of the SDK |
+| Can the tool reach its own Node half? | Yes, `service.connect("<its id>")` from EDGEbuilder's page: 1 ms there and back. Events it emits reach the tool, since EDGEbuilder's page connected. **But only while the tool's package is switched on in the Mod Manager**: off, the connect fails with "... is off: switch it on in the Mod Manager". T1's Tools tab has to show that, which is one more reason for the REDnode addition below (it answers whether each provider is on) |
+| Do EDGEbuilder's keys stay out of a tool's fields? | They did not at first: the page checks `document.activeElement`, which stops at the shadow root's host. `fieldFocused()` (viewport.ts) now looks into shadow roots, and a letter typed anywhere in a tool's drawer stays there (it no longer starts an Assets search) |
+| Is what a tool throws caught? | Yes. `mount` failing, a syntax error in the file, a throw in a click handler and a rejected promise nobody catches all show in red at the top of the drawer and in EDGEbuilder's log with the tool's name; EDGEbuilder goes on, and the tool's other buttons still work. Errors are told apart by the file they come from: Node writes the URL as `file:///e:/...` and Chromium as `file:///E:/...`, so the comparison ignores case |
+| Hot reload? | Yes. EDGEbuilder's Node mod watches each tool's folder; a saved change gives the module a new `?v=` (the file's time), and the page unmounts the old one and mounts the new in about 3 ms. The drawer's reload button loads it afresh without a change. A tool's own relative imports are cached by their URL, so **a tool should be one bundled file** (T3's template does that) |
+| Finding the tools without the REDnode addition | `pkg.appsDirs` (REDnode 0.33.0 and later) gives the development folders and the apps folder, so EDGEbuilder reads the manifests one level down and needs no knowledge of REDnode's layout. It cannot see whether a package is switched on, nor hear one being installed: **Look again** in Settings finds a new one |
+
+Decided on the way: `mount` may be the module's default export (as the example above) or exported by name, and may return the unmount function or an object with `unmount`. The API in T0 is version 0 (`tool`, `selection()`, `scene()`, `onChange`, `say`, `close`); T1 starts on the table above.
+
+Still true from option A: a tool's code runs in EDGEbuilder's page and could post EDGEbuilder's own channel messages past the API. The first-use question (T1) is the answer the design agreed.

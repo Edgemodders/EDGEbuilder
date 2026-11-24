@@ -135,6 +135,21 @@ export function busyText(b: Busy): string {
 const RightTapMs = 250;
 const RightTapPx = 6;
 
+/**
+ * Whether the focus is in a text field: the page's own, or one inside a shadow root (a UI kit element's,
+ * or a tool's drawer, T0), so keys typed there are not taken as EDGEbuilder's shortcuts.
+ */
+export function fieldFocused(): boolean {
+  let el = document.activeElement as HTMLElement | null;
+  for (;;) {
+    if (!el) return false;
+    if (el.tagName === "INPUT" || el.tagName === "RN-INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable) return true;
+    const inner = el.shadowRoot?.activeElement as HTMLElement | null | undefined;
+    if (!inner) return false;
+    el = inner;
+  }
+}
+
 export class Viewport {
   private ctx: CanvasRenderingContext2D;
   private edit = false;
@@ -1366,8 +1381,7 @@ export class Viewport {
 
   private onKey(e: KeyboardEvent): void {
     if (!this.edit) return;
-    const el = document.activeElement as HTMLElement | null;
-    if (el && (el.tagName === "INPUT" || el.tagName === "RN-INPUT" || el.isContentEditable)) return;
+    if (fieldFocused()) return;
     const key = e.key.toLowerCase();
     if (this.rmb && "wasdqe".includes(key)) return; // flying
     if (key === "escape" && this.placing) {

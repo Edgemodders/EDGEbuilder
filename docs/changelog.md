@@ -34,6 +34,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 **Other**
 
 - Previews, the Explorer's preview and the outline are drawn with three.js (MIT), loaded only when first needed.
+- Tools, a first probe (T0, https://edgemodders.github.io/EDGEbuilder/tools.html): a REDnode package can add a tool that opens in a drawer of EDGEbuilder's. Settings lists installed tools, and only when there is one; the Tools tab follows.
 
 ## 0.13.2 (2026-11-23)
 

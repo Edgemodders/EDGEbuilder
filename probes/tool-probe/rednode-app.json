@@ -1,0 +1,19 @@
+{
+  "id": "edgebuilder-tool-probe",
+  "name": "EDGEbuilder tool probe",
+  "version": "0.1.0",
+  "author": "Edgemodders",
+  "description": "EDGEbuilder's T0 probe (docs/tools.md; docs/testing.md, \"T0 Tools probe\"): a tool that opens in a drawer of EDGEbuilder's, uses REDnode's UI kit, calls its own service and hears its events. Development only.",
+  "service": "service.mjs",
+  "provides": ["edgebuilder-tool"],
+  "edgebuilderTool": {
+    "label": "Tool probe",
+    "description": "T0: mounts in EDGEbuilder's drawer, reaches its own Node half, reads the selection.",
+    "ui": "tool.js",
+    "width": 420,
+    "wants": ["scene.read"]
+  },
+  "requires": {
+    "rednode": ">=0.58.0"
+  }
+}

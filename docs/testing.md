@@ -37,6 +37,7 @@ Last updated 2026-10-30.
 | [S1 Sectors](#s1-sectors-0130) | In the game | S1 | 2026-11-23 (0.13.0 to 0.13.2) | Pass |
 | [Project picker](#project-picker-0130) | In the game | Project picker | 2026-11-23 (0.13.1) | Pass; 0.13.2 released |
 | [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24 | Partly run: steps 1 to 35 passed on the morning's build; 36 to 51, and 6, 9, 11 and 33 again, to run on the newest (51 steps, P1 to P7) |
+| [T0 Tools probe](#t0-tools-probe) | In the game | T0 | 2026-11-24 | Not run (checked in REDnode's host; 10 steps) |
 
 ## Automated
 
@@ -1166,3 +1167,24 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | P7 | Are the drawer widths, the Import file picker, the About tab's guide, a picture's details before Drop, the Objects drawer's eye and the Explorer's reveal right in the game? |
 
 **Results, 2026-11-24 (the owner, in game): steps 1 to 35 passed** on the build deployed that morning (dbb20bf: the Library drawer's widths, the Import file picker and the About guide, before everything after it). P1 to P6 are answered yes on that build: the pictures come and look like the objects, the overlay drawing them costs no noticeable frame rate, the crosshair and outline show where a drop lands, the Library works from its drawer, objects are found and placed from the game's folders, and Pick under the cursor finds what is under the mouse with Solid as V meets it. Two findings on the way were fixed after that build: the right button cancelled Drop at click at once (now a tap cancels and a hold looks, steps 9 and 11) and Drop a copy's outline showed where the door had been clicked (step 33). **Still to run, on the newest build:** steps 36 to 51, and steps 6, 9, 11 and 33 again, since what they expect changed after the build tested.
+
+### T0 Tools probe
+
+The probe for [Tools](tools.md) (T0, built 2026-11-24): a tool from another package opens in a drawer of EDGEbuilder's. No change for players without a tool: the **Tools (T0 probe)** box in Settings shows only when one is installed. The probe is `probes/tool-probe` (EDGEbuilder tool probe 0.1.0, in the EDGEdeck library as `edgebuilder-tool-probe`), with EDGEbuilder's newest build. Already checked in REDnode's host ([T0 results](tools.md#t0-results)); this is the same in the overlay over the game.
+
+Before: the game closed, EDGEbuilder's newest build and the probe deployed with EDGEdeck.
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Mod Manager: switch on **EDGEbuilder tool probe**. Load a save, open EDGEbuilder, **Settings** | A **Tools (T0 probe)** box with **Tool probe 0.1.0** and **Open** |
+| 2 | **Open** | A drawer to the left of the window, 420 px, titled TOOL PROBE: "Tool probe 0.1.0, mounted in ... ms" under the title; four panels in EDGEbuilder's look; "Build first"; a yellow line about the id "results" |
+| 3 | **Ask my service** | An answer from its Node half (greeting, calls, pid) and the milliseconds; **Events heard** counts up every 2 s |
+| 4 | Click **Your name** and type a few letters, then switch **Shout** on | The letters in the field and below it, in capitals with Shout; EDGEbuilder's Assets search is untouched, and no tab changes |
+| 5 | Hover over **Ask my service** and **Throw** | Their tooltips show, as EDGEbuilder's own do |
+| 6 | Drop two objects (Assets), select both (Scene), back to the drawer | "Scene ...: N objects, 2 selected" and the two in the list; **Count by kind** writes the count under the title |
+| 7 | **Throw**, then **Reject** | Each says in red under the title what failed; EDGEbuilder works on (search, Edit), and **Ask my service** still answers |
+| 8 | With the drawer open, Mod Manager: switch the probe off, then **Ask my service** | Red: "... is off: switch it on in the Mod Manager". Switch it on again |
+| 9 | Open another drawer (the Objects drawer, or the Library out of the window), then **Open** the tool again | The tool's drawer closes when another opens; it opens again with "Events heard" from 0 |
+| 10 | **Close** (in the tool) | The drawer closes; Settings says **Open** again |
+
+Not in the game check: hot reload (a change to `tool.js` remounts the tool) and the failing mounts, which were checked in REDnode's host and need a file edited while the game runs.
