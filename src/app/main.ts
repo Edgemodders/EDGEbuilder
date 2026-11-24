@@ -472,7 +472,7 @@ function startDropAtClick(path: string, looks: string | undefined, label?: strin
   );
   // The outline's edges are worked out now, while the mouse finds its way to the world.
   edgesFor(path);
-  $("message").textContent = `Drop at click is on: click in the world where ${name} should go. Esc or right-click cancels.`;
+  $("message").textContent = `Drop at click is on: click in the world where ${name} should go. Esc or a tap of the right button cancels; hold it to look around.`;
   $("message").className = "message";
 }
 // A panel's pin (Picked on the Assets and Library tabs, Selected on the Scene tab): pinned, the panel stays at the

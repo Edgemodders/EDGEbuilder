@@ -120,6 +120,10 @@ export function busyText(b: Busy): string {
   return `${b.what}${step} · ${secs} s${b.waiting ? ` · ${b.waiting} more waiting` : ""}`;
 }
 
+/** Drop at click: a right-button press shorter than this, with less mouse travel than RightTapPx, is a tap that cancels; longer is a look. */
+const RightTapMs = 250;
+const RightTapPx = 6;
+
 export class Viewport {
   private ctx: CanvasRenderingContext2D;
   private edit = false;
@@ -169,6 +173,11 @@ export class Viewport {
   private probeSeq = 0;
   private probeAt = { x: NaN, y: NaN, t: 0 };
   private probed: { seq: number; position: V3; rotation: Q; hit: boolean } | undefined;
+  /**
+   * Drop at click and the right button: a tap (released within RightTapMs, the mouse moved less than RightTapPx)
+   * cancels, a hold looks and flies as anywhere else. Set while the right button is down during Drop at click.
+   */
+  private rightTap: { at: number; moved: number } | undefined;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -636,7 +645,7 @@ export class Viewport {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
       const n = chosen.length;
       const help = this.placing
-        ? `Drop at click: click where ${this.outline?.name ?? "it"} should go.  Esc or right-click: cancel.`
+        ? `Drop at click: click where ${this.outline?.name ?? "it"} should go.  Esc or tap the right button: cancel.`
         : this.box
           ? "Release to select what is inside.  Ctrl: add to the selection."
           : n
@@ -839,6 +848,7 @@ export class Viewport {
     const dx = locked ? e.movementX : this.mouse[0] - this.last[0];
     const dy = locked ? e.movementY : this.mouse[1] - this.last[1];
     this.last = this.mouse;
+    if (this.rightTap) this.rightTap.moved += Math.abs(dx) + Math.abs(dy);
     if ((this.rmb || this.mmb) && this.camPos && this.look) {
       if (this.rmb) {
         this.look = { yaw: this.look.yaw - dx * 0.15, pitch: Math.max(-89, Math.min(89, this.look.pitch - dy * 0.15)) };
@@ -956,7 +966,14 @@ export class Viewport {
     // page in the game (REDnode took it to leave interactive mode; B3-1 test).
     if (e.button === 2) {
       if (this.drag) this.cancel();
-      else if (this.placing) {
+      else if (this.placing && this.camEntity) {
+        // A tap cancels on release; a hold looks around (the outline follows the crosshair as the camera turns).
+        this.rightTap = { at: performance.now(), moved: 0 };
+        this.rmb = true;
+        this.canvas.setPointerCapture(e.pointerId);
+        this.lock();
+      } else if (this.placing) {
+        // V's own camera (the editor camera off in Settings): nothing to look with, so a right-click cancels.
         this.disarm();
         this.hooks.status("Drop at click cancelled.");
       } else if (this.box) this.box = undefined;
@@ -1002,8 +1019,15 @@ export class Viewport {
 
   private onUp(e: PointerEvent): void {
     if (e.button === 2 || e.button === 1) {
-      if (e.button === 2) this.rmb = false;
-      else this.mmb = false;
+      if (e.button === 2) {
+        this.rmb = false;
+        const tap = this.rightTap;
+        this.rightTap = undefined;
+        if (tap && this.placing && performance.now() - tap.at < RightTapMs && tap.moved < RightTapPx) {
+          this.disarm();
+          this.hooks.status("Drop at click cancelled.");
+        }
+      } else this.mmb = false;
       if (!this.rmb && !this.mmb) this.unlock();
       try {
         this.canvas.releasePointerCapture(e.pointerId);

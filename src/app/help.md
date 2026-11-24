@@ -39,7 +39,7 @@ A **mesh** is a plain 3D model. An **entity** is a model with parts and behaviou
 ## Drop it
 
 - **Drop where I look** puts it in front of you, on what the camera looks at.
-- **Drop at click**: the cursor becomes a crosshair and the object's outline sits where a click would put it (amber over the sky). Click to drop, <kbd>Esc</kbd> or a right-click cancels.
+- **Drop at click**: the cursor becomes a crosshair and the object's outline sits where a click would put it (amber over the sky). Click to drop. <kbd>Esc</kbd> or a quick tap of the right button cancels; hold the right button to look and fly as usual, and the outline follows the crosshair.
 
 ## Edit mode and the camera
 
