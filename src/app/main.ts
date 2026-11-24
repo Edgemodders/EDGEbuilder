@@ -2695,14 +2695,32 @@ function renderExPreview(s: Snapshot): void {
     if (!appearance || !apps.includes(appearance)) appearance = apps[0];
     list.innerHTML = apps.map((a) => `<rn-item value="${esc(a)}"${a === appearance ? " selected" : ""}>${esc(a)}</rn-item>`).join("");
     list.hidden = false;
-    // As tall as its looks, up to four rows (more scroll), so Properties always shows in full.
-    list.style.setProperty("--rn-list-height", `${Math.min(apps.length, 4) * 35 + 2}px`);
     $("exAppLabel").hidden = false;
+    // The list fills the drawer down to Drop, once laid out: Properties keeps its height above it. Small first, so
+    // a taller list from the last object cannot push Drop out of the drawer before it is measured.
+    if (exFitFor !== e.path) {
+      exFitFor = e.path;
+      list.style.setProperty("--rn-list-height", "72px");
+    }
+    requestAnimationFrame(fitAppearances);
   } else {
     if (lookedAt === e.path) appearance = apps[0];
     list.hidden = true;
     $("exAppLabel").hidden = true;
   }
+}
+
+/** The object the looks list was last fitted for. */
+let exFitFor = "";
+
+/** The looks list as tall as the room between it and Drop (at least about two rows), so the drawer has no gap. */
+function fitAppearances(): void {
+  const list = $("exAppearances");
+  if (list.hidden) return;
+  const top = list.getBoundingClientRect().top;
+  const bottom = ($("exDrop").closest(".row") as HTMLElement).getBoundingClientRect().top;
+  const h = Math.max(72, Math.floor(bottom - top - 10));
+  if (list.style.getPropertyValue("--rn-list-height") !== `${h}px`) list.style.setProperty("--rn-list-height", `${h}px`);
 }
 
 $("exAppearances").addEventListener("select", (e) => {
