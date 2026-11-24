@@ -3564,6 +3564,7 @@ function renderExPreview(s) {
     if (!appearance || !apps.includes(appearance)) appearance = apps[0];
     list.innerHTML = apps.map((a) => `<rn-item value="${esc(a)}"${a === appearance ? " selected" : ""}>${esc(a)}</rn-item>`).join("");
     list.hidden = false;
+    list.style.setProperty("--rn-list-height", `${Math.min(apps.length, 4) * 35 + 2}px`);
     $("exAppLabel").hidden = false;
   } else {
     if (lookedAt === e.path) appearance = apps[0];

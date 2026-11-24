@@ -57,11 +57,16 @@
   #exCanvas { width: 378px; height: 400px; display: block; cursor: grab; background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, .06), transparent 70%); border: 1px solid var(--rn-line, #333); }
   #exCanvas:active { cursor: grabbing; }
   #exNote { min-height: 1.4em; margin: 4px 0; }
-  #exProps { flex: 1; min-height: 0; overflow-y: auto; }
+  /* Each section takes the room it needs, Appearances right under Properties; Drop stays at the bottom. */
+  #exProps { flex: none; padding: 0 2px; }
+  #exPreview > .row:last-child { margin-top: auto; }
+  /* A section of the Preview drawer: a filled header row. */
+  .secHead { display: flex; align-items: baseline; gap: 8px; flex: none; margin: 8px 0 4px; padding: 5px 8px; background: color-mix(in srgb, var(--rn-accent, #fcee0a) 13%, transparent); border-left: 2px solid var(--rn-accent, #fcee0a); font-family: var(--rn-mono, monospace); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--rn-accent, #fcee0a); }
+  .secHead .hint { margin-left: auto; text-transform: none; letter-spacing: 0; color: var(--rn-dim, #999); }
   .prop { display: grid; grid-template-columns: 64px 1fr; gap: 8px; font-family: var(--rn-mono, monospace); font-size: 11px; padding: 2px 0; }
   .prop .k { color: var(--rn-dim, #999); text-transform: uppercase; letter-spacing: .06em; font-size: 10px; padding-top: 1px; }
   .prop .v { color: var(--rn-fg, #eee); word-break: break-all; white-space: pre-wrap; }
-  #exAppearances { --rn-list-height: 110px; margin: 4px 0 6px; }
+  #exAppearances { --rn-list-height: 110px; margin: 0 0 6px; flex: none; }
   /* The search box with the Explorer's button flush against its right edge, a square as high as the box (36 px). */
   .headRow.searchRow { gap: 0; }
   #search { flex: 1; min-width: 0; }
@@ -236,8 +241,9 @@
     <div class="drawerHead"><span id="exTitle" class="section">Preview</span><button id="exPreviewClose" class="act" title="Close the preview"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
     <canvas id="exCanvas" width="378" height="400" title="Drag to turn it; the wheel brings it nearer"></canvas>
     <div id="exNote" class="count"></div>
+    <div class="secHead">Properties</div>
     <div id="exProps"></div>
-    <div id="exAppLabel" class="count" hidden>Appearance (Drop uses the one picked)</div>
+    <div id="exAppLabel" class="secHead" hidden>Appearances<span class="hint">Drop uses the one picked</span></div>
     <rn-list id="exAppearances" hidden></rn-list>
     <div class="row"><rn-button id="exDrop" sound="ui_menu_onpress" title="Closes the drawers and starts Drop at click: the object's outline follows the cursor, a click puts it there, Esc cancels">Drop</rn-button></div>
   </div>
