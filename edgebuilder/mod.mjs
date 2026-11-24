@@ -3174,6 +3174,7 @@ async function worldPick(origin, dir, free = false) {
   publish();
 }
 var hoverNext;
+var hoverSentKey = null;
 var hoverLooking = false;
 async function runHover() {
   if (hoverLooking) return;
@@ -3184,14 +3185,42 @@ async function runHover() {
       hoverNext = void 0;
       if (!next || state.world !== "ready" || state.worldObjects.status === "unavailable") {
         await hoverThing(null);
+        await tellHover(null);
         continue;
       }
       const t = await pickTarget(next.origin, next.dir, next.free ? freeKinds() : state.worldObjects.kinds);
-      await hoverThing(t?.door?.key ?? t?.node?.id ?? null);
+      await hoverThing(next.outline ? t?.door?.key ?? t?.node?.id ?? null : null);
+      await tellHover(t);
     }
   } finally {
     hoverLooking = false;
   }
+}
+async function tellHover(t) {
+  const key = t?.door?.key ?? t?.node?.id ?? null;
+  if (key === hoverSentKey) return;
+  hoverSentKey = key;
+  let thing = null;
+  if (t?.door) thing = t.door;
+  else if (t?.node) {
+    const n = t.node;
+    const resource = await pathOf(n.resource);
+    thing = {
+      key: n.id,
+      what: "mesh",
+      className: n.kind,
+      label: `${n.kind.replace(/^world|Node$/g, "")} ${resource ? path11.basename(resource) : n.id}`,
+      resource: resource || void 0,
+      appearance: n.appearance ?? void 0,
+      position: n.position,
+      scale: n.scale,
+      box: n.bounds,
+      orientation: n.orientation,
+      ray: { solid: !!n.holdsHit },
+      removedBy: editFor(scene.worldEdits, { sectorHash: n.sector, entry: n.instance })?.id
+    };
+  }
+  channel.post({ type: "hover", thing });
 }
 async function hoverThing(key) {
   const picked = state.worldObjects.picked?.key;
@@ -4408,7 +4437,7 @@ channel.on((m) => {
         }
         break;
       case "world.hoverRay":
-        hoverNext = m.ray ? { origin: m.ray.origin, dir: m.ray.dir, free: !!m.free } : null;
+        hoverNext = m.ray ? { origin: m.ray.origin, dir: m.ray.dir, free: !!m.free, outline: m.outline !== false } : null;
         await runHover();
         break;
       case "world.select": {

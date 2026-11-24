@@ -556,7 +556,7 @@ export type PageMessage =
   /** D1: a click that hit none of the scene's objects: the game's door (or mesh) along this line, if any. */
   | { type: "world.pick"; origin: [number, number, number]; dir: [number, number, number]; free?: boolean }
   /** Pick under the cursor (0.14.0): outline what a click would pick along this line; null takes the outline off. */
-  | { type: "world.hoverRay"; ray: { origin: [number, number, number]; dir: [number, number, number] } | null; free?: boolean }
+  | { type: "world.hoverRay"; ray: { origin: [number, number, number]; dir: [number, number, number] } | null; free?: boolean; outline?: boolean }
   /** The World tab's row: pick it; hover outlines it (null: the outline goes). */
   | { type: "world.select"; key: string }
   | { type: "world.hover"; key: string | null }
@@ -686,4 +686,10 @@ export interface FilesReply extends FolderListing {
   places: FilePlace[];
 }
 
-export type ModMessage = { type: "state"; state: Snapshot } | PreviewReply | ProbeReply | ExploreReply | FilesReply;
+/** What is under the cursor in the world (Show tooltip), sent when it changes; null for nothing. */
+export interface HoverReply {
+  type: "hover";
+  thing: WorldThing | null;
+}
+
+export type ModMessage = { type: "state"; state: Snapshot } | PreviewReply | ProbeReply | ExploreReply | FilesReply | HoverReply;

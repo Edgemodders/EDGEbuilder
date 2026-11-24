@@ -1713,7 +1713,9 @@ async function worldPick(origin: V3, dir: V3, free = false): Promise<void> {
 }
 
 // Pick under the cursor: what a click would pick is outlined while the mouse moves; one look at a time, the newest line next.
-let hoverNext: { origin: V3; dir: V3; free: boolean } | null | undefined;
+let hoverNext: { origin: V3; dir: V3; free: boolean; outline: boolean } | null | undefined;
+/** The key of the thing under the cursor last told to the page (Show tooltip). */
+let hoverSentKey: string | null = null;
 let hoverLooking = false;
 
 async function runHover(): Promise<void> {
@@ -1725,14 +1727,45 @@ async function runHover(): Promise<void> {
       hoverNext = undefined;
       if (!next || state.world !== "ready" || state.worldObjects.status === "unavailable") {
         await hoverThing(null);
+        await tellHover(null);
         continue;
       }
       const t = await pickTarget(next.origin, next.dir, next.free ? freeKinds() : state.worldObjects.kinds);
-      await hoverThing(t?.door?.key ?? t?.node?.id ?? null);
+      // The outline only with Pick under the cursor; the page's tooltip either way.
+      await hoverThing(next.outline ? (t?.door?.key ?? t?.node?.id ?? null) : null);
+      await tellHover(t);
     }
   } finally {
     hoverLooking = false;
   }
+}
+
+/** Tells the page what is under the cursor (Show tooltip), when it changed: a door as listed, a mesh from REDnode's registry. */
+async function tellHover(t: { door?: WorldThing; node?: WorldNode } | undefined | null): Promise<void> {
+  const key = t?.door?.key ?? t?.node?.id ?? null;
+  if (key === hoverSentKey) return;
+  hoverSentKey = key;
+  let thing: WorldThing | null = null;
+  if (t?.door) thing = t.door;
+  else if (t?.node) {
+    const n = t.node;
+    const resource = await pathOf(n.resource);
+    thing = {
+      key: n.id,
+      what: "mesh",
+      className: n.kind,
+      label: `${n.kind.replace(/^world|Node$/g, "")} ${resource ? path.basename(resource) : n.id}`,
+      resource: resource || undefined,
+      appearance: n.appearance ?? undefined,
+      position: n.position,
+      scale: n.scale,
+      box: n.bounds,
+      orientation: n.orientation,
+      ray: { solid: !!n.holdsHit },
+      removedBy: editFor(scene.worldEdits, { sectorHash: n.sector, entry: n.instance })?.id,
+    };
+  }
+  channel.post({ type: "hover", thing });
 }
 
 async function hoverThing(key: string | null): Promise<void> {
@@ -3209,7 +3242,7 @@ channel.on<PageMessage>((m) => {
         }
         break;
       case "world.hoverRay":
-        hoverNext = m.ray ? { origin: m.ray.origin, dir: m.ray.dir, free: !!m.free } : null;
+        hoverNext = m.ray ? { origin: m.ray.origin, dir: m.ray.dir, free: !!m.free, outline: m.outline !== false } : null;
         await runHover();
         break;
       case "world.select": {

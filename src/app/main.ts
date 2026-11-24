@@ -1306,7 +1306,6 @@ function renderWorld(s: Snapshot): void {
     pickWaitFrom = undefined;
     viewport.setWorking(undefined);
   }
-  viewport.setWorldTip(worldTip && wo.picked ? tipFor(wo.picked) : undefined);
   for (const [id, k] of KindToggles) ($(id) as HTMLElement & { checked: boolean }).checked = wo.kinds.includes(k);
   const n = wo.things.length;
   const what =
@@ -2225,7 +2224,7 @@ $("freePick").addEventListener("change", (e) => {
   } catch {
     // No storage: for this session only.
   }
-  if (!freePick && hoverSent) {
+  if (!freePick && !worldTip && hoverSent) {
     hoverSent = false;
     post({ type: "world.hoverRay", ray: null });
   }
@@ -2249,7 +2248,13 @@ $("worldTip").addEventListener("change", (e) => {
   } catch {
     // No storage: for this session only.
   }
-  if (state) render(state);
+  if (!worldTip) viewport.setWorldTip(undefined);
+  // On: the mod tells again what is under the cursor, even the same object as before.
+  else post({ type: "world.hoverRay", ray: null });
+  if (!freePick && !worldTip && hoverSent) {
+    hoverSent = false;
+    post({ type: "world.hoverRay", ray: null });
+  }
 });
 
 /**
@@ -2276,7 +2281,7 @@ function tipFor(p: WorldThing): WorldTip {
   const lines = [
     `${p.className}${p.what === "door" ? ", a door" : p.what === "fakeDoor" ? ", a painted-on door" : ""}`,
     box ? `about ${size.map((v) => v.toFixed(1)).join(" × ")} m` : "",
-    p.ray ? (p.ray.solid ? "solid where you clicked" : "not solid where you clicked") : "",
+    p.ray ? (p.ray.solid ? "solid here" : "not solid here (walk-through, or its collision is separate)") : "",
     p.door ? doorText(p.door) : "",
     p.removedBy ? `removed by this scene (${p.removedBy})` : "",
   ].filter(Boolean);
@@ -2837,9 +2842,12 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
   builderStop: () => post({ type: "builder.stop" }),
   probe: (seq, ray) => post({ type: "drop.probe", seq, origin: ray.o, dir: ray.d }),
   hoverWorld: (ray) => {
-    if (!freePick && !hoverSent) return;
-    hoverSent = !!(freePick && ray);
-    post({ type: "world.hoverRay", ray: freePick && ray ? { origin: ray.o, dir: ray.d } : null, free: true });
+    // Pick under the cursor outlines what a click would pick; Show tooltip describes it. Either asks.
+    const want = freePick || worldTip;
+    if (!want && !hoverSent) return;
+    hoverSent = !!(want && ray);
+    post({ type: "world.hoverRay", ray: want && ray ? { origin: ray.o, dir: ray.d } : null, free: freePick, outline: freePick });
+    if (!hoverSent) viewport.setWorldTip(undefined);
   },
   status(text) {
     $("message").textContent = text;
@@ -2897,6 +2905,7 @@ channel.on<ModMessage>((m) => {
   else if (m?.type === "preview") void previewCame(m).then(() => modelCame(m));
   else if (m?.type === "explore") explorerCame(m);
   else if (m?.type === "files") filesCame(m);
+  else if (m?.type === "hover") viewport.setWorldTip(worldTip && m.thing ? tipFor(m.thing) : undefined);
   else if (m?.type === "probe") viewport.setProbe(m);
 });
 post({ type: "hello" });
