@@ -2681,14 +2681,28 @@ function renderExPreview(s: Snapshot): void {
   const parts = models.get(e.path);
   const b = info?.bounds;
   const from = e.source ? (e.source.kind === "project" ? `the project ${e.source.name}` : `the mod ${e.source.name}`) : e.kind === "npc" ? "the game's TweakDB" : e.path.toLowerCase().startsWith("ep1\\") ? "the game (Phantom Liberty)" : "the game";
+  // The Objects drawer's eye: the scene object as it is now (its scale, look, Solid), not as it was when the eye was pressed.
+  const live = copying && objectLike ? (s.scene.objects.find((o) => o.id === objectLike!.id) ?? s.library.peek?.objects.find((o) => o.id === objectLike!.id) ?? objectLike) : undefined;
+  if (live) objectLike = live;
+  const sc = (live?.transform.scale ?? [1, 1, 1]) as number[];
+  const scaled = sc.some((v) => Math.abs(v - 1) > 1e-3);
   const lines: [string, string][] = [
     ["Name", e.kind === "npc" ? (e.name ?? e.path) : shortName(e.path)],
     ["Path", e.path],
     ["Kind", e.kind === "npc" ? "a person (NPC)" : e.kind === "entity" ? "an entity" : "a mesh"],
     ["From", from + (e.replaces ? ", changing the game's file" : "")],
-    ["Size", b ? `${(b.max[0] - b.min[0]).toFixed(2)} × ${(b.max[1] - b.min[1]).toFixed(2)} × ${(b.max[2] - b.min[2]).toFixed(2)} m (width, depth, height)` : info?.error ? info.error : s.bridge.status === "ready" ? "reading..." : "needs REDbridge"],
+    ["Size", b ? `${((b.max[0] - b.min[0]) * sc[0]).toFixed(2)} × ${((b.max[1] - b.min[1]) * sc[1]).toFixed(2)} × ${((b.max[2] - b.min[2]) * sc[2]).toFixed(2)} m (width, depth, height)${scaled ? `, at its scale` : ""}` : info?.error ? info.error : s.bridge.status === "ready" ? "reading..." : "needs REDbridge"],
   ];
-  if (e.kind === "mesh") lines.push(["Solid", info?.hasCollision === true ? "yes: it has collision" : info?.hasCollision === false ? "no: it has no collision data" : "not known yet"]);
+  if (live) {
+    // A scene object (the Objects drawer's eye): its own settings, as they are now.
+    lines.splice(1, 0, ["Object", live.id]);
+    if (scaled) lines.push(["Scale", sc.map((v) => v.toFixed(2)).join(", ")]);
+    if (live.appearance) lines.push(["Look", live.appearance]);
+    if (live.kind === "mesh") lines.push(["Solid", live.solid ? "on: solid once baked" : "off: walk-through once baked"]);
+    lines.push(["Seen from", live.streaming?.primary ? `${live.streaming.primary} m` : "by its size"]);
+    lines.push(["At", live.transform.position.map((v) => v.toFixed(2)).join(", ")]);
+  }
+  if (e.kind === "mesh") lines.push([live ? "Collision" : "Solid", info?.hasCollision === true ? (live ? "its mesh has collision data" : "yes: it has collision") : info?.hasCollision === false ? (live ? "its mesh has no collision data" : "no: it has no collision data") : "not known yet"]);
   if (e.kind === "entity" && parts) lines.push(["Draws", `${parts.length} mesh${parts.length === 1 ? "" : "es"}${parts.length >= 16 ? " (the first 16 shown)" : ""}`]);
   if (e.kind === "npc" && e.template) lines.push(["Template", e.template]);
   if (e.size) lines.push(["File", `${(e.size / 1024).toFixed(e.size < 10240 ? 1 : 0)} KB`]);
