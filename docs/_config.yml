@@ -37,6 +37,8 @@ nav:
     url: /generated-scenes.html
   - title: Detail
     url: /detail.html
+  - title: Tools
+    url: /tools.html
   - title: Scene format
     url: /scene.html
   - title: Tests
