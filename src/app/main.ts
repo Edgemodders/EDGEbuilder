@@ -1681,10 +1681,15 @@ let libraryDrawerOpen = false;
 let previewsOpen = false;
 /** The Import file picker, opened by the folder button beside the Import path. */
 let filesOpen = false;
+/** The Preview drawer beside the Previews drawer, for a picture clicked there (Settings: "A picture's details before Drop"). */
+let tileDetail = false;
+/** The Previews drawer's pictures, by path (declared here: renderLeft marks the picked one). */
+const tiles = new Map<string, { el: HTMLElement; drawn: boolean; picture?: string; error?: string; asked?: number }>();
 
 function openLeft(which: "objects" | "library" | "previews" | "explorer" | "preview" | "world" | "files" | "none"): void {
   const wasFiles = filesOpen;
   filesOpen = which === "files";
+  tileDetail = false;
   if (filesOpen && !wasFiles) askFiles(fileStart());
   previewAlone = which === "preview";
   previewWorld = which === "world";
@@ -1710,13 +1715,16 @@ function renderLeft(): void {
   $("previewsEye").setAttribute("aria-pressed", String(previewsOpen));
   $("explorerDrawer").classList.toggle("open", explorerOpen);
   const worldOpen = previewWorld && !!state?.worldObjects.picked;
-  $("exPreview").classList.toggle("open", worldOpen || ((explorerOpen || previewAlone) && !!exPicked));
-  $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld);
+  const besideTiles = tileDetail && previewsOpen && !explorerOpen;
+  $("exPreview").classList.toggle("open", worldOpen || ((explorerOpen || previewAlone || besideTiles) && !!exPicked));
+  $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles);
+  $("exPreview").classList.toggle("besidePreviews", besideTiles);
+  for (const t of tiles.values()) t.el.classList.toggle("picked", besideTiles && t.el.dataset.path === exPicked?.path);
   $("exPreview").classList.toggle("world", previewWorld);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
   $("fileDrawer").classList.toggle("open", filesOpen);
   $("importBrowse").setAttribute("aria-pressed", String(filesOpen));
-  if (!worldOpen && ((!explorerOpen && !previewAlone) || !exPicked)) stopExView();
+  if (!worldOpen && ((!explorerOpen && !previewAlone && !besideTiles) || !exPicked)) stopExView();
 }
 
 // ---- the Library out of the window (0.14.0) ------------------------------------------------------------
@@ -1932,7 +1940,6 @@ let previews: Previews | undefined;
 let previewsWhy = "";
 let previewsLoading: Promise<void> | undefined;
 /** The tiles on show, by path, and what each has: a picture, an error, or when it was asked for. */
-const tiles = new Map<string, { el: HTMLElement; drawn: boolean; picture?: string; error?: string; asked?: number }>();
 let tilesKey = "";
 /** Models this session already has, for turning a picture under the mouse (the newest few). */
 const models = new Map<string, Part[]>();
@@ -1966,7 +1973,7 @@ function renderPreviews(s: Snapshot): void {
   const people = s.results.filter((r) => r.kind === "npc").length;
   $("previewsTitle").textContent = s.query.text ? `Previews: ${s.query.text}` : "Previews";
   $("previewsInfo").textContent = [
-    `${s.results.length} result${s.results.length === 1 ? "" : "s"}${people ? ` (NPCs by name for now)` : ""}. The mouse on a picture turns it; a click starts Drop at click.`,
+    `${s.results.length} result${s.results.length === 1 ? "" : "s"}${people ? ` (NPCs by name for now)` : ""}. The mouse on a picture turns it; a click ${tileDetails ? "shows its details beside this, with Drop" : "starts Drop at click"}.`,
     previewsWhy,
     s.bridge.status !== "ready" && !previewsWhy ? "New pictures need REDbridge: those kept from before still show." : "",
   ]
@@ -2118,8 +2125,38 @@ $("previewGrid").addEventListener("click", (e) => {
   appearance = undefined;
   post({ type: "look", path });
   stopSpin();
+  const r = state?.results.find((x) => x.path === path);
+  if (tileDetails && r) {
+    // Its details beside the pictures: the model in 3D, what is known, its looks, and Drop.
+    exPicked = r;
+    tileDetail = true;
+    if (state) render(state);
+    else renderLeft();
+    return;
+  }
   openLeft("none");
   startDropAtClick(path, undefined);
+});
+
+// Settings: a click on a picture opens its details first (on by default), or starts Drop at click at once.
+let tileDetails = true;
+try {
+  tileDetails = localStorage.getItem("edgebuilder.tileDetails") !== "0";
+} catch {
+  // No storage: on.
+}
+($("tileDetails") as HTMLElement & { checked: boolean }).checked = tileDetails;
+$("tileDetails").addEventListener("change", (e) => {
+  tileDetails = !!(e as CustomEvent<{ checked: boolean }>).detail.checked;
+  try {
+    localStorage.setItem("edgebuilder.tileDetails", tileDetails ? "1" : "0");
+  } catch {
+    // No storage: for this session only.
+  }
+  if (!tileDetails && tileDetail) {
+    tileDetail = false;
+    renderLeft();
+  }
 });
 
 // ---- the Explorer (0.14.0) ------------------------------------------------------------------------------
@@ -2241,6 +2278,10 @@ function previewResult(path: string): void {
   if (explorerOpen) {
     renderLeft();
     renderExplorer();
+    if (state) render(state);
+  } else if (previewsOpen) {
+    // The pictures are open: its details beside them.
+    tileDetail = true;
     if (state) render(state);
   } else openLeft("preview");
 }
@@ -2365,6 +2406,12 @@ $("explorerOpen").addEventListener("click", () => openLeft(explorerOpen ? "none"
 $("explorerClose").addEventListener("click", () => openLeft("none"));
 $("exPreviewClose").addEventListener("click", () => {
   if (previewAlone || previewWorld) return openLeft("none");
+  if (tileDetail) {
+    // Back to the pictures alone.
+    tileDetail = false;
+    renderLeft();
+    return;
+  }
   exPicked = undefined;
   renderLeft();
   renderExplorer();
@@ -2468,7 +2515,7 @@ function renderExPreview(s: Snapshot): void {
   $("exDrop").removeAttribute("disabled");
   $("exDrop").title = "Closes the drawers and starts Drop at click: the object's outline follows the cursor, a click puts it there, Esc cancels";
   const e = exPicked;
-  if (!e || (!explorerOpen && !previewAlone)) {
+  if (!e || (!explorerOpen && !previewAlone && !(tileDetail && previewsOpen))) {
     stopExView();
     return;
   }

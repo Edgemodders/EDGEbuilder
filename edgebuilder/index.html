@@ -37,6 +37,9 @@
   #exPreview { right: 1144px; width: 400px; }
   /* Opened from a search result (the Preview switch), with no Explorer: beside the window. */
   #exPreview.alone { right: 656px; }
+  /* A tile picked in the Previews drawer (420 px wide), with Settings' "Details for a picture": beside it. */
+  #exPreview.besidePreviews { right: 1084px; }
+  .tile.picked { border-color: var(--rn-accent, #fcee0a); box-shadow: inset 0 0 0 1px var(--rn-accent, #fcee0a); }
   /* Picked in the world with the cursor: at the screen's left edge, coming in from the left, so the middle stays clear. */
   #exPreview.world { left: 24px; right: auto; }
   #exPreview.world:not(.open) { transform: translateX(-60px); }
@@ -421,6 +424,9 @@
         <rn-panel title="While Edit is on">
           <rn-toggle id="editorCamera" label="Use EDGEbuilder's own camera (V stays put)" checked></rn-toggle>
           <rn-toggle id="hideHud" label="Hide the game's HUD" checked></rn-toggle>
+        </rn-panel>
+        <rn-panel title="Previews">
+          <rn-toggle id="tileDetails" label="A picture's details before Drop" checked title="On: a click on a picture in the Previews drawer opens its details beside it (the model in 3D, its size, looks and a Drop button). Off: a click starts Drop at click at once"></rn-toggle>
         </rn-panel>
         <rn-panel title="Library">
           <rn-input id="libraryRoot" label="Library folder"></rn-input>

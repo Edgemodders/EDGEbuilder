@@ -36,7 +36,7 @@ Last updated 2026-10-30.
 | [D2 Open, close, lock](#d2-open-close-lock-0130) | In the game | D2 | 2026-11-23 (0.13.0, 0.13.1) | Pass (step 12 as R1 to R5 on 0.13.1) |
 | [S1 Sectors](#s1-sectors-0130) | In the game | S1 | 2026-11-23 (0.13.0 to 0.13.2) | Pass |
 | [Project picker](#project-picker-0130) | In the game | Project picker | 2026-11-23 (0.13.1) | Pass; 0.13.2 released |
-| [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24 | Partly run: step 1 passed (40 steps, P1 to P7) |
+| [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24 | Partly run: step 1 passed (43 steps, P1 to P7) |
 
 ## Automated
 
@@ -1097,7 +1097,7 @@ REDcode #32 (REDcode 0.10.15: `projects()` and `projects-changed`), asked for by
 
 ### Previews, the Explorer, the Library drawer and Drop at click's outline (0.14.0)
 
-Asked for by the owner on 2026-11-23. Built the same day; checked in REDnode's host without the game, against REDbridge 0.18.0: "crate" gave 95 tiles, meshes and entities drawn (two entities with no mesh parts say "no picture"), a picture turns under the mouse, a click closes the drawer, picks the result and starts Drop at click; the Library goes out to its drawer and back, one drawer at a time, the choice kept after a reload. The Explorer (asked for the same day, with the object's own outline for Drop at click): Game 31,601, base 28,781, containers 667 with their folders; a delivery crate picked showed in 3D with its size, collision and file size, turned by a drag and brought nearer by the wheel; a filter for `barrel` in containers found 37; Drop closed both drawers and started Drop at click, and the page made the crate's outline (482 edges). The Preview switch (asked for the same day): a result clicked with it on showed in the Preview drawer beside the window; off closed it; the search box's ✕ emptied the box and the list. Pick under the cursor (asked for the same day, needed for the owner's work with a user): its switch shows and is kept; the pick itself needs the game. Asked for on 2026-11-24 after step 1 passed in game: the Library drawer's width buttons (420, 540, 680, 840 and back, dimmed at the ends), the Import file picker (Downloads listed with 25 folders and 5 GLB files, a double-click with real mouse events filled the path and showed the Import box) and the About tab's guide, all checked in REDnode's host. The crosshair and the outline need the game's camera, so they are untested.
+Asked for by the owner on 2026-11-23. Built the same day; checked in REDnode's host without the game, against REDbridge 0.18.0: "crate" gave 95 tiles, meshes and entities drawn (two entities with no mesh parts say "no picture"), a picture turns under the mouse, a click closes the drawer, picks the result and starts Drop at click; the Library goes out to its drawer and back, one drawer at a time, the choice kept after a reload. The Explorer (asked for the same day, with the object's own outline for Drop at click): Game 31,601, base 28,781, containers 667 with their folders; a delivery crate picked showed in 3D with its size, collision and file size, turned by a drag and brought nearer by the wheel; a filter for `barrel` in containers found 37; Drop closed both drawers and started Drop at click, and the page made the crate's outline (482 edges). The Preview switch (asked for the same day): a result clicked with it on showed in the Preview drawer beside the window; off closed it; the search box's ✕ emptied the box and the list. Pick under the cursor (asked for the same day, needed for the owner's work with a user): its switch shows and is kept; the pick itself needs the game. Asked for on 2026-11-24 after step 1 passed in game: the Library drawer's width buttons (420, 540, 680, 840 and back, dimmed at the ends), the Import file picker (Downloads listed with 25 folders and 5 GLB files, a double-click with real mouse events filled the path and showed the Import box) and the About tab's guide, all checked in REDnode's host. Asked for the same day: Settings' **A picture's details before Drop** (on by default): a picture's details beside the Previews drawer, the picked tile outlined, ✕ closing the details only, a result row with the Preview switch shown there too, and with the switch off a click starting Drop at click; checked in the host. The crosshair and the outline need the game's camera, so they are untested.
 
 Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a scene open.
 
@@ -1108,7 +1108,7 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | 3 | Rest the mouse on a picture | It turns slowly; it stops when the mouse leaves | P1 |
 | 4 | Close the drawer and open it again; search something else and back to `crate` | The pictures show at once (kept) | P1 |
 | 5 | Note the game's frame rate with the drawer open and pictures drawing, then with it closed | No large drop while it draws (say what you see) | P2 |
-| 6 | Click a crate's tile | The drawer closes, the crate is picked, Edit goes on; the message says Drop at click is on; the help line at the bottom says "Drop at click: click where ... should go" | P3 |
+| 6 | Click a crate's tile | Its details open beside the pictures (Settings' **A picture's details before Drop** is on by default): the crate in 3D, its size and looks, the tile outlined in yellow. Press **Drop**: both drawers close, the crate is picked, Edit goes on; the message says Drop at click is on; the help line at the bottom says "Drop at click: click where ... should go" | P3 |
 | 7 | Move the mouse over the world | A white crosshair instead of the cursor; the crate's outline in white lines (its own edges, a box for a moment while they are worked out) sits on the surface under it and follows the mouse | P3 |
 | 8 | Point at the sky | The outline turns amber, 8 m along the line | P3 |
 | 9 | Right-drag to look around, fly with WASD | The outline keeps up with what is under the crosshair | P3 |
@@ -1143,6 +1143,9 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | 38 | Open folders, press Up, type a path in the path box and Enter, type in the filter | Each folder lists its folders, GLB files (size, date) and Desk props; Up goes to the folder above; the typed path opens; the filter narrows the list | P7 |
 | 39 | Click a GLB, then **Use this file**; open the picker again and double-click another | The drawer closes, the path is in the box and the Import box shows it; the picker opens again at the same folder | P7 |
 | 40 | About tab | A one-page guide, version 0.14.0 at the top, headings in yellow, key tables; nothing out of date | P7 |
+| 41 | Previews open: click a picture, then another, then the details' ✕ | Each shows its details beside the pictures; ✕ closes the details only, the pictures stay | P7 |
+| 42 | With the Preview switch on and the pictures open, click a row in the result list | Its details show beside the pictures, which stay open | P7 |
+| 43 | Settings: switch **A picture's details before Drop** off; click a picture | The drawer closes and Drop at click starts at once; the Previews line says a click starts Drop at click. Switch it on again | P7 |
 
 | # | Question |
 |---|---|
@@ -1152,4 +1155,4 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | P4 | Does the Library work from its drawer as it did in the window? |
 | P5 | Can objects be found and placed from the game's own folders, and does the preview show them well enough to choose? |
 | P6 | Does Pick under the cursor find what is under the mouse, and does Solid match what V bumps into? |
-| P7 | Are the Library drawer's widths, the Import file picker and the About tab's guide right in the game? |
+| P7 | Are the Library drawer's widths, the Import file picker, the About tab's guide and a picture's details before Drop right in the game? |

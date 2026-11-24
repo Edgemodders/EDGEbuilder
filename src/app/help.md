@@ -32,7 +32,7 @@ The three pills at the top say whether everything is ready:
 - **Search** finds the game's meshes, entities and people by name. The tabs under the box narrow it by kind (**Meshes**, **Entities**, **NPCs**) and by where it comes from (**Game**, **Mods**, **Project**). The ✕ in the box clears it.
 - **Explorer**: the folder button beside the search box. The game's own folders, each mod, the open REDcode project and the game's people, opened one folder at a time. Typing filters the folder clicked last. A pick shows the model in 3D beside it: drag to turn it, the wheel zooms. **Drop** starts Drop at click.
 - **Preview** switch, beside the result count: with it on, a click on a result shows it in that same 3D drawer.
-- **Previews**, the eye beside it: the results as small 3D pictures. Rest the mouse on one to turn it; a click starts Drop at click.
+- **Previews**, the eye beside it: the results as small 3D pictures. Rest the mouse on one to turn it; a click shows its details beside them, with **Drop**. In Settings, **A picture's details before Drop** off makes a click start Drop at click at once.
 
 A **mesh** is a plain 3D model. An **entity** is a model with parts and behaviour, such as a device. A **person** (NPC) stands friendly and idle.
 
@@ -117,7 +117,7 @@ The previews of a scene whose bake is in the game stay off, so nothing stands tw
 
 ## Settings
 
-The REDbridge and game folders (found by themselves when empty), the editor camera and HUD switches, the Library folder, **Rebuild asset index** and **Restart REDbridge**.
+The REDbridge and game folders (found by themselves when empty), the editor camera and HUD switches, a picture's details before Drop, the Library folder, **Rebuild asset index** and **Restart REDbridge**.
 
 ## More help
 
