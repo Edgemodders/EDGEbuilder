@@ -2,11 +2,12 @@
 import { channel } from "rednode";
 import { applyChange, boxOf, centreOf, collisionKey, membersOf, seenFromBySize, SeenFromRange, pickMany, pickSelection, selectionUnits } from "../arrange";
 import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
-import type { AssetEntry, AssetFrom, AssetKind, ImportCollision, LibraryBake, ModelEntry, ExploreReply, ExploreRoot, ModMessage, PageMessage, Place, PreviewReply, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
+import type { AssetEntry, AssetFrom, AssetKind, ImportCollision, LibraryBake, ModelEntry, ExploreReply, ExploreRoot, FilesReply, ModMessage, PageMessage, Place, PreviewReply, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
 import type { Part, Previews } from "./previews";
 import { held } from "./held";
 import { Viewport, busyText } from "./viewport";
 import { doorStateText } from "../worldedits";
+import helpHtml from "./help.md";
 
 declare const RednodeUI: { notify(text: string, options?: Record<string, unknown>): void } | undefined;
 
@@ -401,11 +402,11 @@ window.addEventListener(
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "RN-INPUT") return;
     if (lastDownInWorld && ($("edit") as HTMLElement & { checked: boolean }).checked) return;
-    // With the Explorer open, typing filters it.
-    if (explorerOpen) {
+    // With the Explorer or the Import file picker open, typing filters it.
+    if (explorerOpen || filesOpen) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      const box = $("exFilter") as HTMLElement & { value: string; focus(): void };
+      const box = $(filesOpen ? "fileFilter" : "exFilter") as HTMLElement & { value: string; focus(): void };
       box.focus();
       box.value = (box.value ?? "") + e.key;
       box.dispatchEvent(new Event("input"));
@@ -1545,7 +1546,7 @@ function renderSectorDrawer(s: Snapshot): void {
   }
   if (v.path !== lastSector) {
     lastSector = v.path;
-    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = previewWorld = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = previewWorld = filesOpen = false;
     renderLeft();
     ($("sectorFilter") as HTMLInputElement).value = v.filter;
   }
@@ -1678,8 +1679,13 @@ for (const id of ["bakeProjects", "importProjects"]) {
 
 let libraryDrawerOpen = false;
 let previewsOpen = false;
+/** The Import file picker, opened by the folder button beside the Import path. */
+let filesOpen = false;
 
-function openLeft(which: "objects" | "library" | "previews" | "explorer" | "preview" | "world" | "none"): void {
+function openLeft(which: "objects" | "library" | "previews" | "explorer" | "preview" | "world" | "files" | "none"): void {
+  const wasFiles = filesOpen;
+  filesOpen = which === "files";
+  if (filesOpen && !wasFiles) askFiles(fileStart());
   previewAlone = which === "preview";
   previewWorld = which === "world";
   drawerOpen = which === "objects";
@@ -1708,6 +1714,8 @@ function renderLeft(): void {
   $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld);
   $("exPreview").classList.toggle("world", previewWorld);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
+  $("fileDrawer").classList.toggle("open", filesOpen);
+  $("importBrowse").setAttribute("aria-pressed", String(filesOpen));
   if (!worldOpen && ((!explorerOpen && !previewAlone) || !exPicked)) stopExView();
 }
 
@@ -1751,7 +1759,167 @@ $("libraryOut").addEventListener("click", () => setLibraryOut(!libraryOut));
 $("libraryDrawerIn").addEventListener("click", () => setLibraryOut(false));
 $("libraryDrawerClose").addEventListener("click", () => openLeft("none"));
 $("libraryOpen").addEventListener("click", () => openLeft(libraryDrawerOpen ? "none" : "library"));
+
+// The Library drawer's width: its head's two buttons step it wider (to the left) and back; kept.
+const LibraryWidths = [420, 540, 680, 840];
+let libraryStep = 0;
+try {
+  libraryStep = Math.max(0, Math.min(LibraryWidths.length - 1, Number(localStorage.getItem("edgebuilder.libraryWidth") ?? 0) | 0));
+} catch {
+  // No storage: the narrowest.
+}
+function sizeLibrary(step: number): void {
+  libraryStep = Math.max(0, Math.min(LibraryWidths.length - 1, step));
+  $("libraryDrawer").style.width = `${LibraryWidths[libraryStep]}px`;
+  $("libraryShrink").toggleAttribute("disabled", libraryStep === 0);
+  $("libraryGrow").toggleAttribute("disabled", libraryStep === LibraryWidths.length - 1);
+  try {
+    localStorage.setItem("edgebuilder.libraryWidth", String(libraryStep));
+  } catch {
+    // No storage: for this session only.
+  }
+}
+$("libraryGrow").addEventListener("click", () => sizeLibrary(libraryStep + 1));
+$("libraryShrink").addEventListener("click", () => sizeLibrary(libraryStep - 1));
+sizeLibrary(libraryStep);
 placeLibrary();
+
+// ---- the Import file picker (0.14.0) ---------------------------------------------------------------------
+//
+// The folder button beside the Import path opens a wide drawer that walks the disk one folder at a time
+// (the mod lists it): the places on the left (the Library, the project's source\raw, EDGEfab's Desk, the
+// user's folders, the drives), the folder's folders, GLB files and prop items on the right. Use this file
+// (or a double-click on it) puts it in the Import path and picks it for Import. The last folder is kept.
+
+let fileSeq = 0;
+let files: FilesReply | undefined;
+let fileChosen: string | undefined;
+let fileFilter = "";
+
+function fileStart(): string | undefined {
+  // The folder of a path typed in, else the folder shown last.
+  const typed = ($<Field>("importPath").value ?? "").trim().replace(/^"(.*)"$/, "$1");
+  if (typed) return typed.toLowerCase().endsWith(".glb") || typed.toLowerCase().endsWith(".prop.asset") ? typed.replace(/[\\/][^\\/]*$/, "") : typed;
+  try {
+    return localStorage.getItem("edgebuilder.fileDir") ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function askFiles(dir: string | undefined): void {
+  post({ type: "files", seq: ++fileSeq, dir });
+}
+
+function filesCame(m: FilesReply): void {
+  if (m.seq !== fileSeq) return;
+  // A folder that cannot be read keeps the one shown, with why.
+  if (m.why && files && !m.folders.length && !m.files.length) {
+    $("fileInfo").textContent = m.why;
+    return;
+  }
+  if (files?.dir !== m.dir) {
+    fileFilter = "";
+    $<Field>("fileFilter").value = "";
+  }
+  files = m;
+  $<Field>("filePath").value = m.dir;
+  if (!m.why) {
+    try {
+      localStorage.setItem("edgebuilder.fileDir", m.dir);
+    } catch {
+      // No storage: from the first place next time.
+    }
+  }
+  renderFiles();
+}
+
+const fileWhen = (ms: number) => {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`;
+};
+const fileSize = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+
+function renderFiles(): void {
+  const f = files;
+  const places = f?.places ?? [];
+  // The place the folder shown is in: the longest one it starts with.
+  const lower = (f?.dir ?? "").toLowerCase();
+  const inPlace = places.filter((p) => lower === p.dir.toLowerCase().replace(/[\\/]$/, "") || lower.startsWith(p.dir.toLowerCase().replace(/[\\/]?$/, "\\")) || lower === p.dir.toLowerCase()).sort((a, b) => b.dir.length - a.dir.length)[0];
+  const kinds: Record<string, string> = { known: "", user: "", drive: "drive" };
+  $("filePlaces").innerHTML = places
+    .map((p, i) => {
+      const gap = i > 0 && places[i - 1].kind !== p.kind ? ' style="margin-top:8px"' : "";
+      return `<rn-item value="${esc(p.dir)}" title="${esc(p.dir)}"${p === inPlace ? " selected" : ""}${gap}>${esc(p.label)}<span slot="end">${esc(kinds[p.kind] ?? "")}</span></rn-item>`;
+    })
+    .join("");
+  ($("fileUp") as HTMLElement).toggleAttribute("disabled", !f?.parent);
+  if (!f) {
+    $("fileList").innerHTML = `<rn-item disabled>reading...</rn-item>`;
+    $("fileInfo").textContent = "";
+    return;
+  }
+  const text = fileFilter.toLowerCase();
+  const match = (name: string) => !text || name.toLowerCase().includes(text);
+  const folders = f.folders.filter((d) => !d.prop && match(d.name));
+  const props = f.folders.filter((d) => d.prop && match(`${d.name} ${d.prop}`));
+  const glbs = f.files.filter((x) => match(x.name));
+  const rows: string[] = [];
+  for (const d of folders) rows.push(`<rn-item value="d:${esc(d.path)}" title="${esc(d.path)}"><span class="fold">▸</span>${esc(d.name)}<span slot="end"><span class="when">${esc(fileWhen(d.changed))}</span></span></rn-item>`);
+  for (const d of props) rows.push(`<rn-item value="f:${esc(d.path)}" title="${esc(d.path)}"${fileChosen === d.path ? " selected" : ""}><span class="fold"></span>${esc(d.prop ?? d.name)}<span slot="end">prop<span class="when">${esc(fileWhen(d.changed))}</span></span></rn-item>`);
+  for (const x of glbs) rows.push(`<rn-item value="f:${esc(x.path)}" title="${esc(x.path)}"${fileChosen === x.path ? " selected" : ""}><span class="fold"></span>${esc(x.name)}<span slot="end"><span class="size">${esc(fileSize(x.bytes))}</span><span class="when">${esc(fileWhen(x.changed))}</span></span></rn-item>`);
+  if (!rows.length) rows.push(`<rn-item disabled>${esc(f.why ?? (text ? "nothing here matches" : "no folders or GLB files here"))}</rn-item>`);
+  $("fileList").innerHTML = rows.join("");
+  const n = (k: number, one: string, many: string) => `${k.toLocaleString()} ${k === 1 ? one : many}`;
+  $("fileInfo").textContent = f.why ?? `${n(folders.length, "folder", "folders")}, ${n(glbs.length, "GLB file", "GLB files")}${props.length ? `, ${n(props.length, "prop", "props")}` : ""}${text ? " match" : ""}${f.more ? " (a very big folder: only the first 3,000 entries)" : ""}. A click opens a folder or picks a file; a double-click on a file uses it.`;
+  $("fileChosen").textContent = fileChosen ?? "Pick a .glb file, or a prop from EDGEfab's Desk";
+  $("fileUse").toggleAttribute("disabled", !fileChosen);
+}
+
+function useFile(file: string): void {
+  $<Field>("importPath").value = file;
+  openLeft("none");
+  pickTyped();
+}
+
+$("importBrowse").addEventListener("click", () => openLeft(filesOpen ? "none" : "files"));
+$("fileClose").addEventListener("click", () => openLeft("none"));
+$("fileUp").addEventListener("click", () => files?.parent && askFiles(files.parent));
+$<Field>("filePath").addEventListener("submit", () => {
+  const dir = ($<Field>("filePath").value ?? "").trim().replace(/^"(.*)"$/, "$1");
+  if (dir) askFiles(dir);
+});
+$("fileFilter").addEventListener("input", () => {
+  fileFilter = ($<Field>("fileFilter").value ?? "").trim();
+  renderFiles();
+});
+$("filePlaces").addEventListener("select", (e) => {
+  const dir = (e as CustomEvent<{ value: string }>).detail.value;
+  if (dir) askFiles(dir);
+});
+$("fileList").addEventListener("select", (e) => {
+  const value = (e as CustomEvent<{ value: string }>).detail.value ?? "";
+  if (value.startsWith("d:")) return askFiles(value.slice(2));
+  if (!value.startsWith("f:")) return;
+  fileChosen = value.slice(2);
+  renderFiles();
+});
+// A double-click on a file uses it. Not the browser's dblclick: the first click's select redraws the rows,
+// so the second lands on a new element (as on the Library tab).
+let lastFileClick = { value: "", at: 0 };
+$("fileList").addEventListener(
+  "click",
+  (e) => {
+    const value = (e.target as HTMLElement).closest?.("rn-item")?.getAttribute("value") ?? "";
+    const twice = value.startsWith("f:") && value === lastFileClick.value && performance.now() - lastFileClick.at < 500;
+    lastFileClick = twice ? { value: "", at: 0 } : { value, at: performance.now() };
+    if (twice) useFile(value.slice(2));
+  },
+  true,
+);
+$("fileUse").addEventListener("click", () => fileChosen && useFile(fileChosen));
 
 // ---- the Previews drawer (0.14.0) ------------------------------------------------------------------------
 //
@@ -1994,7 +2162,7 @@ $("freePick").addEventListener("change", (e) => {
 
 /** Opens the Preview drawer at the screen's left for the thing picked in the world; the other left drawers close. */
 function showWorldPreview(): void {
-  drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = false;
+  drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = filesOpen = false;
   previewWorld = true;
   if (state?.sectors.open) post({ type: "sectors.close" });
 }
@@ -2482,10 +2650,14 @@ $("saveSettings").addEventListener("click", () =>
   post({ type: "settings", bridgePath: ($("bridgePath") as HTMLInputElement & { value: string }).value?.trim() || undefined, gameDir: ($("gameDir") as HTMLInputElement & { value: string }).value?.trim() || undefined }),
 );
 
+// The About tab: the quickstart in src/app/help.md, made into HTML by build.mjs.
+$("help").innerHTML = helpHtml;
+
 channel.on<ModMessage>((m) => {
   if (m?.type === "state" && m.state) render(m.state);
   else if (m?.type === "preview") void previewCame(m).then(() => modelCame(m));
   else if (m?.type === "explore") explorerCame(m);
+  else if (m?.type === "files") filesCame(m);
   else if (m?.type === "probe") viewport.setProbe(m);
 });
 post({ type: "hello" });

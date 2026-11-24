@@ -2,6 +2,7 @@
 
 // src/mod.ts
 import * as fs9 from "node:fs";
+import * as os2 from "node:os";
 import * as path11 from "node:path";
 import { createHash as createHash2 } from "node:crypto";
 import { api, archives, channel, game, kernel, pkg, service, ui, world as world2 } from "rednode";
@@ -96,8 +97,8 @@ var BridgeClient = class {
     if (!this.running) return Promise.reject(new BridgeError("REDbridge is not running"));
     const id = this.nextId++;
     const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id, method, params: params ?? {} }), "utf8");
-    return new Promise((resolve4, reject) => {
-      this.pending.set(id, { resolve: resolve4, reject });
+    return new Promise((resolve5, reject) => {
+      this.pending.set(id, { resolve: resolve5, reject });
       this.process.stdin.write(Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r
 \r
 `, "ascii"), body]));
@@ -1775,6 +1776,67 @@ function mtime(p) {
     return fs8.statSync(p).mtimeMs;
   } catch {
     return 0;
+  }
+}
+var MaxListed = 3e3;
+function filePlaces(known, env = process.env) {
+  const home = env.USERPROFILE ?? env.HOME ?? "";
+  const out = [];
+  const add3 = (label, dir, kind) => {
+    if (!dir || out.some((p) => p.dir.toLowerCase() === dir.toLowerCase())) return;
+    if (isDir(dir)) out.push({ label, dir, kind });
+  };
+  for (const k of known) add3(k.label, k.dir, "known");
+  if (home) {
+    add3("Desktop", path9.join(home, "Desktop"), "user");
+    add3("Documents", path9.join(home, "Documents"), "user");
+    add3("Downloads", path9.join(home, "Downloads"), "user");
+  }
+  if (process.platform === "win32") for (const c of "CDEFGHIJKLMNOPQRSTUVWXYZ") add3(`${c}:`, `${c}:\\`, "drive");
+  else add3("/", "/", "drive");
+  return out;
+}
+function listFolder(dir) {
+  const at = path9.resolve(dir);
+  const parent = path9.dirname(at);
+  const listing = { dir: at, parent: parent !== at ? parent : void 0, folders: [], files: [] };
+  let names;
+  try {
+    names = fs8.readdirSync(at, { withFileTypes: true });
+  } catch (err) {
+    listing.why = err.code === "ENOENT" ? `There is no folder at ${at}.` : `This folder cannot be read (${err.code ?? "an error"}).`;
+    return listing;
+  }
+  names.sort((a, b) => a.name.localeCompare(b.name, void 0, { sensitivity: "base", numeric: true }));
+  for (const d of names) {
+    if (listing.folders.length + listing.files.length >= MaxListed) {
+      listing.more = true;
+      break;
+    }
+    const full = path9.join(at, d.name);
+    const lower = d.name.toLowerCase();
+    const folder = d.isDirectory() || d.isSymbolicLink() && isDir(full);
+    if (folder) {
+      if (d.name.startsWith(".") || d.name.startsWith("$") || d.name === "System Volume Information") continue;
+      if (lower.endsWith(PropEnding)) listing.folders.push({ name: d.name, path: full, prop: propName(full), changed: mtime(full) });
+      else listing.folders.push({ name: d.name, path: full, changed: mtime(full) });
+    } else if (d.isFile() && lower.endsWith(".glb")) {
+      let st;
+      try {
+        st = fs8.statSync(full);
+      } catch {
+        continue;
+      }
+      listing.files.push({ name: d.name, path: full, bytes: st.size, changed: st.mtimeMs });
+    }
+  }
+  return listing;
+}
+function isDir(p) {
+  try {
+    return fs8.statSync(p).isDirectory();
+  } catch {
+    return false;
   }
 }
 function checkModelPath(p) {
@@ -4311,6 +4373,12 @@ channel.on((m) => {
       case "explore": {
         const found = index.explore(m.root, m.dir, m.text ?? "");
         channel.post({ type: "explore", seq: m.seq, root: m.root, dir: m.dir, text: m.text ?? "", roots: index.exploreRoots(), ...found });
+        break;
+      }
+      case "files": {
+        const places = filePlaces(state.library.modelPlaces.map((p) => ({ label: p.label, dir: p.dir })));
+        const dir = m.dir || places[0]?.dir || os2.homedir();
+        channel.post({ type: "files", seq: m.seq, places, ...listFolder(dir) });
         break;
       }
       case "preview.save":

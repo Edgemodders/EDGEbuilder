@@ -1337,6 +1337,9 @@ function doorStateText(d) {
   return [d.open === void 0 ? "" : d.open ? "open" : "closed", d.locked === void 0 ? "" : d.locked ? "locked" : "unlocked"].filter(Boolean).join(", ");
 }
 
+// src/app/help.md
+var help_default = '<h1>EDGEbuilder</h1>\n<p class="version">Version 0.14.0, for Cyberpunk 2077 2.5</p>\n\n<p>A world builder that runs inside the game. You find a model, drop it into the world, move it until it sits right, arrange a scene, and bake the scene into a mod, so the objects are part of Night City for anyone who installs it.</p>\n<p>Two words you will meet everywhere:</p>\n<ul>\n<li>A <strong>preview</strong> is an object you placed that is not baked yet. Only you see it, and only while EDGEbuilder runs.</li>\n<li>To <strong>bake</strong> a scene is to turn it into a mod: its objects then stand in the world without EDGEbuilder.</li>\n</ul>\n<h2>Before you start</h2>\n<p>The three pills at the top say whether everything is ready:</p>\n<table>\n<thead>\n<tr>\n<th>Pill</th>\n<th>Ready when it says</th>\n<th>If not</th>\n</tr>\n</thead>\n<tbody><tr>\n<td>World</td>\n<td><strong>World ready</strong></td>\n<td>Load a save</td>\n</tr>\n<tr>\n<td>REDbridge</td>\n<td><strong>REDbridge</strong> and its version, in green</td>\n<td>Hover it for why. It reads the game&#39;s files and bakes</td>\n</tr>\n<tr>\n<td>Index</td>\n<td>About <strong>31,600 assets</strong></td>\n<td>It says <strong>Indexing...</strong> for a few seconds the first time</td>\n</tr>\n</tbody></table>\n<h2>First scene in five steps</h2>\n<ol>\n<li><strong>Library</strong> tab: type a name in <strong>Name</strong>, pick a folder in the tree, press <strong>New scene here</strong>. The scene is saved after every change from now on.</li>\n<li><strong>Assets</strong> tab: type <code>crate</code>. Typing anywhere on the tab goes into the search box.</li>\n<li>Click a result. <strong>Picked</strong> shows its size and its looks (appearances): click one.</li>\n<li>Press <strong>Drop where I look</strong>, or <strong>Drop at click</strong> and click the spot in the world.</li>\n<li>Switch <strong>Edit</strong> on (top right of this window), click the crate, and drag its arrows.</li>\n</ol>\n<h2>Find something</h2>\n<ul>\n<li><strong>Search</strong> finds the game&#39;s meshes, entities and people by name. The tabs under the box narrow it by kind (<strong>Meshes</strong>, <strong>Entities</strong>, <strong>NPCs</strong>) and by where it comes from (<strong>Game</strong>, <strong>Mods</strong>, <strong>Project</strong>). The \u2715 in the box clears it.</li>\n<li><strong>Explorer</strong>: the folder button beside the search box. The game&#39;s own folders, each mod, the open REDcode project and the game&#39;s people, opened one folder at a time. Typing filters the folder clicked last. A pick shows the model in 3D beside it: drag to turn it, the wheel zooms. <strong>Drop</strong> starts Drop at click.</li>\n<li><strong>Preview</strong> switch, beside the result count: with it on, a click on a result shows it in that same 3D drawer.</li>\n<li><strong>Previews</strong>, the eye beside it: the results as small 3D pictures. Rest the mouse on one to turn it; a click starts Drop at click.</li>\n</ul>\n<p>A <strong>mesh</strong> is a plain 3D model. An <strong>entity</strong> is a model with parts and behaviour, such as a device. A <strong>person</strong> (NPC) stands friendly and idle.</p>\n<h2>Drop it</h2>\n<ul>\n<li><strong>Drop where I look</strong> puts it in front of you, on what the camera looks at.</li>\n<li><strong>Drop at click</strong>: the cursor becomes a crosshair and the object&#39;s outline sits where a click would put it (amber over the sky). Click to drop, <kbd>Esc</kbd> or a right-click cancels.</li>\n</ul>\n<h2>Edit mode and the camera</h2>\n<p>Switch <strong>Edit</strong> on to work in the world: the mouse works in the world, the game&#39;s HUD hides and EDGEbuilder looks through a camera of its own. V stays where V stood. Both can be switched off in <strong>Settings</strong>.</p>\n<table>\n<thead>\n<tr>\n<th>To</th>\n<th>Do</th>\n</tr>\n</thead>\n<tbody><tr>\n<td>Look around</td>\n<td>Hold the right mouse button and move the mouse</td>\n</tr>\n<tr>\n<td>Fly</td>\n<td>Right button held, <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>, <kbd>Q</kbd> down, <kbd>E</kbd> up; <kbd>Shift</kbd> faster, the wheel sets the speed</td>\n</tr>\n<tr>\n<td>Orbit the selection</td>\n<td>Middle button; with <kbd>Shift</kbd> it pans; the wheel moves closer</td>\n</tr>\n<tr>\n<td>Frame the selection</td>\n<td><kbd>F</kbd></td>\n</tr>\n</tbody></table>\n<p>A help line at the bottom of the screen always says what you can do next. <kbd>F10</kbd> hands the mouse back to the game: V\u2019s view and the HUD come back, and Edit picks up where it was at the next <kbd>F10</kbd>.</p>\n<h2>Position</h2>\n<p>Click an object to select it. Its <strong>gizmo</strong> has red, green and blue arrows (drag one to move along it) and a yellow ring (drag it to turn).</p>\n<table>\n<thead>\n<tr>\n<th>Key</th>\n<th>Does</th>\n</tr>\n</thead>\n<tbody><tr>\n<td><kbd>G</kbd> <kbd>R</kbd> <kbd>S</kbd></td>\n<td>Move, turn, scale (meshes) with the mouse</td>\n</tr>\n<tr>\n<td>then <kbd>X</kbd> <kbd>Y</kbd> <kbd>Z</kbd></td>\n<td>Lock to one axis; type a number for an exact amount</td>\n</tr>\n<tr>\n<td><kbd>Enter</kbd> or a click</td>\n<td>Keep it</td>\n</tr>\n<tr>\n<td><kbd>Esc</kbd> or a right-click</td>\n<td>Put it back</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd> while dragging</td>\n<td>Snap to steps</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>E</kbd></td>\n<td>Drop to the floor</td>\n</tr>\n<tr>\n<td><kbd>Delete</kbd></td>\n<td>Remove it from the scene</td>\n</tr>\n</tbody></table>\n<p><strong>Selected</strong> on the Scene tab takes exact numbers: X, Y, Z, Heading, Scale, and <strong>Seen from</strong>, how far off it is seen once baked. <strong>Solid</strong> makes a mesh stop V once baked, when its mesh carries collision data.</p>\n<h2>Arrange</h2>\n<table>\n<thead>\n<tr>\n<th>Keys</th>\n<th>Does</th>\n</tr>\n</thead>\n<tbody><tr>\n<td><kbd>Ctrl</kbd>+click, <kbd>Shift</kbd>+drag, <kbd>Ctrl</kbd>+<kbd>A</kbd></td>\n<td>Add to the selection, select in a box, select all</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>G</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></td>\n<td>Group, ungroup. A click selects the whole group, <kbd>Alt</kbd>+click one object</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>D</kbd></td>\n<td>Duplicate: the copy follows the mouse until a click puts it down</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Ctrl</kbd>+<kbd>X</kbd>, <kbd>Ctrl</kbd>+<kbd>V</kbd></td>\n<td>Copy, cut, paste where the cursor points</td>\n</tr>\n<tr>\n<td><kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>+<kbd>Y</kbd></td>\n<td>Undo, redo (the last 100 changes)</td>\n</tr>\n</tbody></table>\n<p>A move, turn or scale acts on the whole selection, around its middle.</p>\n<h2>Scenes and the Library</h2>\n<ul>\n<li>The open scene is saved after every change. <kbd>Ctrl</kbd>+<kbd>S</kbd> confirms it, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves a copy under a new name. Its name is at the top of the <strong>Scene</strong> tab (Enter renames it).</li>\n<li>The <strong>Library</strong> tab lists every scene: in the <strong>Library</strong> (your own folders, shared by the EDGE tools, <code>Documents\\EDGE Library</code> unless you choose another in Settings), in the open REDcode project, and on <strong>This PC</strong>.</li>\n<li>Pick a scene to <strong>Open</strong> it, <strong>Close</strong> it, or <strong>Show in world</strong> beside the one you are editing (shown, not editable). <strong>Objects</strong> lists a scene&#39;s objects in a drawer: two clicks fly the camera to one.</li>\n<li>The icon at the top right of the tree moves the Library out of the window into a drawer. The drawer&#39;s arrows make it wider or narrower.</li>\n<li>EDGEbuilder opens the last scene again when it starts.</li>\n</ul>\n<h2>Import a model of your own</h2>\n<ol>\n<li>Library tab: type the path of a <code>.glb</code> file in the box at the top, or press the folder button beside it to find it on your disk. Models in the Library, in the project&#39;s <code>source\\raw</code> and on EDGEfab&#39;s Desk are listed in the tree too.</li>\n<li>Pick it. The Import box asks for a <strong>Name</strong>, a <strong>Height</strong> (for a model with no real size) and how solid it is.</li>\n<li>Press <strong>Import</strong>. It goes into the open REDcode project, is packed and comes into the running game. Making textures takes most of the time; <strong>Stop</strong> ends it.</li>\n<li>It is then picked on the Assets tab, ready to drop.</li>\n</ol>\n<h2>The game&#39;s own objects</h2>\n<p>The <strong>World</strong> tab:</p>\n<ul>\n<li><strong>Nearby</strong> finds the doors near V (<strong>Scan Doors</strong>). With <strong>Edit</strong> on, a click picks a door. The switches choose what a click picks: doors, painted-on doors, meshes.</li>\n<li><strong>Pick under the cursor</strong> (in Picked in the world): what a click would pick is outlined as the mouse moves, and a click picks any mesh or door. Its details open in a drawer at the left of the screen: the model in 3D, its kind, size, place, node and sector, and whether it is <strong>solid</strong> where you clicked. <strong>Drop a copy</strong> puts a copy in your scene.</li>\n<li><strong>Remove from world</strong> takes a door, a painted-on door or a mesh out, kept in the scene. <strong>Restore</strong> or Undo brings it back. A bake removes it for good.</li>\n<li><strong>Open</strong>, <strong>Close</strong>, <strong>Lock</strong> keep a door that way while the scene is open.</li>\n<li><strong>Sectors</strong> lists the pieces the game streams the world in: near V, near the camera, or by name. A sector&#39;s drawer lists every entry in it: pick, fly to, hide for the session or remove.</li>\n</ul>\n<h2>Bake</h2>\n<ol>\n<li>Open a project in REDcode (VS Code). The <strong>Bake</strong> tab names it, and checks the scene.</li>\n<li>Press <strong>Bake</strong>. The scene becomes a streaming sector of its own in the project.</li>\n<li>In REDcode, <strong>Pack and Install</strong> (or add it in EDGEdeck and deploy), then start the game again: a bake comes in as the game starts.</li>\n</ol>\n<p>The previews of a scene whose bake is in the game stay off, so nothing stands twice. <strong>Bake into Library</strong>, on the Library tab, keeps a bake there that can hold several scenes; <strong>Include in project</strong> copies it into a project. People are not baked yet.</p>\n<h2>Settings</h2>\n<p>The REDbridge and game folders (found by themselves when empty), the editor camera and HUD switches, the Library folder, <strong>Rebuild asset index</strong> and <strong>Restart REDbridge</strong>.</p>\n<h2>More help</h2>\n<p>The full guide, with pictures: <code>edgemodders.ai/wiki/edgebuilder</code></p>\n<p>Questions and bugs: <code>github.com/Edgemodders/EDGEbuilder/issues</code></p>\n<p>EDGEbuilder is inspired by World Builder by keanuWheeze. It is its own design and uses none of World Builder&#39;s code, files or data.</p>\n';
+
 // src/app/main.ts
 var $ = (id) => document.getElementById(id);
 var post = (m) => channel.post(m);
@@ -1666,10 +1669,10 @@ window.addEventListener(
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "RN-INPUT") return;
     if (lastDownInWorld && $("edit").checked) return;
-    if (explorerOpen) {
+    if (explorerOpen || filesOpen) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      const box2 = $("exFilter");
+      const box2 = $(filesOpen ? "fileFilter" : "exFilter");
       box2.focus();
       box2.value = (box2.value ?? "") + e.key;
       box2.dispatchEvent(new Event("input"));
@@ -2642,7 +2645,7 @@ function renderSectorDrawer(s) {
   }
   if (v2.path !== lastSector) {
     lastSector = v2.path;
-    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = previewWorld = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = previewWorld = filesOpen = false;
     renderLeft();
     $("sectorFilter").value = v2.filter;
   }
@@ -2747,7 +2750,11 @@ for (const id of ["bakeProjects", "importProjects"]) {
 }
 var libraryDrawerOpen = false;
 var previewsOpen = false;
+var filesOpen = false;
 function openLeft(which) {
+  const wasFiles = filesOpen;
+  filesOpen = which === "files";
+  if (filesOpen && !wasFiles) askFiles(fileStart());
   previewAlone = which === "preview";
   previewWorld = which === "world";
   drawerOpen = which === "objects";
@@ -2775,6 +2782,8 @@ function renderLeft() {
   $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld);
   $("exPreview").classList.toggle("world", previewWorld);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
+  $("fileDrawer").classList.toggle("open", filesOpen);
+  $("importBrowse").setAttribute("aria-pressed", String(filesOpen));
   if (!worldOpen && (!explorerOpen && !previewAlone || !exPicked)) stopExView();
 }
 var libraryOut = false;
@@ -2806,7 +2815,140 @@ $("libraryOut").addEventListener("click", () => setLibraryOut(!libraryOut));
 $("libraryDrawerIn").addEventListener("click", () => setLibraryOut(false));
 $("libraryDrawerClose").addEventListener("click", () => openLeft("none"));
 $("libraryOpen").addEventListener("click", () => openLeft(libraryDrawerOpen ? "none" : "library"));
+var LibraryWidths = [420, 540, 680, 840];
+var libraryStep = 0;
+try {
+  libraryStep = Math.max(0, Math.min(LibraryWidths.length - 1, Number(localStorage.getItem("edgebuilder.libraryWidth") ?? 0) | 0));
+} catch {
+}
+function sizeLibrary(step) {
+  libraryStep = Math.max(0, Math.min(LibraryWidths.length - 1, step));
+  $("libraryDrawer").style.width = `${LibraryWidths[libraryStep]}px`;
+  $("libraryShrink").toggleAttribute("disabled", libraryStep === 0);
+  $("libraryGrow").toggleAttribute("disabled", libraryStep === LibraryWidths.length - 1);
+  try {
+    localStorage.setItem("edgebuilder.libraryWidth", String(libraryStep));
+  } catch {
+  }
+}
+$("libraryGrow").addEventListener("click", () => sizeLibrary(libraryStep + 1));
+$("libraryShrink").addEventListener("click", () => sizeLibrary(libraryStep - 1));
+sizeLibrary(libraryStep);
 placeLibrary();
+var fileSeq = 0;
+var files;
+var fileChosen;
+var fileFilter = "";
+function fileStart() {
+  const typed = ($("importPath").value ?? "").trim().replace(/^"(.*)"$/, "$1");
+  if (typed) return typed.toLowerCase().endsWith(".glb") || typed.toLowerCase().endsWith(".prop.asset") ? typed.replace(/[\\/][^\\/]*$/, "") : typed;
+  try {
+    return localStorage.getItem("edgebuilder.fileDir") ?? void 0;
+  } catch {
+    return void 0;
+  }
+}
+function askFiles(dir) {
+  post({ type: "files", seq: ++fileSeq, dir });
+}
+function filesCame(m) {
+  if (m.seq !== fileSeq) return;
+  if (m.why && files && !m.folders.length && !m.files.length) {
+    $("fileInfo").textContent = m.why;
+    return;
+  }
+  if (files?.dir !== m.dir) {
+    fileFilter = "";
+    $("fileFilter").value = "";
+  }
+  files = m;
+  $("filePath").value = m.dir;
+  if (!m.why) {
+    try {
+      localStorage.setItem("edgebuilder.fileDir", m.dir);
+    } catch {
+    }
+  }
+  renderFiles();
+}
+var fileWhen = (ms) => {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const two = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`;
+};
+var fileSize = (b) => b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
+function renderFiles() {
+  const f = files;
+  const places = f?.places ?? [];
+  const lower = (f?.dir ?? "").toLowerCase();
+  const inPlace = places.filter((p) => lower === p.dir.toLowerCase().replace(/[\\/]$/, "") || lower.startsWith(p.dir.toLowerCase().replace(/[\\/]?$/, "\\")) || lower === p.dir.toLowerCase()).sort((a, b) => b.dir.length - a.dir.length)[0];
+  const kinds = { known: "", user: "", drive: "drive" };
+  $("filePlaces").innerHTML = places.map((p, i) => {
+    const gap = i > 0 && places[i - 1].kind !== p.kind ? ' style="margin-top:8px"' : "";
+    return `<rn-item value="${esc(p.dir)}" title="${esc(p.dir)}"${p === inPlace ? " selected" : ""}${gap}>${esc(p.label)}<span slot="end">${esc(kinds[p.kind] ?? "")}</span></rn-item>`;
+  }).join("");
+  $("fileUp").toggleAttribute("disabled", !f?.parent);
+  if (!f) {
+    $("fileList").innerHTML = `<rn-item disabled>reading...</rn-item>`;
+    $("fileInfo").textContent = "";
+    return;
+  }
+  const text = fileFilter.toLowerCase();
+  const match = (name) => !text || name.toLowerCase().includes(text);
+  const folders = f.folders.filter((d) => !d.prop && match(d.name));
+  const props = f.folders.filter((d) => d.prop && match(`${d.name} ${d.prop}`));
+  const glbs = f.files.filter((x) => match(x.name));
+  const rows = [];
+  for (const d of folders) rows.push(`<rn-item value="d:${esc(d.path)}" title="${esc(d.path)}"><span class="fold">\u25B8</span>${esc(d.name)}<span slot="end"><span class="when">${esc(fileWhen(d.changed))}</span></span></rn-item>`);
+  for (const d of props) rows.push(`<rn-item value="f:${esc(d.path)}" title="${esc(d.path)}"${fileChosen === d.path ? " selected" : ""}><span class="fold"></span>${esc(d.prop ?? d.name)}<span slot="end">prop<span class="when">${esc(fileWhen(d.changed))}</span></span></rn-item>`);
+  for (const x of glbs) rows.push(`<rn-item value="f:${esc(x.path)}" title="${esc(x.path)}"${fileChosen === x.path ? " selected" : ""}><span class="fold"></span>${esc(x.name)}<span slot="end"><span class="size">${esc(fileSize(x.bytes))}</span><span class="when">${esc(fileWhen(x.changed))}</span></span></rn-item>`);
+  if (!rows.length) rows.push(`<rn-item disabled>${esc(f.why ?? (text ? "nothing here matches" : "no folders or GLB files here"))}</rn-item>`);
+  $("fileList").innerHTML = rows.join("");
+  const n = (k, one, many) => `${k.toLocaleString()} ${k === 1 ? one : many}`;
+  $("fileInfo").textContent = f.why ?? `${n(folders.length, "folder", "folders")}, ${n(glbs.length, "GLB file", "GLB files")}${props.length ? `, ${n(props.length, "prop", "props")}` : ""}${text ? " match" : ""}${f.more ? " (a very big folder: only the first 3,000 entries)" : ""}. A click opens a folder or picks a file; a double-click on a file uses it.`;
+  $("fileChosen").textContent = fileChosen ?? "Pick a .glb file, or a prop from EDGEfab's Desk";
+  $("fileUse").toggleAttribute("disabled", !fileChosen);
+}
+function useFile(file) {
+  $("importPath").value = file;
+  openLeft("none");
+  pickTyped();
+}
+$("importBrowse").addEventListener("click", () => openLeft(filesOpen ? "none" : "files"));
+$("fileClose").addEventListener("click", () => openLeft("none"));
+$("fileUp").addEventListener("click", () => files?.parent && askFiles(files.parent));
+$("filePath").addEventListener("submit", () => {
+  const dir = ($("filePath").value ?? "").trim().replace(/^"(.*)"$/, "$1");
+  if (dir) askFiles(dir);
+});
+$("fileFilter").addEventListener("input", () => {
+  fileFilter = ($("fileFilter").value ?? "").trim();
+  renderFiles();
+});
+$("filePlaces").addEventListener("select", (e) => {
+  const dir = e.detail.value;
+  if (dir) askFiles(dir);
+});
+$("fileList").addEventListener("select", (e) => {
+  const value = e.detail.value ?? "";
+  if (value.startsWith("d:")) return askFiles(value.slice(2));
+  if (!value.startsWith("f:")) return;
+  fileChosen = value.slice(2);
+  renderFiles();
+});
+var lastFileClick = { value: "", at: 0 };
+$("fileList").addEventListener(
+  "click",
+  (e) => {
+    const value = e.target.closest?.("rn-item")?.getAttribute("value") ?? "";
+    const twice = value.startsWith("f:") && value === lastFileClick.value && performance.now() - lastFileClick.at < 500;
+    lastFileClick = twice ? { value: "", at: 0 } : { value, at: performance.now() };
+    if (twice) useFile(value.slice(2));
+  },
+  true
+);
+$("fileUse").addEventListener("click", () => fileChosen && useFile(fileChosen));
 var previews;
 var previewsWhy = "";
 var previewsLoading;
@@ -3003,7 +3145,7 @@ $("freePick").addEventListener("change", (e) => {
   }
 });
 function showWorldPreview() {
-  drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = false;
+  drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = filesOpen = false;
   previewWorld = true;
   if (state?.sectors.open) post({ type: "sectors.close" });
 }
@@ -3435,10 +3577,12 @@ $("saveSettings").addEventListener(
   "click",
   () => post({ type: "settings", bridgePath: $("bridgePath").value?.trim() || void 0, gameDir: $("gameDir").value?.trim() || void 0 })
 );
+$("help").innerHTML = help_default;
 channel.on((m) => {
   if (m?.type === "state" && m.state) render(m.state);
   else if (m?.type === "preview") void previewCame(m).then(() => modelCame(m));
   else if (m?.type === "explore") explorerCame(m);
+  else if (m?.type === "files") filesCame(m);
   else if (m?.type === "probe") viewport.setProbe(m);
 });
 post({ type: "hello" });

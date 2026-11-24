@@ -2,6 +2,7 @@
 // editor page's script (app.js). `rednode` stays external: the REDnode host provides it to both.
 import * as esbuild from "esbuild";
 import * as fs from "node:fs";
+import { marked } from "marked";
 
 const watch = process.argv.includes("--watch");
 // The version players see in the log comes from the package manifest.
@@ -20,6 +21,20 @@ const mod = {
   banner: { js: "// Built from src/ by build.mjs; edit the TypeScript, not this file." },
 };
 
+// 0.14.0: the About tab, written in src/app/help.md and made into HTML here, so the page needs no
+// Markdown reader. Links show their address as text: the overlay cannot open a browser.
+const helpMarkdown = {
+  name: "help-markdown",
+  setup(build) {
+    build.onLoad({ filter: /.md$/ }, async (args) => {
+      const renderer = new marked.Renderer();
+      renderer.link = ({ href, text }) => `${text} <code>${href}</code>`;
+      const md = fs.readFileSync(args.path, "utf8").replaceAll("{{version}}", version);
+      return { contents: `export default ${JSON.stringify(await marked.parse(md, { renderer, gfm: true }))};`, loader: "js" };
+    });
+  },
+};
+
 const app = {
   entryPoints: ["src/app/main.ts"],
   outfile: "edgebuilder/app.js",
@@ -28,6 +43,7 @@ const app = {
   format: "esm",
   target: "chrome120",
   external: ["rednode"],
+  plugins: [helpMarkdown],
   legalComments: "none",
   banner: { js: "// Built from src/app/ by build.mjs; edit the TypeScript, not this file." },
 };

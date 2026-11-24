@@ -6,6 +6,7 @@
 // B3-2: named scenes in the Library, the REDcode project or This PC; other scenes shown; a service.
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { api, archives, channel, game, kernel, pkg, service, ui, world, type GameRef, type WorldNode } from "rednode";
@@ -45,7 +46,7 @@ import { Scene, forReader, readSceneFile, yawToQuaternion, type SceneFile, type 
 import { SectorKinds, bridgeKinds, editsInSector, levelsOf, nodeRows, placesEntity, sectorHash, sectorMatches, sectorName, sectorRows, shortKind, type FoundSector, type SectorItem } from "./sectors";
 import { DefaultKinds, KindLabels, MeshNodeKinds, doorActions, doorAfter, doorStateText, doorUnderRay, editFor, editId, idText, kindOfClass, questWarnings, readableEdits, registryId, sameId } from "./worldedits";
 import { movePreview, sameTransform } from "./move";
-import { checkModelPath, deskDir, scanModels } from "./models";
+import { checkModelPath, deskDir, filePlaces, listFolder, scanModels } from "./models";
 import { isTextureLine, loadFab, type BridgeCall, type FabCore, type FabPrepared } from "./fab";
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, upright, type Clip } from "./arrange";
@@ -3174,6 +3175,13 @@ channel.on<PageMessage>((m) => {
         // The Explorer (0.14.0): one folder of a place, from the asset index alone (REDbridge is not asked).
         const found = index.explore(m.root, m.dir, m.text ?? "");
         channel.post({ type: "explore", seq: m.seq, root: m.root, dir: m.dir, text: m.text ?? "", roots: index.exploreRoots(), ...found });
+        break;
+      }
+      case "files": {
+        // The Import file picker (0.14.0): one folder of the disk, its folders and GLB files.
+        const places = filePlaces(state.library.modelPlaces.map((p) => ({ label: p.label, dir: p.dir })));
+        const dir = m.dir || places[0]?.dir || os.homedir();
+        channel.post({ type: "files", seq: m.seq, places, ...listFolder(dir) });
         break;
       }
       case "preview.save":

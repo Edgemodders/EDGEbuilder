@@ -5,7 +5,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ModelEntry, ModelPlace } from "./protocol";
+import type { FilePlace, FolderListing, ModelEntry, ModelPlace } from "./protocol";
 
 const MaxModels = 2000;
 const MaxDepth = 8;
@@ -86,6 +86,79 @@ export function propSlug(name: string): string {
       .replace(/^_+|_+$/g, "")
       .slice(0, 48) || "prop"
   );
+}
+
+// ---- the file picker (0.14.0) ----------------------------------------------------------------------------
+//
+// The Library tab's folder icon beside the Import path opens a drawer that walks the disk one folder at a
+// time: its folders, its `.glb` files and its `.prop.asset` items (picked whole, never walked into).
+
+const MaxListed = 3000;
+
+/** Where the file picker starts: the places Import already knows, the user's own folders, and the drives. */
+export function filePlaces(known: { label: string; dir: string }[], env: NodeJS.ProcessEnv = process.env): FilePlace[] {
+  const home = env.USERPROFILE ?? env.HOME ?? "";
+  const out: FilePlace[] = [];
+  const add = (label: string, dir: string | undefined, kind: FilePlace["kind"]) => {
+    if (!dir || out.some((p) => p.dir.toLowerCase() === dir.toLowerCase())) return;
+    if (isDir(dir)) out.push({ label, dir, kind });
+  };
+  for (const k of known) add(k.label, k.dir, "known");
+  if (home) {
+    add("Desktop", path.join(home, "Desktop"), "user");
+    add("Documents", path.join(home, "Documents"), "user");
+    add("Downloads", path.join(home, "Downloads"), "user");
+  }
+  if (process.platform === "win32") for (const c of "CDEFGHIJKLMNOPQRSTUVWXYZ") add(`${c}:`, `${c}:\\`, "drive");
+  else add("/", "/", "drive");
+  return out;
+}
+
+/** One folder for the file picker: its folders (prop items marked), its `.glb` files, or why it cannot be read. */
+export function listFolder(dir: string): FolderListing {
+  const at = path.resolve(dir);
+  const parent = path.dirname(at);
+  const listing: FolderListing = { dir: at, parent: parent !== at ? parent : undefined, folders: [], files: [] };
+  let names: fs.Dirent[];
+  try {
+    names = fs.readdirSync(at, { withFileTypes: true });
+  } catch (err) {
+    listing.why = (err as NodeJS.ErrnoException).code === "ENOENT" ? `There is no folder at ${at}.` : `This folder cannot be read (${(err as NodeJS.ErrnoException).code ?? "an error"}).`;
+    return listing;
+  }
+  names.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }));
+  for (const d of names) {
+    if (listing.folders.length + listing.files.length >= MaxListed) {
+      listing.more = true;
+      break;
+    }
+    const full = path.join(at, d.name);
+    const lower = d.name.toLowerCase();
+    // A junction or a link to a folder (Windows' "My Music" in Documents, for one) counts as a folder when it can be read.
+    const folder = d.isDirectory() || (d.isSymbolicLink() && isDir(full));
+    if (folder) {
+      if (d.name.startsWith(".") || d.name.startsWith("$") || d.name === "System Volume Information") continue;
+      if (lower.endsWith(PropEnding)) listing.folders.push({ name: d.name, path: full, prop: propName(full), changed: mtime(full) });
+      else listing.folders.push({ name: d.name, path: full, changed: mtime(full) });
+    } else if (d.isFile() && lower.endsWith(".glb")) {
+      let st: fs.Stats;
+      try {
+        st = fs.statSync(full);
+      } catch {
+        continue;
+      }
+      listing.files.push({ name: d.name, path: full, bytes: st.size, changed: st.mtimeMs });
+    }
+  }
+  return listing;
+}
+
+function isDir(p: string): boolean {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 /** A path typed in for Import: a `.glb` or a `.prop.asset` folder that is there, else why not. */

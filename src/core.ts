@@ -33,7 +33,7 @@ export { Scene, forReader, quaternionToYaw, readSceneFile, yawToQuaternion } fro
 export { DefaultKinds, DoorClasses, KindLabels, doorActions, doorAfter, doorStateText, doorUnderRay, editCounts, editFor, editId, editsDiff, idText, kindOfClass, questWarnings, rayToSegment, readableEdits, registryId, sameId } from "./worldedits";
 export { cleanFolderName, fileNameOf, folderIn, freeFileName, libraryConfigFile, readLibraryRoot, refOf, scanShelf, slugOf, whereIs, writeLibraryRoot } from "./scenes";
 export { ModSources, NeedsNewerBridge, modArchives, sceneNeeds } from "./sources";
-export { PropEnding, checkModelPath, deskDir, propName, propSlug, scanModels } from "./models";
+export { PropEnding, checkModelPath, deskDir, filePlaces, listFolder, propName, propSlug, scanModels } from "./models";
 export { isTextureLine } from "./fab";
 export * from "./math";
 export type * from "./protocol";

@@ -66,6 +66,46 @@
   .drawerHead { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
   .drawerHead .section { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rn-fg, #eee); }
   #libraryDrawer #shelves { --rn-list-height: 830px; }
+  /* The Library drawer grows to the left in steps (its head's two buttons); the width is kept. */
+  #libraryDrawer { transition: transform .16s ease-out, opacity .16s, visibility .16s, width .16s ease-out; }
+  /* A square button flush against the right edge of a box, as high as it (36 px): the Import path's. */
+  .flushRow { display: flex; align-items: center; gap: 0; margin: 6px 0; }
+  .flushRow > rn-input { flex: 1; min-width: 0; }
+  .flushRow > rn-button { margin-left: 6px; }
+  .flushBtn { flex: none; width: 36px; height: 36px; box-sizing: border-box; padding: 0; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--rn-panel-2) 70%, black); border: 1px solid var(--rn-line, #333); border-left: none; color: var(--rn-dim, #999); cursor: pointer; }
+  .flushBtn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
+  .flushBtn:hover { background: var(--rn-panel-2, #151a26); color: var(--rn-fg, #eee); }
+  .flushBtn[aria-pressed="true"] { color: var(--rn-accent, #fcee0a); }
+  /* The Import file picker: a very wide drawer, the places on its left, one folder's contents on its right. */
+  #fileDrawer { position: absolute; right: 656px; top: 70px; width: 1000px; height: 920px; box-sizing: border-box; padding: 10px; background: var(--rn-bg, #08090d); border: 1px solid var(--rn-line, #333); border-top: 2px solid var(--rn-accent, #fcee0a); opacity: 0; visibility: hidden; transform: translateX(60px); transition: transform .16s ease-out, opacity .16s, visibility .16s; display: flex; flex-direction: column; }
+  #fileDrawer.open { opacity: 1; visibility: visible; transform: none; }
+  #fileBody { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px 1fr; gap: 10px; }
+  #filePlaces { --rn-list-height: 820px; }
+  #fileMain { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #filePathRow { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  #filePath { flex: 1; min-width: 0; }
+  #fileInfo { margin: 6px 0; }
+  #fileList { --rn-list-height: 720px; }
+  #fileList rn-item { white-space: nowrap; }
+  #fileList .when { display: inline-block; width: 140px; text-align: right; }
+  #fileList .size { display: inline-block; width: 90px; text-align: right; }
+  #fileFoot { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  #fileChosen { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The About tab: the quickstart, written in src/app/help.md. */
+  .help { font-family: var(--rn-body, sans-serif); font-size: 13px; line-height: 1.5; color: var(--rn-fg, #eee); }
+  .help h1 { font-family: var(--rn-mono, monospace); font-size: 15px; letter-spacing: .08em; text-transform: uppercase; color: var(--rn-accent, #fcee0a); margin: 4px 0 6px; }
+  .help h2 { font-family: var(--rn-mono, monospace); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--rn-accent, #fcee0a); margin: 18px 0 6px; padding-top: 8px; border-top: 1px solid var(--rn-line, #333); }
+  .help h3 { font-size: 13px; margin: 12px 0 4px; color: var(--rn-fg, #eee); }
+  .help p { margin: 6px 0; }
+  .help ul, .help ol { margin: 6px 0; padding-left: 20px; }
+  .help li { margin: 2px 0; }
+  .help code { font-family: var(--rn-mono, monospace); font-size: 11.5px; color: var(--rn-accent, #fcee0a); word-break: break-all; }
+  .help kbd { font-family: var(--rn-mono, monospace); font-size: 11px; border: 1px solid var(--rn-line, #333); border-bottom-width: 2px; padding: 0 4px; color: var(--rn-fg, #eee); white-space: nowrap; }
+  .help table { border-collapse: collapse; width: 100%; margin: 6px 0; font-size: 12px; }
+  .help th, .help td { border-bottom: 1px solid var(--rn-line, #333); padding: 3px 8px 3px 0; text-align: left; vertical-align: top; }
+  .help th { font-family: var(--rn-mono, monospace); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--rn-dim, #999); font-weight: normal; }
+  .help strong { color: #fff; }
+  .help .version { font-family: var(--rn-mono, monospace); font-size: 11px; color: var(--rn-dim, #999); }
   #previewsInfo { margin-bottom: 6px; word-break: normal; }
   #previewGrid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-content: start; padding-right: 2px; }
   .tile { border: 1px solid var(--rn-line, #333); background: rgba(255, 255, 255, .02); cursor: pointer; display: flex; flex-direction: column; min-width: 0; }
@@ -157,8 +197,21 @@
     <rn-list id="sectorList"></rn-list>
   </div>
   <div id="libraryDrawer">
-    <div class="drawerHead"><span class="section">Library</span><button id="libraryDrawerIn" class="icon" aria-pressed="true" title="Back into the EDGEbuilder window"><svg viewBox="0 0 16 16"><path d="M7 2.5h6.5v11H7M10 8H1.5M4.5 5L1.5 8l3 3"/></svg></button><button id="libraryDrawerClose" class="act" title="Close (the Library button on the Library tab opens it again)"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+    <div class="drawerHead"><span class="section">Library</span><button id="libraryShrink" class="icon" title="Narrower"><svg viewBox="0 0 16 16"><path d="M14 2.5v11M2 8h8M7 5l3 3-3 3"/></svg></button><button id="libraryGrow" class="icon" title="Wider: the drawer grows to the left"><svg viewBox="0 0 16 16"><path d="M14 2.5v11M11 8H2M5 5L2 8l3 3"/></svg></button><button id="libraryDrawerIn" class="icon" aria-pressed="true" title="Back into the EDGEbuilder window"><svg viewBox="0 0 16 16"><path d="M7 2.5h6.5v11H7M10 8H1.5M4.5 5L1.5 8l3 3"/></svg></button><button id="libraryDrawerClose" class="act" title="Close (the Library button on the Library tab opens it again)"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
     <div id="libraryDrawerBody"></div>
+  </div>
+  <div id="fileDrawer">
+    <div class="drawerHead"><span class="section">Find a model to import</span><button id="fileClose" class="act" title="Close (the folder button beside the Import path opens it again)"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+    <div id="fileBody">
+      <rn-list id="filePlaces"></rn-list>
+      <div id="fileMain">
+        <div id="filePathRow"><rn-button id="fileUp" variant="ghost" title="The folder above">Up</rn-button><rn-input id="filePath" title="The folder shown: type a path and press Enter to go there"></rn-input></div>
+        <rn-input id="fileFilter" clearable placeholder="Filter this folder, e.g. chair"></rn-input>
+        <div id="fileInfo" class="count"></div>
+        <rn-list id="fileList"></rn-list>
+        <div id="fileFoot"><span id="fileChosen" class="path"></span><rn-button id="fileUse" disabled title="Put this path in the Import box and pick it">Use this file</rn-button></div>
+      </div>
+    </div>
   </div>
   <div id="previewsDrawer">
     <div class="drawerHead"><span id="previewsTitle" class="section">Previews</span><button id="previewsClose" class="act" title="Close"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
@@ -258,7 +311,7 @@
       <rn-tab label="Library">
         <div id="libraryInfo" class="count"></div>
         <div class="row" id="libraryMakeRow" hidden><rn-button id="libraryMake">Make the Library</rn-button></div>
-        <div class="row"><rn-input id="importPath" placeholder="Import a GLB from anywhere: its full path, then Pick" title="A .glb file (a textured glTF in one file), or a prop's .prop.asset folder"></rn-input><rn-button id="importPathGo" variant="ghost">Pick</rn-button></div>
+        <div class="flushRow"><rn-input id="importPath" placeholder="A .glb to import: its path, or the folder button" title="A .glb file (a textured glTF in one file), or a prop's .prop.asset folder"></rn-input><button id="importBrowse" class="flushBtn" aria-pressed="false" title="Find the file: a drawer that walks your folders and drives"><svg viewBox="0 0 16 16"><path d="M1.5 4.5V13h13V5.5H7.5L6 3.5H1.5z"/></svg></button><rn-button id="importPathGo" variant="ghost" title="Pick the file typed in, for Import">Pick</rn-button></div>
         <div class="headRow"><span id="libraryLabel" class="section grow">Library</span><span id="libraryOpenRow" class="grow" hidden><rn-button id="libraryOpen" variant="ghost" title="Open the Library's drawer again">Library</rn-button></span><button id="libraryOut" class="icon" aria-pressed="false" title="Out of the window: the Library in a drawer to the left, with more room"><svg viewBox="0 0 16 16"><path d="M7 2.5h6.5v11H7M10 8H1.5M4.5 5L1.5 8l3 3"/></svg></button></div>
         <div id="libraryHome"><rn-list id="shelves"></rn-list></div>
         <rn-panel id="libraryPanel" class="pinnable" title="Picked" data-pin-note="so Open, Close, Show in world and the rest stay in view">
@@ -380,17 +433,7 @@
         <div id="settingsFile" class="detail"></div>
       </rn-tab>
       <rn-tab label="About">
-        <div class="phase">// B3 · arrange and save</div>
-        <p>A world builder for the EDGE platform: browse the game's assets, drop them into the world, position, arrange, bake.</p>
-        <p>To place an asset: pick it, then <b>Drop where I look</b>, or <b>Drop at click</b> and click the spot in the world (Esc or right-click cancels). On the Assets tab, typing searches.</p>
-        <p>Switch <b>Edit</b> on (top of this window) to work in the world: click an object to select it, drag an arrow to move it along that axis, drag the ring to turn it. Keys: G move, R turn, S scale (meshes), then X, Y or Z to lock an axis and a number to type the amount; Enter or a click keeps it, Esc or a right-click undoes it. Ctrl snaps, Ctrl+E drops to the floor, Delete removes. With Edit off the game gets the mouse as usual.</p>
-        <p>With Edit on, EDGEbuilder looks through a camera of its own and hides the game's HUD; V stays where V is. Hold the right mouse button to look around and fly with W A S D, Q down, E up (Shift faster, the wheel changes the speed while flying). The middle mouse orbits the selected object, Shift with it pans, the wheel moves closer, F frames the selection. Switch Edit off and the view is V's again. Both can be switched off in Settings, also while Edit is on.</p>
-        <p>To arrange: Ctrl+click adds an object to the selection, Shift+drag selects everything in a box, Ctrl+A the whole scene, and a move, turn or scale then acts on all of them, around their middle. Ctrl+G groups the selection and Ctrl+Shift+G ungroups; a click on an object in a group selects the group, Alt+click just that object. Ctrl+D duplicates the selection, which then follows the mouse until a click places it (Esc or right-click: no copy). Ctrl+C copies the selection, Ctrl+X cuts it (copies, then deletes), and Ctrl+V pastes it where the cursor points, standing on the surface there, as often as you like. Ctrl+Z undoes, Ctrl+Y redoes, Clear scene included; Undo, Redo, Copy, Group and Ungroup are buttons on the Scene tab too. Groups open and close with the arrow.</p>
-        <p>Scenes: the open scene is saved after every change, and <b>Close</b> takes its objects out of the world with no scene open; Ctrl+S confirms it and Ctrl+Shift+S saves a copy under a new name. Its name is at the top of the Scene tab (Enter renames it). <b>Objects</b> on the Library tab lists a scene's objects beside this window: two clicks fly the camera to one and select it, and its trash icon deletes it wherever it is. The Library tab lists every scene: in the Library (your own folders, shared by the EDGE tools; set it in Settings), in the open REDcode project, and on This PC. Pick one to open it, or <b>Show in world</b> to see it beside the one you are editing (shown, not editable). EDGEbuilder opens the last scene again when it starts.</p>
-        <p>Bake: the Bake tab writes the open scene into the open REDcode project, as a streaming sector of its own. Pack and install the project, and it stands in the world from the next game start, with EDGEbuilder off. Its previews then stay off, so nothing stands twice.</p>
-        <p>Bakes in the Library: pick a scene on the Library tab and <b>Bake into Library</b>. A bake there can hold several scenes (<b>Add open scene</b>); <b>Include in project</b> copies it into the REDcode project open in VS Code, and the Bake tab offers <b>Update</b> when the Library's bake is newer. Flags: stale (a scene changed since), collides (two bakes hold the same scene), in game, in project.</p>
-        <p>Next: the first public preview.</p>
-        <p>Design and guide: <code>edgemodders.github.io/EDGEbuilder</code></p>
+        <div id="help" class="help"></div>
       </rn-tab>
     </rn-tabs>
   </rn-window>

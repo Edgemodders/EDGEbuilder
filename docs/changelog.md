@@ -16,13 +16,16 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - The Explorer: the folder icon beside the search box opens the game's folders, each mod, the open REDcode project and the game's people in a wide drawer to the left, folder by folder with how many objects each holds; typing filters within the folder clicked last. A pick opens a Preview drawer beside it: the object in 3D (drag to turn it, the wheel to come nearer), its size, whether it can be solid, its appearances and more, and a Drop button that starts Drop at click.
 - The Preview switch beside the result count: on, a click on a search result also shows it in the Preview drawer to the left (the Explorer's: 3D on top, what is known below, Drop). EDGEbuilder remembers the switch.
 - Pick under the cursor, a switch in the World tab's Picked in the world panel: with Edit on, what a click would pick is outlined as the mouse moves, and a click picks any mesh the game placed (or a door). Its details open in a drawer at the left edge of the screen, so the middle stays clear: the model in 3D, its kind, path, look, size, place, node and sector, and whether it is solid where you clicked (the game's physics stopped the click on it, or went through). **Drop a copy** puts a copy of it in the open scene with Drop at click.
-- The Library can leave the window: the icon at the top right of the Library tree puts it in a drawer to the left, with more room. A Library button opens the drawer again, the same icon brings the Library back, and a pick in the drawer shows the Library tab's Picked panel. EDGEbuilder remembers the choice.
+- The Library can leave the window: the icon at the top right of the Library tree puts it in a drawer to the left, with more room. A Library button opens the drawer again, the same icon brings the Library back, and a pick in the drawer shows the Library tab's Picked panel. EDGEbuilder remembers the choice. The drawer's two arrows make it wider (in steps, up to 840 px) or narrower again, also remembered.
+- Import: the folder button beside the path box on the Library tab opens a wide drawer to find a GLB on your disk: the Library, the project's `source\raw`, EDGEfab's Desk, Desktop, Documents, Downloads and every drive on the left; the folder's folders, GLB files (with size and date) and Desk props on the right, with Up, a typed path and a filter. **Use this file** or a double-click puts it in the box and picks it for Import. The last folder is remembered.
+- The About tab is a one-page quickstart: the pills, a first scene in five steps, finding, dropping, the camera, positioning and arranging keys, scenes and the Library, Import, the game's own objects, baking and settings.
 
 **Changed**
 
 - Drop at click: the cursor becomes a white crosshair, and the object's own outline, drawn in white lines, shows where a click would put it (amber when nothing is under the cursor and it would land 8 m away; its box while the outline is worked out, for an object with too many edges, and for a person). The help line at the bottom names what is being dropped.
 - The search box has a ✕ inside it on the right (dimmed while it is empty) that empties it and the result list, and the Explorer's button sits flush against it, as high as the box. The Explorer's filter has a ✕ too. With no text, the list is empty (Mods and Project still list all they hold), rather than the first 120 assets.
-- One drawer at a time to the left of the window: Objects, the Library, Previews, the Explorer (with its Preview) or a sector.
+- One drawer at a time to the left of the window: Objects, the Library, Previews, the Explorer (with its Preview), Import's file picker or a sector.
+- The Import path box on the Library tab is wider.
 
 **Other**
 

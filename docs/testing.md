@@ -36,7 +36,7 @@ Last updated 2026-10-30.
 | [D2 Open, close, lock](#d2-open-close-lock-0130) | In the game | D2 | 2026-11-23 (0.13.0, 0.13.1) | Pass (step 12 as R1 to R5 on 0.13.1) |
 | [S1 Sectors](#s1-sectors-0130) | In the game | S1 | 2026-11-23 (0.13.0 to 0.13.2) | Pass |
 | [Project picker](#project-picker-0130) | In the game | Project picker | 2026-11-23 (0.13.1) | Pass; 0.13.2 released |
-| [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | | Not run (35 steps, P1 to P6) |
+| [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24 | Partly run: step 1 passed (40 steps, P1 to P7) |
 
 ## Automated
 
@@ -1097,7 +1097,7 @@ REDcode #32 (REDcode 0.10.15: `projects()` and `projects-changed`), asked for by
 
 ### Previews, the Explorer, the Library drawer and Drop at click's outline (0.14.0)
 
-Asked for by the owner on 2026-11-23. Built the same day; checked in REDnode's host without the game, against REDbridge 0.18.0: "crate" gave 95 tiles, meshes and entities drawn (two entities with no mesh parts say "no picture"), a picture turns under the mouse, a click closes the drawer, picks the result and starts Drop at click; the Library goes out to its drawer and back, one drawer at a time, the choice kept after a reload. The Explorer (asked for the same day, with the object's own outline for Drop at click): Game 31,601, base 28,781, containers 667 with their folders; a delivery crate picked showed in 3D with its size, collision and file size, turned by a drag and brought nearer by the wheel; a filter for `barrel` in containers found 37; Drop closed both drawers and started Drop at click, and the page made the crate's outline (482 edges). The Preview switch (asked for the same day): a result clicked with it on showed in the Preview drawer beside the window; off closed it; the search box's ✕ emptied the box and the list. Pick under the cursor (asked for the same day, needed for the owner's work with a user): its switch shows and is kept; the pick itself needs the game. The crosshair and the outline need the game's camera, so they are untested.
+Asked for by the owner on 2026-11-23. Built the same day; checked in REDnode's host without the game, against REDbridge 0.18.0: "crate" gave 95 tiles, meshes and entities drawn (two entities with no mesh parts say "no picture"), a picture turns under the mouse, a click closes the drawer, picks the result and starts Drop at click; the Library goes out to its drawer and back, one drawer at a time, the choice kept after a reload. The Explorer (asked for the same day, with the object's own outline for Drop at click): Game 31,601, base 28,781, containers 667 with their folders; a delivery crate picked showed in 3D with its size, collision and file size, turned by a drag and brought nearer by the wheel; a filter for `barrel` in containers found 37; Drop closed both drawers and started Drop at click, and the page made the crate's outline (482 edges). The Preview switch (asked for the same day): a result clicked with it on showed in the Preview drawer beside the window; off closed it; the search box's ✕ emptied the box and the list. Pick under the cursor (asked for the same day, needed for the owner's work with a user): its switch shows and is kept; the pick itself needs the game. Asked for on 2026-11-24 after step 1 passed in game: the Library drawer's width buttons (420, 540, 680, 840 and back, dimmed at the ends), the Import file picker (Downloads listed with 25 folders and 5 GLB files, a double-click with real mouse events filled the path and showed the Import box) and the About tab's guide, all checked in REDnode's host. The crosshair and the outline need the game's camera, so they are untested.
 
 Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a scene open.
 
@@ -1138,6 +1138,11 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | 33 | Press **Drop a copy** | The drawer closes; Drop at click starts with that object's outline; a click puts a copy in the open scene | P6 |
 | 34 | Pick a door in the Nearby list (no click in the world); then the drawer's ✕ | The list pick does not open the drawer; ✕ closes it | P6 |
 | 35 | Switch Pick under the cursor off | No outline as the mouse moves; a click picks by the kind switches as before | P6 |
+| 36 | Library drawer open: press the left arrow in its head three times, then the right arrow three times | It grows to the left in steps (540, 680, 840 px) and back to 420; the arrow at the end of its range is dimmed. Close and open EDGEbuilder: the width is kept | P7 |
+| 37 | Library tab: look at the Import path box; press the folder button flush against its right | The box fills the row up to the button and Pick; a wide drawer opens to the left: places on the left (Library, the project's source\raw, EDGEfab's Desk, Desktop, Documents, Downloads, the drives), the folder on the right | P7 |
+| 38 | Open folders, press Up, type a path in the path box and Enter, type in the filter | Each folder lists its folders, GLB files (size, date) and Desk props; Up goes to the folder above; the typed path opens; the filter narrows the list | P7 |
+| 39 | Click a GLB, then **Use this file**; open the picker again and double-click another | The drawer closes, the path is in the box and the Import box shows it; the picker opens again at the same folder | P7 |
+| 40 | About tab | A one-page guide, version 0.14.0 at the top, headings in yellow, key tables; nothing out of date | P7 |
 
 | # | Question |
 |---|---|
@@ -1147,3 +1152,4 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | P4 | Does the Library work from its drawer as it did in the window? |
 | P5 | Can objects be found and placed from the game's own folders, and does the preview show them well enough to choose? |
 | P6 | Does Pick under the cursor find what is under the mouse, and does Solid match what V bumps into? |
+| P7 | Are the Library drawer's widths, the Import file picker and the About tab's guide right in the game? |

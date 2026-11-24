@@ -286,6 +286,20 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.match(core.checkModelPath(path.join(root, "none.glb")).why, /no file/);
   assert.ok(core.deskDir({ LOCALAPPDATA: "C:\\L" }).endsWith(path.join("EDGEfab", "desk")));
   assert.ok(core.isTextureLine("    b2d_probe_front_d01.xbm") && !core.isTextureLine("b2d_probe_front:"));
+  // The Import file picker: one folder at a time, its folders (a prop item marked), its GLB files only.
+  fs.mkdirSync(path.join(root, ".hidden"));
+  const props = core.listFolder(path.join(root, "Props"));
+  assert.deepEqual(props.folders.map((f) => [f.name, f.prop]), [["drum.prop.asset", "Rusty drum"], ["Street", undefined]]);
+  assert.deepEqual(props.files, []);
+  assert.equal(props.parent, root);
+  const top = core.listFolder(root);
+  assert.deepEqual(top.folders.map((f) => f.name), ["Alley.bake", "Props"], "hidden folders are left out");
+  assert.deepEqual(core.listFolder(path.join(root, "Props", "Street")).files.map((f) => f.name), ["Bin Big.glb"]);
+  assert.match(core.listFolder(path.join(root, "missing")).why, /no folder/);
+  const places = core.filePlaces([{ label: "Library", dir: root }, { label: "Gone", dir: path.join(root, "gone") }]);
+  assert.equal(places[0].dir, root, "the places Import knows come first");
+  assert.ok(!places.some((p) => p.label === "Gone"), "a place that is not there is left out");
+  assert.ok(places.some((p) => p.kind === "drive"));
   fs.rmSync(root, { recursive: true, force: true });
   console.log("models: ok");
 }

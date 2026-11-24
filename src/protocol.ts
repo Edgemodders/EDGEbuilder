@@ -587,7 +587,9 @@ export type PageMessage =
    * The Explorer (0.14.0): what one folder of a place holds (its folders with their counts, and its files), or
    * with `text` what matches under it. Answered with an `explore` message carrying the same `seq`.
    */
-  | { type: "explore"; seq: number; root: string; dir: string; text?: string };
+  | { type: "explore"; seq: number; root: string; dir: string; text?: string }
+  // The Import file picker (0.14.0): one folder on the disk; no `dir`, the first place.
+  | { type: "files"; seq: number; dir?: string };
 
 /** One model of a preview: a mesh's plain GLB (base64), and for an entity's part its offset and scale in the entity (game axes). */
 export interface PreviewPart {
@@ -643,4 +645,32 @@ export interface ExploreReply {
   total: number;
 }
 
-export type ModMessage = { type: "state"; state: Snapshot } | PreviewReply | ProbeReply | ExploreReply;
+/** A place the Import file picker starts from: one Import already knows, a folder of the user's, or a drive. */
+export interface FilePlace {
+  label: string;
+  dir: string;
+  kind: "known" | "user" | "drive";
+}
+
+/** One folder for the Import file picker. */
+export interface FolderListing {
+  dir: string;
+  /** Absent at a drive's top. */
+  parent?: string;
+  /** Its folders; `prop` names a `.prop.asset` item, which is picked whole rather than opened. */
+  folders: { name: string; path: string; prop?: string; changed: number }[];
+  files: { name: string; path: string; bytes: number; changed: number }[];
+  /** More than the picker lists. */
+  more?: boolean;
+  /** Why it could not be read. */
+  why?: string;
+}
+
+/** The file picker's answer to `files`. */
+export interface FilesReply extends FolderListing {
+  type: "files";
+  seq: number;
+  places: FilePlace[];
+}
+
+export type ModMessage = { type: "state"; state: Snapshot } | PreviewReply | ProbeReply | ExploreReply | FilesReply;
