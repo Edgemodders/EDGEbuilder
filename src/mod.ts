@@ -51,7 +51,7 @@ import { isTextureLine, loadFab, type BridgeCall, type FabCore, type FabPrepared
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, upright, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
-import { AnyLook, type PreviewPart, type AssetEntry, type AssetFrom, type AssetInfo, type AssetKind, type BakeRecord, type LibraryBake, type PageMessage, type Place, type PlaceRoot, type SceneObject, type SceneTransform, type Snapshot, type DoorState, type SectorView, type WorldEdit, type WorldKind, type WorldNodeRef, type WorldPicked, type WorldThing } from "./protocol";
+import { AnyLook, type PreviewPart, type AssetEntry, type AssetFrom, type AssetInfo, type AssetKind, type BakeRecord, type LibraryBake, type PageMessage, type DropLike, type Place, type PlaceRoot, type SceneObject, type SceneTransform, type Snapshot, type DoorState, type SectorView, type WorldEdit, type WorldKind, type WorldNodeRef, type WorldPicked, type WorldThing } from "./protocol";
 
 /** A base-game entity template that is a bare entity: no components, no appearances. The editor camera is this with a camera component attached. */
 const EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
@@ -2449,7 +2449,7 @@ function runSearch(): void {
   publish();
 }
 
-async function drop(assetPath: string, appearance?: string, at?: { origin: V3; dir: V3 }): Promise<void> {
+async function drop(assetPath: string, appearance?: string, at?: { origin: V3; dir: V3 }, like?: DropLike): Promise<void> {
   if (!scene.file) return say(NoScene, "warn");
   const person = isRecord(assetPath) ? npcs.find(assetPath) : undefined;
   if (isRecord(assetPath) && !person) return say(`${assetPath} is not in the NPC list.`, "warn");
@@ -2477,6 +2477,13 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
     if (person) {
       o.bounds = PersonBounds;
       o.props = { behaviour: "idle" };
+    }
+    // A copy of another object (the Objects drawer's eye): its scale, Solid, Seen from and a person's settings.
+    if (like) {
+      if (like.scale && !person) o.transform.scale = [...like.scale] as V3;
+      if (kind === "mesh" && like.solid !== undefined) o.solid = like.solid;
+      if (like.streaming) o.streaming = { ...like.streaming };
+      if (person && like.props) o.props = { ...like.props };
     }
     let sized = true;
     if (bridge?.running && !person) {
@@ -3156,7 +3163,7 @@ channel.on<PageMessage>((m) => {
         }
         break;
       case "drop":
-        await inTurn("Drop", () => drop(m.path, m.appearance, m.at));
+        await inTurn("Drop", () => drop(m.path, m.appearance, m.at, m.like));
         break;
       case "drop.probe":
         probeNext = { seq: m.seq, origin: m.origin, dir: m.dir };

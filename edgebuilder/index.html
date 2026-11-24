@@ -39,6 +39,11 @@
   #exPreview.alone { right: 656px; }
   /* A tile picked in the Previews drawer (420 px wide), with Settings' "Details for a picture": beside it. */
   #exPreview.besidePreviews { right: 1084px; }
+  /* An object's eye in the Objects drawer (380 px wide): beside it. Beside the Explorer, the page sets right from its width. */
+  #exPreview.besideObjects { right: 1044px; }
+  #explorerDrawer { transition: transform .16s ease-out, opacity .16s, visibility .16s, width .16s ease-out; }
+  #exPreview { transition: transform .16s ease-out, opacity .16s, visibility .16s, right .16s ease-out; }
+  #drawerList .icon { padding: 2px 4px; margin-right: 2px; }
   .tile.picked { border-color: var(--rn-accent, #fcee0a); box-shadow: inset 0 0 0 1px var(--rn-accent, #fcee0a); }
   /* Picked in the world with the cursor: at the screen's left edge, coming in from the left, so the middle stays clear. */
   #exPreview.world { left: 24px; right: auto; }
@@ -222,7 +227,7 @@
     <div id="previewGrid"></div>
   </div>
   <div id="explorerDrawer">
-    <div class="drawerHead"><span class="section">Explorer</span><button id="explorerClose" class="act" title="Close (the folder icon beside the search opens it again)"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+    <div class="drawerHead"><span class="section">Explorer</span><button id="exShrink" class="icon" title="Narrower"><svg viewBox="0 0 16 16"><path d="M14 2.5v11M2 8h8M7 5l3 3-3 3"/></svg></button><button id="exGrow" class="icon" title="Wider: the drawer grows to the left"><svg viewBox="0 0 16 16"><path d="M14 2.5v11M11 8H2M5 5L2 8l3 3"/></svg></button><button id="explorerClose" class="act" title="Close (the folder icon beside the search opens it again)"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
     <rn-input id="exFilter" clearable placeholder="Filter in the folder clicked last, e.g. crate"></rn-input>
     <div id="exInfo" class="count"></div>
     <rn-list id="exList"></rn-list>

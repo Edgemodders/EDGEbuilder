@@ -189,6 +189,16 @@ function isGameFolder(dir) {
 // src/index.ts
 import * as fs2 from "node:fs";
 import * as path2 from "node:path";
+
+// src/explore.ts
+function exploreSegments(root, assetPath) {
+  if (root !== "people") return assetPath.split("\\");
+  const name = assetPath.replace(/^character\./i, "");
+  const cut2 = name.indexOf("_");
+  return cut2 > 0 ? [name.slice(0, cut2).toLowerCase(), assetPath] : [assetPath];
+}
+
+// src/index.ts
 var IndexPrefixes = ["base\\environment", "ep1\\environment", "base\\items", "ep1\\items", "base\\gameplay\\devices"];
 var PageSize = 5e3;
 var AssetIndex = class {
@@ -389,12 +399,6 @@ function unique(entries) {
     seen2.add(key);
     return true;
   });
-}
-function exploreSegments(root, assetPath) {
-  if (root !== "people") return assetPath.split("\\");
-  const name = assetPath.replace(/^character\./i, "");
-  const cut2 = name.indexOf("_");
-  return cut2 > 0 ? [name.slice(0, cut2).toLowerCase(), assetPath] : [assetPath];
 }
 function kindOf(file) {
   const lower = file.toLowerCase();
@@ -3791,7 +3795,7 @@ function runSearch() {
   state.results = !blank && (index.entries.length || index.extra.length) ? index.search(state.query.text, state.query.kind, ResultLimit, state.query.from) : [];
   publish();
 }
-async function drop(assetPath, appearance, at) {
+async function drop(assetPath, appearance, at, like) {
   if (!scene.file) return say(NoScene, "warn");
   const person = isRecord(assetPath) ? npcs.find(assetPath) : void 0;
   if (isRecord(assetPath) && !person) return say(`${assetPath} is not in the NPC list.`, "warn");
@@ -3818,6 +3822,12 @@ async function drop(assetPath, appearance, at) {
     if (person) {
       o.bounds = PersonBounds;
       o.props = { behaviour: "idle" };
+    }
+    if (like) {
+      if (like.scale && !person) o.transform.scale = [...like.scale];
+      if (kind === "mesh" && like.solid !== void 0) o.solid = like.solid;
+      if (like.streaming) o.streaming = { ...like.streaming };
+      if (person && like.props) o.props = { ...like.props };
     }
     let sized = true;
     if (bridge?.running && !person) {
@@ -4357,7 +4367,7 @@ channel.on((m) => {
         }
         break;
       case "drop":
-        await inTurn("Drop", () => drop(m.path, m.appearance, m.at));
+        await inTurn("Drop", () => drop(m.path, m.appearance, m.at, m.like));
         break;
       case "drop.probe":
         probeNext = { seq: m.seq, origin: m.origin, dir: m.dir };

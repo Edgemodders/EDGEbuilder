@@ -61,6 +61,14 @@ export interface SceneGroup {
 }
 
 /** One placed object, as the scene file keeps it (format 1) plus its live preview. */
+/** A copy of a scene object dropped with Drop at click (the Objects drawer's eye): what it keeps of the original. */
+export interface DropLike {
+  scale?: [number, number, number];
+  solid?: boolean;
+  streaming?: { primary?: number; secondary?: number };
+  props?: Record<string, unknown>;
+}
+
 export interface SceneObject {
   id: string;
   kind: "mesh" | "entity" | "light" | "npc";
@@ -463,7 +471,7 @@ export type PageMessage =
   | { type: "search"; text: string; kind: AssetKind | "all"; from?: AssetFrom }
   | { type: "look"; path: string }
   /** `at`: a line from the camera through where the player clicked (Drop at click); else where the camera looks. */
-  | { type: "drop"; path: string; appearance?: string; at?: { origin: [number, number, number]; dir: [number, number, number] } }
+  | { type: "drop"; path: string; appearance?: string; at?: { origin: [number, number, number]; dir: [number, number, number] }; like?: DropLike }
   | { type: "select"; ids: string[] }
   | { type: "delete"; ids: string[] }
   | { type: "rebuild" }

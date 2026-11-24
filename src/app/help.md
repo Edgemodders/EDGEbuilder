@@ -30,7 +30,7 @@ The three pills at the top say whether everything is ready:
 ## Find something
 
 - **Search** finds the game's meshes, entities and people by name. The tabs under the box narrow it by kind (**Meshes**, **Entities**, **NPCs**) and by where it comes from (**Game**, **Mods**, **Project**). The ✕ in the box clears it.
-- **Explorer**: the folder button beside the search box. The game's own folders, each mod, the open REDcode project and the game's people, opened one folder at a time. Typing filters the folder clicked last. A pick shows the model in 3D beside it: drag to turn it, the wheel zooms. **Drop** starts Drop at click.
+- **Explorer**: the folder button beside the search box. The game's own folders, each mod, the open REDcode project and the game's people, opened one folder at a time. Typing filters the folder clicked last; its arrows make it wider. A search result you click is found in it too. A pick shows the model in 3D beside it: drag to turn it, the wheel zooms. **Drop** starts Drop at click.
 - **Preview** switch, beside the result count: with it on, a click on a result shows it in that same 3D drawer.
 - **Previews**, the eye beside it: the results as small 3D pictures. Rest the mouse on one to turn it; a click shows its details beside them, with **Drop**. In Settings, **A picture's details before Drop** off makes a click start Drop at click at once.
 
@@ -87,7 +87,7 @@ A move, turn or scale acts on the whole selection, around its middle.
 - The open scene is saved after every change. <kbd>Ctrl</kbd>+<kbd>S</kbd> confirms it, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves a copy under a new name. Its name is at the top of the **Scene** tab (Enter renames it).
 - The **Library** tab lists every scene: in the **Library** (your own folders, shared by the EDGE tools, `Documents\EDGE Library` unless you choose another in Settings), in the open REDcode project, and on **This PC**.
 - Pick a scene to **Open** it, **Close** it, or **Show in world** beside the one you are editing (shown, not editable). **Objects** lists a scene's objects in a drawer: two clicks fly the camera to one.
-- The icon at the top right of the tree moves the Library out of the window into a drawer. The drawer's arrows make it wider or narrower.
+- The icon at the top right of the tree moves the Library out of the window into a drawer. The drawer's arrows make it wider or narrower. **Objects**: the eye on a row shows the object in 3D beside the drawer, with **Drop a copy** (its look, scale and settings kept).
 - EDGEbuilder opens the last scene again when it starts.
 
 ## Import a model of your own

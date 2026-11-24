@@ -5,6 +5,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Bridge } from "./bridge";
+import { exploreSegments } from "./explore";
 import type { AssetEntry, AssetFrom, AssetInfo, AssetKind, ExploreFolder, ExploreRoot } from "./protocol";
 
 /** The folders worth indexing for world building. Characters, weapons and UI are left out. */
@@ -237,16 +238,6 @@ function unique(entries: AssetEntry[]): AssetEntry[] {
   });
 }
 
-/**
- * Where an asset sits in the Explorer: a file by its folders; a person (a `Character` record) in a folder named by
- * the first word of its record, such as `afterlife` for `Character.afterlife_merc_...`.
- */
-export function exploreSegments(root: string, assetPath: string): string[] {
-  if (root !== "people") return assetPath.split("\\");
-  const name = assetPath.replace(/^character\./i, "");
-  const cut = name.indexOf("_");
-  return cut > 0 ? [name.slice(0, cut).toLowerCase(), assetPath] : [assetPath];
-}
 
 export function kindOf(file: string): AssetKind | undefined {
   const lower = file.toLowerCase();
@@ -254,3 +245,5 @@ export function kindOf(file: string): AssetKind | undefined {
   if (lower.endsWith(".ent")) return "entity";
   return undefined;
 }
+
+export { exploreSegments };

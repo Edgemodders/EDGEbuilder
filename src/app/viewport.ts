@@ -80,6 +80,8 @@ export interface DropOutline {
   edges?: () => Float32Array | undefined;
   /** What is being dropped, for the help line. */
   name?: string;
+  /** A copy keeps its original's scale: the outline is drawn at it. */
+  scale?: V3;
 }
 
 interface Drag {
@@ -353,10 +355,11 @@ export class Viewport {
     if (p && this.cam && this.probeSeq - p.seq < 30) {
       const colour = p.hit ? "rgba(255,255,255,0.9)" : "rgba(255,204,77,0.9)";
       const lines = this.outline?.edges?.();
-      if (lines) this.drawEdges(lines, p.position, p.rotation, colour);
+      const scale = this.outline?.scale ?? [1, 1, 1];
+      if (lines) this.drawEdges(lines, p.position, p.rotation, colour, scale);
       else {
         const b = this.outline?.bounds?.();
-        const o: SceneObject = { id: "drop-outline", kind: "mesh", transform: { position: p.position, rotation: p.rotation, scale: [1, 1, 1] }, bounds: b ? { min: b.min, max: b.max } : undefined } as SceneObject;
+        const o: SceneObject = { id: "drop-outline", kind: "mesh", transform: { position: p.position, rotation: p.rotation, scale }, bounds: b ? { min: b.min, max: b.max } : undefined } as SceneObject;
         this.drawBox(o, colour, 1.5);
       }
     }
@@ -677,7 +680,7 @@ export class Viewport {
   }
 
   /** Drop at click's outline: the object's own edges (line pairs in its space, game axes) placed at `at`, turned by `q`. */
-  private drawEdges(lines: Float32Array, at: V3, q: Q, colour: string): void {
+  private drawEdges(lines: Float32Array, at: V3, q: Q, colour: string, s: V3 = [1, 1, 1]): void {
     const cam = this.cam!;
     // The rotation as a matrix once, rather than a quaternion per point.
     const [x, y, z, w] = q;
@@ -687,9 +690,9 @@ export class Viewport {
       2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y),
     ];
     const place = (i: number): V3 => {
-      const a = lines[i];
-      const b = lines[i + 1];
-      const c = lines[i + 2];
+      const a = lines[i] * s[0];
+      const b = lines[i + 1] * s[1];
+      const c = lines[i + 2] * s[2];
       return [at[0] + m[0] * a + m[1] * b + m[2] * c, at[1] + m[3] * a + m[4] * b + m[5] * c, at[2] + m[6] * a + m[7] * b + m[8] * c];
     };
     const ctx = this.ctx;

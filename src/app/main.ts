@@ -2,11 +2,12 @@
 import { channel } from "rednode";
 import { applyChange, boxOf, centreOf, collisionKey, membersOf, seenFromBySize, SeenFromRange, pickMany, pickSelection, selectionUnits } from "../arrange";
 import { AXES, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
-import type { AssetEntry, AssetFrom, AssetKind, ImportCollision, LibraryBake, ModelEntry, ExploreReply, ExploreRoot, FilesReply, ModMessage, PageMessage, Place, PreviewReply, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
+import type { AssetEntry, AssetFrom, AssetKind, DropLike, ImportCollision, LibraryBake, ModelEntry, ExploreReply, ExploreRoot, FilesReply, ModMessage, PageMessage, Place, PreviewReply, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
 import type { Part, Previews } from "./previews";
 import { held } from "./held";
 import { Viewport, busyText } from "./viewport";
 import { doorStateText } from "../worldedits";
+import { exploreSegments } from "../explore";
 import helpHtml from "./help.md";
 
 declare const RednodeUI: { notify(text: string, options?: Record<string, unknown>): void } | undefined;
@@ -456,7 +457,7 @@ $("dropClick").addEventListener("click", () => {
  * Drop at click: Edit goes on, the cursor becomes a white crosshair and the object's outline shows where a
  * click would put it (its own edges once the page has its model, its box until then); the next left click drops it there.
  */
-function startDropAtClick(path: string, looks: string | undefined, label?: string): void {
+function startDropAtClick(path: string, looks: string | undefined, label?: string, like?: DropLike): void {
   const edit = $("edit") as HTMLElement & { checked: boolean };
   if (!edit.checked) {
     edit.checked = true;
@@ -466,9 +467,9 @@ function startDropAtClick(path: string, looks: string | undefined, label?: strin
   viewport.armDrop(
     (ray) => {
       dropAsked = true;
-      post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d } });
+      post({ type: "drop", path, appearance: looks, at: { origin: ray.o, dir: ray.d }, like });
     },
-    { name, bounds: () => (state?.looked?.path === path ? state.looked.info?.bounds : undefined), edges: () => edgesFor(path) },
+    { name, bounds: () => (state?.looked?.path === path ? state.looked.info?.bounds : undefined), edges: () => edgesFor(path), scale: like?.scale },
   );
   // The outline's edges are worked out now, while the mouse finds its way to the world.
   edgesFor(path);
@@ -1196,7 +1197,7 @@ function renderDrawer(s: Snapshot): void {
       const end =
         confirming === o.id
           ? `<span slot="end" class="confirm">${isOpen ? "Delete?" : "Delete for good?"}<button data-act="yes" data-id="${esc(o.id)}">Yes</button><button data-act="no">No</button></span>`
-          : `<span slot="end">${o.group ? `<span class="grouptag">${esc(groupName(o.group) ?? "")}</span>` : ""}<button class="act" data-act="trash" data-id="${esc(o.id)}" title="Delete">${TrashIcon}</button></span>`;
+          : `<span slot="end">${o.group ? `<span class="grouptag">${esc(groupName(o.group) ?? "")}</span>` : ""}${o.resource || o.record ? `<button class="icon" data-act="eye" data-id="${esc(o.id)}" aria-pressed="${objectPreview && objectLike?.id === o.id}" title="Its preview beside this drawer, with Drop a copy">${EyeIcon}</button>` : ""}<button class="act" data-act="trash" data-id="${esc(o.id)}" title="Delete">${TrashIcon}</button></span>`;
       const [x, y, z] = o.transform.position.map((v) => v.toFixed(1));
       return `<rn-item value="${esc(o.id)}" title="${esc(`${o.resource}\n${x}, ${y}, ${z}`)}"${isOpen && s.selected.includes(o.id) ? " selected" : ""}>${esc(o.id)}${end}</rn-item>`;
     })
@@ -1241,6 +1242,14 @@ $("drawerList").addEventListener(
       e.stopPropagation();
       const id = act.dataset.id;
       lastDrawerRow = { id: "", at: 0 };
+      if (act.dataset.act === "eye") {
+        const shown = isOpen ? state.scene : state.library.peek;
+        const o = shown?.objects.find((x) => x.id === id);
+        if (objectPreview && objectLike?.id === id) objectPreview = false;
+        else if (o) previewObject(o);
+        render(state);
+        return;
+      }
       if (act.dataset.act === "trash") confirming = id;
       else {
         confirming = undefined;
@@ -1683,6 +1692,11 @@ let previewsOpen = false;
 let filesOpen = false;
 /** The Preview drawer beside the Previews drawer, for a picture clicked there (Settings: "A picture's details before Drop"). */
 let tileDetail = false;
+/** The Preview drawer beside the Objects drawer, for an object's eye there; the object it shows. */
+let objectPreview = false;
+let objectLike: SceneObject | undefined;
+/** The Explorer's width (its head's arrows), which places its Preview drawer. */
+let exWidth = 480;
 /** The Previews drawer's pictures, by path (declared here: renderLeft marks the picked one). */
 const tiles = new Map<string, { el: HTMLElement; drawn: boolean; picture?: string; error?: string; asked?: number }>();
 
@@ -1690,6 +1704,7 @@ function openLeft(which: "objects" | "library" | "previews" | "explorer" | "prev
   const wasFiles = filesOpen;
   filesOpen = which === "files";
   tileDetail = false;
+  objectPreview = false;
   if (filesOpen && !wasFiles) askFiles(fileStart());
   previewAlone = which === "preview";
   previewWorld = which === "world";
@@ -1716,15 +1731,18 @@ function renderLeft(): void {
   $("explorerDrawer").classList.toggle("open", explorerOpen);
   const worldOpen = previewWorld && !!state?.worldObjects.picked;
   const besideTiles = tileDetail && previewsOpen && !explorerOpen;
-  $("exPreview").classList.toggle("open", worldOpen || ((explorerOpen || previewAlone || besideTiles) && !!exPicked));
-  $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles);
+  const besideObjects = objectPreview && drawerOpen && !explorerOpen;
+  $("exPreview").classList.toggle("open", worldOpen || ((explorerOpen || previewAlone || besideTiles || besideObjects) && !!exPicked));
+  $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles && !besideObjects);
   $("exPreview").classList.toggle("besidePreviews", besideTiles);
+  $("exPreview").classList.toggle("besideObjects", besideObjects);
+  ($("exPreview") as HTMLElement).style.right = explorerOpen && !previewWorld ? `${656 + exWidth + 8}px` : "";
   for (const t of tiles.values()) t.el.classList.toggle("picked", besideTiles && t.el.dataset.path === exPicked?.path);
   $("exPreview").classList.toggle("world", previewWorld);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
   $("fileDrawer").classList.toggle("open", filesOpen);
   $("importBrowse").setAttribute("aria-pressed", String(filesOpen));
-  if (!worldOpen && ((!explorerOpen && !previewAlone && !besideTiles) || !exPicked)) stopExView();
+  if (!worldOpen && ((!explorerOpen && !previewAlone && !besideTiles && !besideObjects) || !exPicked)) stopExView();
 }
 
 // ---- the Library out of the window (0.14.0) ------------------------------------------------------------
@@ -1768,28 +1786,39 @@ $("libraryDrawerIn").addEventListener("click", () => setLibraryOut(false));
 $("libraryDrawerClose").addEventListener("click", () => openLeft("none"));
 $("libraryOpen").addEventListener("click", () => openLeft(libraryDrawerOpen ? "none" : "library"));
 
-// The Library drawer's width: its head's two buttons step it wider (to the left) and back; kept.
-const LibraryWidths = [420, 540, 680, 840];
-let libraryStep = 0;
-try {
-  libraryStep = Math.max(0, Math.min(LibraryWidths.length - 1, Number(localStorage.getItem("edgebuilder.libraryWidth") ?? 0) | 0));
-} catch {
-  // No storage: the narrowest.
-}
-function sizeLibrary(step: number): void {
-  libraryStep = Math.max(0, Math.min(LibraryWidths.length - 1, step));
-  $("libraryDrawer").style.width = `${LibraryWidths[libraryStep]}px`;
-  $("libraryShrink").toggleAttribute("disabled", libraryStep === 0);
-  $("libraryGrow").toggleAttribute("disabled", libraryStep === LibraryWidths.length - 1);
+/**
+ * A drawer's width in steps: its head's two arrows make it wider (to the left) and back; the step is kept.
+ * The Library drawer and the Explorer have them.
+ */
+function drawerWidths(drawer: string, shrink: string, grow: string, widths: number[], key: string, changed?: (w: number) => void): void {
+  let step = 0;
   try {
-    localStorage.setItem("edgebuilder.libraryWidth", String(libraryStep));
+    step = Number(localStorage.getItem(key) ?? 0) | 0;
   } catch {
-    // No storage: for this session only.
+    // No storage: the narrowest.
   }
+  const size = (n: number) => {
+    step = Math.max(0, Math.min(widths.length - 1, n));
+    $(drawer).style.width = `${widths[step]}px`;
+    $(shrink).toggleAttribute("disabled", step === 0);
+    $(grow).toggleAttribute("disabled", step === widths.length - 1);
+    try {
+      localStorage.setItem(key, String(step));
+    } catch {
+      // No storage: for this session only.
+    }
+    changed?.(widths[step]);
+  };
+  $(grow).addEventListener("click", () => size(step + 1));
+  $(shrink).addEventListener("click", () => size(step - 1));
+  size(step);
 }
-$("libraryGrow").addEventListener("click", () => sizeLibrary(libraryStep + 1));
-$("libraryShrink").addEventListener("click", () => sizeLibrary(libraryStep - 1));
-sizeLibrary(libraryStep);
+drawerWidths("libraryDrawer", "libraryShrink", "libraryGrow", [420, 540, 680, 840], "edgebuilder.libraryWidth");
+// The Explorer's Preview drawer stays beside it as it grows.
+drawerWidths("explorerDrawer", "exShrink", "exGrow", [480, 600, 720, 840], "edgebuilder.explorerWidth", (w) => {
+  exWidth = w;
+  renderLeft();
+});
 placeLibrary();
 
 // ---- the Import file picker (0.14.0) ---------------------------------------------------------------------
@@ -2276,8 +2305,8 @@ function previewResult(path: string): void {
   if (!r) return;
   exPicked = r;
   if (explorerOpen) {
+    revealInExplorer(r);
     renderLeft();
-    renderExplorer();
     if (state) render(state);
   } else if (previewsOpen) {
     // The pictures are open: its details beside them.
@@ -2400,12 +2429,50 @@ function renderExplorer(): void {
     $("exInfo").textContent = exRoots.length ? "A click opens a folder; a pick shows it beside this, in 3D. Typing filters in the folder clicked last." : "";
   }
   $("exList").innerHTML = rows.join("");
+  // A result revealed: scrolled to once its folder's rows have come.
+  if (exReveal) {
+    const row = [...$("exList").querySelectorAll("rn-item")].find((x) => x.getAttribute("value") === `i:${exReveal}`);
+    if (row) {
+      row.scrollIntoView({ block: "center" });
+      exReveal = undefined;
+    }
+  }
+}
+
+/** The row to scroll to when it comes: a search result revealed in the tree. */
+let exReveal: string | undefined;
+
+/** Opens the Explorer's folders down to a search result and picks it there (its row selected and scrolled to). */
+function revealInExplorer(e: AssetEntry): void {
+  const root = e.kind === "npc" ? "people" : e.source?.kind === "project" ? "project" : e.source?.kind === "mod" ? `mod:${e.source.name}` : "game";
+  let dir = "";
+  exOpen.add(exKey(root, ""));
+  for (const seg of exploreSegments(root, e.path).slice(0, -1)) {
+    dir = exJoin(dir, seg);
+    exOpen.add(exKey(root, dir));
+  }
+  exFolder = { root, dir };
+  if (exFilter) {
+    // The tree, not a filter's matches, so the folders show.
+    exFilter = "";
+    $<Field>("exFilter").value = "";
+    exFound = undefined;
+  }
+  exReveal = e.path;
+  renderExplorer();
 }
 
 $("explorerOpen").addEventListener("click", () => openLeft(explorerOpen ? "none" : "explorer"));
 $("explorerClose").addEventListener("click", () => openLeft("none"));
 $("exPreviewClose").addEventListener("click", () => {
   if (previewAlone || previewWorld) return openLeft("none");
+  if (objectPreview) {
+    // Back to the Objects drawer alone.
+    objectPreview = false;
+    if (state) render(state);
+    else renderLeft();
+    return;
+  }
   if (tileDetail) {
     // Back to the pictures alone.
     tileDetail = false;
@@ -2511,11 +2578,14 @@ const kindOfPath = (p: string) => /\.(mesh|ent)$/i.test(p);
 
 function renderExPreview(s: Snapshot): void {
   if (previewWorld) return renderWorldPreview(s);
-  $("exDrop").textContent = "Drop";
+  const copying = objectPreview && drawerOpen && !explorerOpen;
+  $("exDrop").textContent = copying ? "Drop a copy" : "Drop";
   $("exDrop").removeAttribute("disabled");
-  $("exDrop").title = "Closes the drawers and starts Drop at click: the object's outline follows the cursor, a click puts it there, Esc cancels";
+  $("exDrop").title = copying
+    ? "A copy of this object, with its look, scale, Solid and Seen from: the drawers close and Drop at click starts with its outline"
+    : "Closes the drawers and starts Drop at click: the object's outline follows the cursor, a click puts it there, Esc cancels";
   const e = exPicked;
-  if (!e || (!explorerOpen && !previewAlone && !(tileDetail && previewsOpen))) {
+  if (!e || (!explorerOpen && !previewAlone && !(tileDetail && previewsOpen) && !copying)) {
     stopExView();
     return;
   }
@@ -2567,9 +2637,28 @@ $("exDrop").addEventListener("click", () => {
   }
   const e = exPicked;
   if (!e) return;
+  if (objectPreview && objectLike) {
+    // A copy of the scene object: its look (or the one picked here), scale, Solid, Seen from, a person's settings.
+    const o = objectLike;
+    const like: DropLike = { scale: o.transform.scale as [number, number, number], solid: o.solid, streaming: o.streaming, props: o.props };
+    openLeft("none");
+    startDropAtClick(e.path, appearance ?? o.appearance, `a copy of ${o.id}`, like);
+    return;
+  }
   openLeft("none");
   startDropAtClick(e.path, appearance, labelOf(e));
 });
+
+/** The Objects drawer's eye: the object in the Preview drawer beside it, with Drop a copy. */
+function previewObject(o: SceneObject): void {
+  const path = o.resource ?? o.record;
+  if (!path) return;
+  objectPreview = true;
+  objectLike = o;
+  exPicked = { path, kind: o.kind === "npc" ? "npc" : o.kind === "entity" ? "entity" : "mesh", size: 0, appearance: o.appearance } as AssetEntry;
+  appearance = o.appearance;
+  if (o.kind !== "npc") post({ type: "look", path });
+}
 
 /** A model came (or failed): the Explorer's preview and Drop at click's outline may have waited for it. */
 function modelCame(m: PreviewReply): void {
