@@ -36,7 +36,7 @@ Last updated 2026-10-30.
 | [D2 Open, close, lock](#d2-open-close-lock-0130) | In the game | D2 | 2026-11-23 (0.13.0, 0.13.1) | Pass (step 12 as R1 to R5 on 0.13.1) |
 | [S1 Sectors](#s1-sectors-0130) | In the game | S1 | 2026-11-23 (0.13.0 to 0.13.2) | Pass |
 | [Project picker](#project-picker-0130) | In the game | Project picker | 2026-11-23 (0.13.1) | Pass; 0.13.2 released |
-| [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24 | Partly run: step 1 passed (51 steps, P1 to P7) |
+| [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24 | Partly run: steps 1 to 35 passed on the morning's build; 36 to 51, and 6, 9, 11 and 33 again, to run on the newest (51 steps, P1 to P7) |
 
 ## Automated
 
@@ -1164,3 +1164,5 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | P5 | Can objects be found and placed from the game's own folders, and does the preview show them well enough to choose? |
 | P6 | Does Pick under the cursor find what is under the mouse, and does Solid match what V bumps into? |
 | P7 | Are the drawer widths, the Import file picker, the About tab's guide, a picture's details before Drop, the Objects drawer's eye and the Explorer's reveal right in the game? |
+
+**Results, 2026-11-24 (the owner, in game): steps 1 to 35 passed** on the build deployed that morning (dbb20bf: the Library drawer's widths, the Import file picker and the About guide, before everything after it). P1 to P6 are answered yes on that build: the pictures come and look like the objects, the overlay drawing them costs no noticeable frame rate, the crosshair and outline show where a drop lands, the Library works from its drawer, objects are found and placed from the game's folders, and Pick under the cursor finds what is under the mouse with Solid as V meets it. Two findings on the way were fixed after that build: the right button cancelled Drop at click at once (now a tap cancels and a hold looks, steps 9 and 11) and Drop a copy's outline showed where the door had been clicked (step 33). **Still to run, on the newest build:** steps 36 to 51, and steps 6, 9, 11 and 33 again, since what they expect changed after the build tested.
