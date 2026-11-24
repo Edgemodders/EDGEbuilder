@@ -11,7 +11,7 @@ EDGEbuilder is a world builder for Cyberpunk 2077 that runs inside the game on R
 | [Requests](requests.md) | Feature requests from modders and where each lands in the roadmap; 2026-11-22: a team building generated arena maps |
 | [Generated scenes](generated-scenes.md) | Agreed 2026-11-22: a scene a program wrote, checked and baked from a command line with the game closed, opened in the editor, and hand edits taken back as a diff (G0 to G3) |
 | [Detail settings](detail.md) | Agreed 2026-11-22: how far and how finely a baked object is drawn; Seen from today, a level-of-detail setting after a probe (B4-4) |
-| [Tools](tools.md) | Proposed 2026-11-24: a Tools tab with plugins, REDnode packages that open in an EDGEbuilder drawer and work on the scene through an API EDGEbuilder offers (T0 to T3) |
+| [Tools](tools.md) | Agreed 2026-11-24: a Tools tab with plugins, REDnode packages that open in an EDGEbuilder drawer and work on the scene through an API EDGEbuilder offers (T0 to T3) |
 | [Scene format](scene.md) | The scene file, format 1: the contract between the runtime builder, the project builder and REDbridge's bake |
 | [Tests](testing.md) | Every test so far in one place: the automated ones, the page check in REDnode's host, and each in-game test with its result and what it found |
 | [B1 test](b1-test.md) | The in-game test for Browse and drop: what to install, the steps, what the result decides |
@@ -46,6 +46,6 @@ As of 2026-10-30 (design draft 4): B2b passed in game on 2.31, the 0.3.4 check o
 | B4b Edit the world | Agreed with B3b: the game's own objects hidden or changed, baked as ArchiveXL sector edits |
 | B4c Quest places | Planned for EDGEquest's Q4 ([issue #3](https://github.com/Edgemodders/EDGEbuilder/issues/3)): spots, trigger areas, map markers and NPC spawns with refs, listed through EDGEbuilder's service |
 | B5 Lights and more kinds | Not started. Split by kind on 2026-11-22: B5-1 lights, B5-2 decals, B5-3 particles, effects and fog volumes, B5-4 colliders, B5-5 sounds |
-| Tools (T0 to T3) | Proposed 2026-11-24, to be agreed: a Tools tab, plugins in a drawer, an API for them ([Tools](tools.md)) |
+| Tools (T0 to T3) | Agreed 2026-11-24, not yet placed in the order: a Tools tab, plugins in a drawer, an API for them ([Tools](tools.md)) |
 | B6 Comfort | Not started |
 | B7 Project builder | Not started |

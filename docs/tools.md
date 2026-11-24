@@ -4,7 +4,7 @@ title: Tools
 
 # Tools: plugins for EDGE<span class="y">builder</span>
 
-Draft 1, 2026-11-24. **A proposal, not yet agreed.** Asked for by the owner on 2026-11-24: a **Tools** tab before About, with a button for each installed tool. A tool is a REDnode package written in JavaScript or TypeScript with REDnode's UI kit. It opens in a drawer of EDGEbuilder's and works on EDGEbuilder's scene through an API EDGEbuilder offers.
+Draft 1, 2026-11-24. **Agreed with the owner on 2026-11-24**, with every recommendation below; not yet placed in the build order. Asked for by the owner on 2026-11-24: a **Tools** tab before About, with a button for each installed tool. A tool is a REDnode package written in JavaScript or TypeScript with REDnode's UI kit. It opens in a drawer of EDGEbuilder's and works on EDGEbuilder's scene through an API EDGEbuilder offers.
 
 ## What a player sees
 
@@ -131,7 +131,9 @@ B6 Comfort's scatter and snapping can be built as tools from T2 on, which tests 
 
 ## Questions for the owner
 
-| Question | Recommendation |
+Answered on 2026-11-24: the owner agreed the design with each recommendation. The REDnode request is filed when T0 starts.
+
+| Question | Recommendation (agreed) |
 |---|---|
 | Where the drawer runs: A, B or C | A, a module in EDGEbuilder's page |
 | Ask on first use, or trust every installed tool | Ask once, with what it wants |
