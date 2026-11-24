@@ -29,7 +29,14 @@ Last updated 2026-10-30.
 | [B4 Bake](#b4-bake) | In the game | B4 | | Round 3, the solid probe, passed on 2026-11-05: a Kinematic instanced destructible mesh is solid; `worldCollisionNode` boxes as written did nothing. **B4-1, the Bake tab, passed in game on 2026-11-05 on 0.7.1**, all 16 steps; released as 0.7.3. **B4-2, the Solid switch, passed in game on 2026-11-08** on 0.8.0 and 0.8.1, all 22 steps; Seen from reaches its distance with REDbridge 0.12.1 |
 | [B3c NPCs](#b3c-npcs) | In the game | B3c | 2026-11-12 (0.10.9) | Pass; released as 0.10.9 |
 | [B2d Import a model](#b2d-import-a-model) | In the game | B2d | 2026-11-18 (0.11.0, 0.11.1) | Pass: B2d-1 on 0.11.0, its retest on 0.11.1 |
-| [D0 Doors probe](#d0-doors-probe) | In the game, no EDGEbuilder | Doors | | Not run |
+| [D0 Doors probe](#d0-doors-probe) | In the game, no EDGEbuilder | Doors | 2026-11-19 (probe 0.1.1) | Pass |
+| [D1a Remove from world](#d1a-remove-from-world-0120) | In the game | D1 | 2026-11-19 (0.12.1) | Pass |
+| [D1b Bake removals](#d1b-bake-removals-0122) | In the game | D1 | 2026-11-19 (0.12.2) | Pass; D1 released as 0.12.5 |
+| [Remove Doors 0.1.0](#remove-doors-010-a-small-rednode-app) | In the game | Remove Doors | 2026-11-19 (0.1.0) | Pass; released |
+| [D2 Open, close, lock](#d2-open-close-lock-0130) | In the game | D2 | 2026-11-23 (0.13.0, 0.13.1) | Pass (step 12 as R1 to R5 on 0.13.1) |
+| [S1 Sectors](#s1-sectors-0130) | In the game | S1 | 2026-11-23 (0.13.0 to 0.13.2) | Pass |
+| [Project picker](#project-picker-0130) | In the game | Project picker | 2026-11-23 (0.13.1) | Pass; 0.13.2 released |
+| [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | | Not run (35 steps, P1 to P6) |
 
 ## Automated
 
