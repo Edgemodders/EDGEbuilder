@@ -386,6 +386,11 @@ var Viewport = class {
    * cancels, a hold looks and flies as anywhere else. Set while the right button is down during Drop at click.
    */
   rightTap;
+  /**
+   * Drop at click started from a button (a drawer's Drop, Drop a copy): the cursor is still over the button and the
+   * viewport knows only where it was last in the world. Nothing is drawn or asked until the mouse moves over the world.
+   */
+  placeSeen = false;
   /** The tooltip beside the object picked in the world (the World tab's Show tooltip). */
   worldTip;
   /** The line through the cursor, for a paste, when the cursor is over the world in Edit. */
@@ -450,6 +455,7 @@ var Viewport = class {
     this.placing = then;
     this.outline = outline;
     this.probed = void 0;
+    this.placeSeen = false;
     this.probeAt = { x: NaN, y: NaN, t: 0 };
     this.canvas.style.cursor = "none";
     this.kick();
@@ -467,7 +473,7 @@ var Viewport = class {
   }
   /** While Drop at click waits: the line under the cursor, about 15 times a second while it moves, and now and then while it stays (the camera may fly). */
   probeIfMoved() {
-    if (!this.placing || !this.cam || !this.overView) return;
+    if (!this.placing || !this.cam || !this.overView || !this.placeSeen) return;
     const now = performance.now();
     const [x, y] = this.mouse;
     const moved = x !== this.probeAt.x || y !== this.probeAt.y;
@@ -498,6 +504,7 @@ var Viewport = class {
   }
   /** Drop at click's look: the object's box where a click would put it (white on a surface, amber 8 m along the line when nothing is there), and a white crosshair for the cursor. */
   drawPlacing() {
+    if (!this.placeSeen) return;
     const ctx = this.ctx;
     const p = this.probed;
     if (p && this.cam && this.probeSeq - p.seq < 30) {
@@ -1059,6 +1066,7 @@ var Viewport = class {
   onMove(e) {
     const locked = this.locked;
     if (!locked) this.mouse = this.pageXY(e);
+    if (this.placing && e.target === this.canvas) this.placeSeen = true;
     if (!this.edit) return;
     const dx = locked ? e.movementX : this.mouse[0] - this.last[0];
     const dy = locked ? e.movementY : this.mouse[1] - this.last[1];
@@ -1168,6 +1176,7 @@ var Viewport = class {
     if (!this.edit || !this.cam) return;
     this.mouse = this.pageXY(e);
     this.last = this.mouse;
+    if (this.placing) this.placeSeen = true;
     if (e.button === 2) {
       if (this.drag) this.cancel();
       else if (this.placing && this.camEntity) {

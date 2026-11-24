@@ -25,7 +25,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 **Changed**
 
-- Drop at click: the cursor becomes a white crosshair, and the object's own outline, drawn in white lines, shows where a click would put it (amber when nothing is under the cursor and it would land 8 m away; its box while the outline is worked out, for an object with too many edges, and for a person). The help line at the bottom names what is being dropped. Hold the right button to look around and fly while it waits, as anywhere else; Esc or a quick tap of the right button cancels.
+- Drop at click: the cursor becomes a white crosshair, and the object's own outline, drawn in white lines, shows where a click would put it (amber when nothing is under the cursor and it would land 8 m away; its box while the outline is worked out, for an object with too many edges, and for a person). The help line at the bottom names what is being dropped. Hold the right button to look around and fly while it waits, as anywhere else; Esc or a quick tap of the right button cancels. Started from a button in a drawer, the crosshair and outline show once the mouse moves into the world, under the cursor (they showed where the mouse had last been in the world).
 - The search box has a ✕ inside it on the right (dimmed while it is empty) that empties it and the result list, and the Explorer's button sits flush against it, as high as the box. The Explorer's filter has a ✕ too. With no text, the list is empty (Mods and Project still list all they hold), rather than the first 120 assets.
 - One drawer at a time to the left of the window: Objects, the Library, Previews, the Explorer (with its Preview), Import's file picker or a sector.
 - The Import path box on the Library tab is wider.

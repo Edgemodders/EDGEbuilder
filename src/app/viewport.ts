@@ -189,6 +189,11 @@ export class Viewport {
    * cancels, a hold looks and flies as anywhere else. Set while the right button is down during Drop at click.
    */
   private rightTap: { at: number; moved: number } | undefined;
+  /**
+   * Drop at click started from a button (a drawer's Drop, Drop a copy): the cursor is still over the button and the
+   * viewport knows only where it was last in the world. Nothing is drawn or asked until the mouse moves over the world.
+   */
+  private placeSeen = false;
   /** The tooltip beside the object picked in the world (the World tab's Show tooltip). */
   private worldTip: WorldTip | undefined;
 
@@ -318,6 +323,7 @@ export class Viewport {
     this.placing = then;
     this.outline = outline;
     this.probed = undefined;
+    this.placeSeen = false;
     this.probeAt = { x: NaN, y: NaN, t: 0 };
     // The system cursor goes: the viewport draws a white crosshair in its place, and the box where the object lands.
     this.canvas.style.cursor = "none";
@@ -339,7 +345,7 @@ export class Viewport {
 
   /** While Drop at click waits: the line under the cursor, about 15 times a second while it moves, and now and then while it stays (the camera may fly). */
   private probeIfMoved(): void {
-    if (!this.placing || !this.cam || !this.overView) return;
+    if (!this.placing || !this.cam || !this.overView || !this.placeSeen) return;
     const now = performance.now();
     const [x, y] = this.mouse;
     const moved = x !== this.probeAt.x || y !== this.probeAt.y;
@@ -374,6 +380,8 @@ export class Viewport {
 
   /** Drop at click's look: the object's box where a click would put it (white on a surface, amber 8 m along the line when nothing is there), and a white crosshair for the cursor. */
   private drawPlacing(): void {
+    // Not until the mouse has moved over the world: the place known before is where it was, not where it is.
+    if (!this.placeSeen) return;
     const ctx = this.ctx;
     const p = this.probed;
     if (p && this.cam && this.probeSeq - p.seq < 30) {
@@ -986,6 +994,7 @@ export class Viewport {
     const locked = this.locked;
     // Locked, the cursor is held still and the movement comes as movementX and movementY.
     if (!locked) this.mouse = this.pageXY(e);
+    if (this.placing && e.target === this.canvas) this.placeSeen = true;
     if (!this.edit) return;
     const dx = locked ? e.movementX : this.mouse[0] - this.last[0];
     const dy = locked ? e.movementY : this.mouse[1] - this.last[1];
@@ -1104,6 +1113,7 @@ export class Viewport {
     if (!this.edit || !this.cam) return;
     this.mouse = this.pageXY(e);
     this.last = this.mouse;
+    if (this.placing) this.placeSeen = true;
     // Right-click cancels what is in progress, as Esc does: before REDnode 0.52.0 Esc never reaches the
     // page in the game (REDnode took it to leave interactive mode; B3-1 test).
     if (e.button === 2) {
