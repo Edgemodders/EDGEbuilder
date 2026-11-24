@@ -115,7 +115,7 @@ EDGEbuilder needs every installed package that provides `edgebuilder-tool`, with
 
 | Way | Notes |
 |---|---|
-| **A REDnode addition (asked for)**: `service.providers(role)`, every package providing a role, with its manifest, its folder and whether it is switched on, and an event when that changes | The clean answer. A [request](https://github.com/Edgemodders/REDnode/issues) to file, with the owner's yes |
+| **A REDnode addition (asked for, [REDnode #58](https://github.com/Edgemodders/REDnode/issues/58), 2026-11-24)**: `service.providers(role)`, every package providing a role, with its manifest, its folder and whether it is switched on, and an event when that changes | The clean answer. Filed with T0 |
 | Meanwhile: EDGEbuilder's Node mod reads the manifests in REDnode's app folders | Works today for installed packages, but misses REDnode's development folders and needs EDGEbuilder to know REDnode's layout. Kept only until the addition ships |
 
 ## Phases
@@ -131,7 +131,7 @@ B6 Comfort's scatter and snapping can be built as tools from T2 on, which tests 
 
 ## Questions for the owner
 
-Answered on 2026-11-24: the owner agreed the design with each recommendation. The REDnode request is filed when T0 starts.
+Answered on 2026-11-24: the owner agreed the design with each recommendation. The REDnode request is [REDnode #58](https://github.com/Edgemodders/REDnode/issues/58), filed with T0.
 
 | Question | Recommendation (agreed) |
 |---|---|
