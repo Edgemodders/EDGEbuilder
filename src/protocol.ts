@@ -338,6 +338,8 @@ export interface Snapshot {
     status: "idle" | "looking" | "ready" | "unavailable";
     things: WorldThing[];
     picked?: WorldPicked;
+    /** How many picks in the world the mod has finished: the page's spinner turns from a click until this grows. */
+    picks?: number;
     registry?: { sectors: number; nodes: number };
     note?: string;
   };

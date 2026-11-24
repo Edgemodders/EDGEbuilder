@@ -1302,6 +1302,10 @@ function doorText(d: WorldThing["door"]): string {
 
 function renderWorld(s: Snapshot): void {
   const wo = s.worldObjects;
+  if (pickWaitFrom !== undefined && ((wo.picks ?? 0) > pickWaitFrom || performance.now() - worldClickAt > 15000)) {
+    pickWaitFrom = undefined;
+    viewport.setWorking(undefined);
+  }
   viewport.setWorldTip(worldTip && wo.picked ? tipFor(wo.picked) : undefined);
   for (const [id, k] of KindToggles) ($(id) as HTMLElement & { checked: boolean }).checked = wo.kinds.includes(k);
   const n = wo.things.length;
@@ -2227,6 +2231,9 @@ $("freePick").addEventListener("change", (e) => {
   }
 });
 
+/** A pick in the world on its way: the mod's count of finished picks when it was asked (the spinner turns until it grows). */
+let pickWaitFrom: number | undefined;
+
 /** Show tooltip (the World tab's switch, beside Pick under the cursor): the picked object's details beside it in the world. */
 let worldTip = false;
 try {
@@ -2790,6 +2797,9 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
     else if (ray) {
       // None of the scene's objects: the game's own door (or mesh) there, if any (D1).
       worldClickAt = performance.now();
+      // The spinner turns until the mod has finished this pick (or for 15 s at most).
+      pickWaitFrom = state.worldObjects.picks ?? 0;
+      viewport.setWorking(worldClickAt);
       post({ type: "world.pick", origin: ray.o, dir: ray.d, free: freePick });
     }
   },

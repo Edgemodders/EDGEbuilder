@@ -433,6 +433,12 @@ var Viewport = class {
       if (this.edit && this.builderAsked) this.builderAsked = false;
     }
   }
+  /** EDGEbuilder is fetching what was clicked in the world: a turning disc at the top centre, from this time. */
+  workingSince;
+  setWorking(since) {
+    this.workingSince = since;
+    this.kick();
+  }
   /** The tooltip beside the object picked in the world, or none. */
   setWorldTip(tip) {
     this.worldTip = tip;
@@ -758,6 +764,9 @@ var Viewport = class {
       ctx.fillRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
     }
     if (this.worldTip && this.edit && !this.paused) this.drawWorldTip(this.worldTip);
+    if (this.workingSince !== void 0 && performance.now() - this.workingSince > 15e3) this.workingSince = void 0;
+    if (this.workingSince !== void 0 && performance.now() - this.workingSince > 150) this.drawWorking();
+    else if (this.workingSince !== void 0) this.kick();
     if (this.drag) this.label(...this.dragText(this.drag).split("   "));
     else if (this.edit) {
       const camHelp = this.camEntity ? "Right mouse: look, fly with W A S D Q E (Shift faster).  Middle: orbit, Shift pan.  Wheel: closer.  F: frame." : "";
@@ -906,6 +915,51 @@ var Viewport = class {
     ctx.fillStyle = "#e8e8e8";
     lines.forEach((l, i) => ctx.fillText(l, x + 12, y + 28 + i * 17));
     ctx.textBaseline = "alphabetic";
+  }
+  /** A disc turning at the top centre, as the game's save spinner does, with what EDGEbuilder is doing. */
+  drawWorking() {
+    const ctx = this.ctx;
+    const cx = (this.canvas.width - 24 - 624) / 2 + 12;
+    const cy = 44;
+    const a = performance.now() / 1e3 * Math.PI * 2 * 1.2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = "rgba(8,9,13,0.85)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 19, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(252,238,10,0.35)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 15, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.rotate(a);
+    ctx.strokeStyle = "#fcee0a";
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    for (const start of [0, Math.PI]) {
+      ctx.beginPath();
+      ctx.arc(0, 0, 11, start, start + Math.PI * 0.55);
+      ctx.stroke();
+    }
+    ctx.lineCap = "butt";
+    ctx.fillStyle = "#fcee0a";
+    ctx.beginPath();
+    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.font = "12px 'JetBrains Mono', Consolas, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "rgba(8,9,13,0.85)";
+    const text = "Picking...";
+    const w = ctx.measureText(text).width + 12;
+    ctx.fillRect(cx - w / 2, cy + 24, w, 18);
+    ctx.fillStyle = "#fcee0a";
+    ctx.fillText(text, cx, cy + 27);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    this.kick();
   }
   label(...parts) {
     const ctx = this.ctx;
@@ -2543,6 +2597,10 @@ function doorText(d) {
 }
 function renderWorld(s) {
   const wo = s.worldObjects;
+  if (pickWaitFrom !== void 0 && ((wo.picks ?? 0) > pickWaitFrom || performance.now() - worldClickAt > 15e3)) {
+    pickWaitFrom = void 0;
+    viewport.setWorking(void 0);
+  }
   viewport.setWorldTip(worldTip && wo.picked ? tipFor(wo.picked) : void 0);
   for (const [id, k] of KindToggles) $(id).checked = wo.kinds.includes(k);
   const n = wo.things.length;
@@ -3295,6 +3353,7 @@ $("freePick").addEventListener("change", (e) => {
     post({ type: "world.hoverRay", ray: null });
   }
 });
+var pickWaitFrom;
 var worldTip = false;
 try {
   worldTip = localStorage.getItem("edgebuilder.worldTip") === "1";
@@ -3776,6 +3835,8 @@ var viewport = new Viewport($("view"), {
     if (ids.length) showSceneTab();
     else if (ray) {
       worldClickAt = performance.now();
+      pickWaitFrom = state.worldObjects.picks ?? 0;
+      viewport.setWorking(worldClickAt);
       post({ type: "world.pick", origin: ray.o, dir: ray.d, free: freePick });
     }
   },

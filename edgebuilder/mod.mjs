@@ -4400,7 +4400,12 @@ channel.on((m) => {
         await inTurn("Select", () => select(m.ids));
         break;
       case "world.pick":
-        await worldPick(m.origin, m.dir, !!m.free);
+        try {
+          await worldPick(m.origin, m.dir, !!m.free);
+        } finally {
+          state.worldObjects.picks = (state.worldObjects.picks ?? 0) + 1;
+          publish();
+        }
         break;
       case "world.hoverRay":
         hoverNext = m.ray ? { origin: m.ray.origin, dir: m.ray.dir, free: !!m.free } : null;
