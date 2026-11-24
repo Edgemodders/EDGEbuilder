@@ -840,7 +840,8 @@ export class Viewport {
   /** A disc turning at the top centre, as the game's save spinner does, with what EDGEbuilder is doing. */
   private drawWorking(): void {
     const ctx = this.ctx;
-    const cx = (this.canvas.width - 24 - 624) / 2 + 12;
+    // The screen's centre: EDGEbuilder's window (at the right) does not reach it.
+    const cx = this.canvas.width / 2;
     const cy = 44;
     const a = (performance.now() / 1000) * Math.PI * 2 * 1.2;
     ctx.save();
