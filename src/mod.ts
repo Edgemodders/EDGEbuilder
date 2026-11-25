@@ -1682,22 +1682,42 @@ async function findNode(p: WorldPicked, seq: number): Promise<void> {
   }
 }
 
-/** Picks a door from the list or a click: the scene's selection goes, the door is outlined, its node is looked up. */
-async function pickThing(t: WorldThing): Promise<void> {
+/**
+ * Picks a door from the list or a click: the scene's selection goes, the door is outlined, its node is looked up.
+ * `late`: details that come later (a mesh's collision data), added while it is still the picked thing.
+ */
+async function pickThing(t: WorldThing, late?: Promise<Partial<WorldThing> | undefined>): Promise<void> {
   const seq = ++pickSeq;
   await clearPicked();
   if (state.selected.length) await select([]);
   const p: WorldPicked = { ...t, warnings: [], note: "Looking for its node..." };
   state.worldObjects.picked = p;
+  void late?.then((x) => {
+    if (!x || seq !== pickSeq || state.worldObjects.picked !== p) return;
+    Object.assign(p, x);
+    publish();
+  });
   await outlineThing(t.key, WorldOutline);
   publish();
   await findNode(p, seq);
   if (seq === pickSeq) publish();
 }
 
+/** Whether a mesh's file carries collision data, from REDbridge's mesh.info (kept in the asset index); undefined without REDbridge. */
+async function meshCollision(resource: string | undefined): Promise<boolean | null | undefined> {
+  if (!resource || !/.mesh$/i.test(resource)) return undefined;
+  const known = sourceOf(resource) ? undefined : index.info[resource];
+  if (known && !known.error && known.hasCollision !== undefined) return known.hasCollision;
+  const b = bridge;
+  if (!b?.running || state.bridge.status !== "ready") return undefined;
+  const info = await assetInfo(b, resource).catch(() => undefined);
+  return info && !info.error ? (info.hasCollision ?? null) : undefined;
+}
+
 /** A mesh the registry's pick found: the World panel shows it as a thing of its own. */
 async function pickMesh(n: WorldNode, physicsHit?: { distance: number } | null): Promise<void> {
   const resource = await pathOf(n.resource);
+  const collision = meshCollision(resource).then((c) => (c === undefined ? undefined : { collision: c }));
   await pickThing({
     // The game's physics stopped the line inside its bounds: solid there.
     ray: { solid: !!n.holdsHit, distance: n.holdsHit ? physicsHit?.distance : undefined },
@@ -1712,7 +1732,7 @@ async function pickMesh(n: WorldNode, physicsHit?: { distance: number } | null):
     appearance: n.appearance ?? undefined,
     position: n.position,
     removedBy: editFor(scene.worldEdits, { sectorHash: n.sector, entry: n.instance })?.id,
-  });
+  }, collision);
 }
 
 /** Pick under the cursor (0.14.0): the kinds switched on, and meshes whatever their switch says. */
@@ -1802,10 +1822,16 @@ async function tellHover(t: { door?: WorldThing; node?: WorldNode } | undefined 
       box: n.bounds,
       orientation: n.orientation,
       ray: { solid: !!n.holdsHit },
+      collision: sourceOf(resource) ? undefined : index.info[resource]?.hasCollision,
       removedBy: editFor(scene.worldEdits, { sectorHash: n.sector, entry: n.instance })?.id,
     };
   }
   channel.post({ type: "hover", thing });
+  // Its collision data not read yet: told again once REDbridge has read the mesh, if the cursor is still on it.
+  if (thing && thing.what === "mesh" && thing.collision === undefined) {
+    const c = await meshCollision(thing.resource);
+    if (c !== undefined && hoverSentKey === key) channel.post({ type: "hover", thing: { ...thing, collision: c } });
+  }
 }
 
 async function hoverThing(key: string | null): Promise<void> {

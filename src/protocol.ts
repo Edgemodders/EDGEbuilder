@@ -168,6 +168,8 @@ export interface WorldThing {
    * along; false when the line went through it.
    */
   ray?: { solid: boolean; distance?: number };
+  /** A mesh: whether its file carries collision data (REDbridge's mesh.info), so a copy can be made solid; null when not known. */
+  collision?: boolean | null;
   /** Its scale in the world, for a mesh from the node registry. */
   scale?: [number, number, number];
   /** A mesh node's box from REDnode's registry, and its orientation: for the tooltip, placed beside it on screen. */

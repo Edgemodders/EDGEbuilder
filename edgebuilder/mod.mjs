@@ -3210,19 +3210,34 @@ async function findNode(p, seq) {
     p.note = `Its node was not found: ${err.message}`;
   }
 }
-async function pickThing(t) {
+async function pickThing(t, late) {
   const seq = ++pickSeq;
   await clearPicked();
   if (state.selected.length) await select([]);
   const p = { ...t, warnings: [], note: "Looking for its node..." };
   state.worldObjects.picked = p;
+  void late?.then((x) => {
+    if (!x || seq !== pickSeq || state.worldObjects.picked !== p) return;
+    Object.assign(p, x);
+    publish();
+  });
   await outlineThing(t.key, WorldOutline);
   publish();
   await findNode(p, seq);
   if (seq === pickSeq) publish();
 }
+async function meshCollision(resource) {
+  if (!resource || !/.mesh$/i.test(resource)) return void 0;
+  const known = sourceOf(resource) ? void 0 : index.info[resource];
+  if (known && !known.error && known.hasCollision !== void 0) return known.hasCollision;
+  const b = bridge;
+  if (!b?.running || state.bridge.status !== "ready") return void 0;
+  const info = await assetInfo(b, resource).catch(() => void 0);
+  return info && !info.error ? info.hasCollision ?? null : void 0;
+}
 async function pickMesh(n, physicsHit) {
   const resource = await pathOf(n.resource);
+  const collision = meshCollision(resource).then((c) => c === void 0 ? void 0 : { collision: c });
   await pickThing({
     // The game's physics stopped the line inside its bounds: solid there.
     ray: { solid: !!n.holdsHit, distance: n.holdsHit ? physicsHit?.distance : void 0 },
@@ -3237,7 +3252,7 @@ async function pickMesh(n, physicsHit) {
     appearance: n.appearance ?? void 0,
     position: n.position,
     removedBy: editFor(scene.worldEdits, { sectorHash: n.sector, entry: n.instance })?.id
-  });
+  }, collision);
 }
 var freeKinds = () => [.../* @__PURE__ */ new Set([...state.worldObjects.kinds, "mesh"])];
 async function pickTarget(origin, dir, kinds) {
@@ -3314,10 +3329,15 @@ async function tellHover(t) {
       box: n.bounds,
       orientation: n.orientation,
       ray: { solid: !!n.holdsHit },
+      collision: sourceOf(resource) ? void 0 : index.info[resource]?.hasCollision,
       removedBy: editFor(scene.worldEdits, { sectorHash: n.sector, entry: n.instance })?.id
     };
   }
   channel.post({ type: "hover", thing });
+  if (thing && thing.what === "mesh" && thing.collision === void 0) {
+    const c = await meshCollision(thing.resource);
+    if (c !== void 0 && hoverSentKey === key) channel.post({ type: "hover", thing: { ...thing, collision: c } });
+  }
 }
 async function hoverThing(key) {
   const picked = state.worldObjects.picked?.key;

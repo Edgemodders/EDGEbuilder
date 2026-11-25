@@ -1302,6 +1302,27 @@ function doorText(d: WorldThing["door"]): string {
   return [d.open === undefined ? "" : d.open ? "open" : "closed", d.locked ? "locked" : "", d.sealed ? "sealed" : "", d.lift ? "an elevator's door" : ""].filter(Boolean).join(", ");
 }
 
+/**
+ * Whether a thing in the world is solid, in a word and why: a door while closed, a mesh node our bake writes as solid,
+ * or the game's physics stopping the click's line on it; not known for a mesh picked without the cursor.
+ */
+function solidOf(p: WorldThing & { node?: { type: string } }): { word: "Yes" | "No" | "Not known"; why: string } {
+  if (p.what === "door") return p.door?.open ? { word: "No", why: "it is open" } : { word: "Yes", why: "while it is closed" };
+  const type = p.node?.type ?? p.className;
+  if (p.ray?.solid) return { word: "Yes", why: "the game's physics stops a line on it" };
+  if (/^worldInstancedDestructibleMeshNode$/.test(type)) return { word: "Yes", why: `a ${type}` };
+  if (p.ray) return { word: "No", why: "a line goes through it" };
+  return { word: "Not known", why: "pick it with the cursor to find out" };
+}
+
+/** Whether a mesh's file carries collision data, so a copy can be made solid; empty for what is not a mesh. */
+function collisionLine(p: WorldThing): string {
+  if (p.what !== "mesh" || !p.resource || !/.mesh$/i.test(p.resource)) return "";
+  if (p.collision === true) return "Collision data: Yes (a copy can be made solid)";
+  if (p.collision === false) return "Collision data: No (a copy cannot be made solid: it needs a collision box)";
+  return "";
+}
+
 function renderWorld(s: Snapshot): void {
   const wo = s.worldObjects;
   if (pickWaitFrom !== undefined && ((wo.picks ?? 0) > pickWaitFrom || performance.now() - worldClickAt > 15000)) {
@@ -1358,6 +1379,8 @@ function renderWorld(s: Snapshot): void {
     picked.appearance ? `appearance ${picked.appearance}` : "",
     d ? [doorText(d), d.initial ? `starts ${d.initial.toLowerCase()}` : "", d.closesItself ? "closes by itself" : ""].filter(Boolean).join("; ") : "",
     `at ${picked.position.map((v) => v.toFixed(2)).join(", ")}`,
+    `Solid: ${solidOf(picked).word}`,
+    collisionLine(picked) || (picked.what === "mesh" && picked.resource && /.mesh$/i.test(picked.resource) ? "Collision data: reading..." : ""),
     where || picked.note || "",
     picked.ref ? `reference ${picked.ref}` : "",
     picked.proxies?.length ? `and its proxy mesh: ${picked.proxies.map((p) => `entry ${p.entry} in ${p.sector ? shortName(p.sector) : p.sectorHash}`).join(", ")}` : "",
@@ -2338,7 +2361,8 @@ function tipFor(p: WorldThing): WorldTip {
   const lines = [
     `${p.className}${p.what === "door" ? ", a door" : p.what === "fakeDoor" ? ", a painted-on door" : ""}`,
     box ? `about ${size.map((v) => v.toFixed(1)).join(" × ")} m` : "",
-    p.ray ? (p.ray.solid ? "solid here" : "not solid here (walk-through, or its collision is separate)") : "",
+    p.what === "fakeDoor" && !p.ray ? "" : `Solid: ${solidOf(p).word}`,
+    collisionLine(p),
     p.door ? doorText(p.door) : "",
     p.removedBy ? `removed by this scene (${p.removedBy})` : "",
   ].filter(Boolean);
@@ -2404,19 +2428,20 @@ function renderWorldPreview(s: Snapshot): void {
   const sc = p.scale ?? [1, 1, 1];
   const node = p.node;
   const d = p.door;
-  const solid = p.ray
-    ? p.ray.solid
-      ? `yes: the game's physics stopped the click's line on it${p.ray.distance !== undefined ? ` (${p.ray.distance.toFixed(1)} m from the camera)` : ""}`
-      : "no: the click's line went through it (walk-through here, or its collision is a separate node)"
-    : p.what === "door"
-      ? "a door: solid while it is closed"
-      : "not known: pick it with the cursor to find out";
+  const so = solidOf(p);
+  const solid =
+    p.ray?.solid && p.ray.distance !== undefined
+      ? `Yes: the game's physics stopped the click's line on it (${p.ray.distance.toFixed(1)} m from the camera)`
+      : so.word === "No" && p.ray
+        ? "No: the click's line went through it (walk-through here, or its collision is a separate node)"
+        : `${so.word}: ${so.why}`;
+  const coll = p.collision ?? info?.hasCollision;
   const lines: [string, string][] = [
     ["Name", p.label],
     ["Kind", `${p.className}${p.what === "door" ? " (a door that opens)" : p.what === "fakeDoor" ? " (a painted-on door)" : ""}`],
     ["Solid", solid],
   ];
-  if (res && p.what === "mesh") lines.push(["Collision", info?.hasCollision === true ? "its mesh carries collision data" : info?.hasCollision === false ? "its mesh has no collision data" : "reading..."]);
+  if (res && p.what === "mesh") lines.push(["Collision data", coll === true ? "Yes: a copy can be made solid" : coll === false ? "No: a copy cannot be made solid, it needs a collision box" : "reading..."]);
   if (p.resource) lines.push(["Path", p.resource]);
   if (p.appearance) lines.push(["Look", p.appearance]);
   if (b) lines.push(["Size", `${((b.max[0] - b.min[0]) * sc[0]).toFixed(2)} × ${((b.max[1] - b.min[1]) * sc[1]).toFixed(2)} × ${((b.max[2] - b.min[2]) * sc[2]).toFixed(2)} m${sc.some((v) => Math.abs(v - 1) > 1e-3) ? ` (scaled ${sc.map((v) => v.toFixed(2)).join(", ")})` : ""}`]);
