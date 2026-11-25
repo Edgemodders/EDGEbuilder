@@ -39,7 +39,7 @@ let lastCopy: number | undefined;
 
 // ---- rendering --------------------------------------------------------------------------------
 
-// A drop or a paste selects what it placed; the page then shows the Scene tab, where the Selected panel
+// A drop or a paste selects what it placed; the page then shows the Scene tab, where the Selected Object panel
 // is, as a click in the world does (B3-1 test: after Drop at click the panel stayed out of sight).
 let dropAsked = false;
 let knownIds = new Set<string>();
@@ -293,7 +293,7 @@ type Field = HTMLElement & { value: string };
 const fields = ["px", "py", "pz", "yaw", "scale"] as const;
 const field = (id: (typeof fields)[number]) => $<Field>(id);
 
-/** The Selected panel: one object's numbers, or for several their middle, a turn and a factor. */
+/** The Selected Object panel: one object's numbers, or for several their middle, a turn and a factor. */
 /** The Solid switch, for the meshes selected: on when all that can be solid are. */
 function renderSolid(sel: SceneObject[], s: Snapshot): void {
   const meshes = sel.filter((o) => o.kind === "mesh");
@@ -480,7 +480,7 @@ function startDropAtClick(path: string, looks: string | undefined, label?: strin
   $("message").textContent = `Drop at click is on: click in the world where ${name} should go. Esc or a tap of the right button cancels; hold it to look around.`;
   $("message").className = "message";
 }
-// A panel's pin (Picked on the Assets and Library tabs, Selected on the Scene tab): pinned, the panel stays at the
+// A panel's pin (Selected Asset, Selected Scene, Selected Object and Selected Node): pinned, the panel stays at the
 // bottom of its tab while the tab scrolls. Each panel's choice is kept in this page's storage; pinned
 // unless turned off.
 for (const panel of document.querySelectorAll<HTMLElement>(".pinnable")) {
@@ -593,7 +593,7 @@ function duplicate(): void {
 }
 
 /**
- * The numbers in the Selected panel. One object: position, a new heading, a uniform scale for meshes.
+ * The numbers in the Selected Object panel. One object: position, a new heading, a uniform scale for meshes.
  * Several: their middle moves to X, Y, Z; Turn by turns them around it; Scale by scales them from it.
  */
 function applyFields(): void {
@@ -766,7 +766,7 @@ function findModel(s: Snapshot, file: string): ModelEntry | undefined {
   return s.library.models.find((m) => sameFile(m.file, file));
 }
 
-/** B2d: the Picked panel's text for a model, and the Import box. */
+/** B2d: the Selected Scene panel's text for a model, and the Import box. */
 function renderModel(s: Snapshot, file: string | undefined): void {
   $("importBox").hidden = !file;
   if (!file) return;
@@ -851,13 +851,13 @@ $("bakeList").addEventListener(
   true,
 );
 
-// ---- a Library bake in the Picked panel (B4-3) ---------------------------------------------------------
+// ---- a Library bake in the Selected Scene panel (B4-3) ---------------------------------------------------------
 
 let lbakeAsking = false;
 let lbakeDropping: string | undefined;
 let lbakeHtml = "";
 
-/** What the Picked panel says about a Library bake: where, which version, and each flag in words. */
+/** What the Selected Scene panel says about a Library bake: where, which version, and each flag in words. */
 function bakeText(s: Snapshot, b: LibraryBake): string {
   if (b.error) return `${b.name}: cannot be read (${b.error})\n${b.dir}`;
   const lines = [`${b.name}: a bake in ${whereLabel(s, "library", b.folder)}, version ${b.version}${b.date ? `, baked ${new Date(b.date).toLocaleString()}` : ""}`];
@@ -1022,7 +1022,7 @@ $("shelves").addEventListener(
 $("shelves").addEventListener("select", (e) => {
   const value = (e as CustomEvent<{ value: string }>).detail.value;
   lbakeAsking = false;
-  // In its drawer, a pick shows the Library tab, where the Picked panel and its buttons are.
+  // In its drawer, a pick shows the Library tab, where the Selected Scene panel and its buttons are.
   if (libraryOut) mainTabs().select?.(TabLabels.library);
   if (value.startsWith("f:")) picked = { kind: "scene", file: value.slice(2) };
   else if (value.startsWith("b:")) picked = { kind: "bake", dir: value.slice(2) };
@@ -1544,7 +1544,7 @@ $("worldEdits").addEventListener(
 //
 // The game's streaming sectors around V, around the camera, or by name or grid cell (REDbridge's
 // sector.find), and in a drawer to the left one sector's node data entries (sector.nodes), marked when
-// streamed in. A row picked there goes into Picked in the world; two clicks fly there.
+// streamed in. A row picked there goes into Selected Node; two clicks fly there.
 
 const SectorToggles: [string, string][] = [
   ["secExterior", "exterior"],
@@ -1643,7 +1643,7 @@ function renderSectorDrawer(s: Snapshot): void {
         : [
             `${v.kind}${v.kind ? ", " : ""}level ${v.level}. ${v.total} entr${v.total === 1 ? "y" : "ies"}${streamed ? `, ${streamed}` : ""}.`,
             v.matching > v.nodes.length ? `${v.matching} match; the first ${v.nodes.length} shown: the filter narrows them.` : v.filter ? `${v.matching} match.` : "",
-            "A click picks one (Picked in the world, on the World tab); two clicks fly there. The eye hides one until EDGEbuilder stops.",
+            "A click picks one (Selected Node, on the World tab); two clicks fly there. The eye hides one until EDGEbuilder stops.",
           ]
             .filter(Boolean)
             .join("\n");
@@ -1840,7 +1840,7 @@ function renderLeft(): void {
 // ---- the Library out of the window (0.14.0) ------------------------------------------------------------
 //
 // The icon at the top right of the Library tree moves the tree into a drawer to the left, with more room;
-// a Library button and the same icon stay where it was. The Picked panel stays on the tab, and a pick in
+// a Library button and the same icon stay where it was. The Selected Scene panel stays on the tab, and a pick in
 // the drawer shows the tab. The choice is kept in this page's storage.
 
 let libraryOut = false;

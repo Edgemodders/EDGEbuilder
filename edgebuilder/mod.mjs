@@ -4194,7 +4194,7 @@ async function goTo(id) {
     } catch (err) {
       console.log(`Go to ${id}: ${err.message}`);
       await select([id]);
-      return say(`${id} is selected, but the game did not place its preview (the log says why). There is no gizmo without a preview; its numbers in the Selected panel still work.${noCamera}`, "warn");
+      return say(`${id} is selected, but the game did not place its preview (the log says why). There is no gizmo without a preview; its numbers in the Selected Object panel still work.${noCamera}`, "warn");
     }
   }
   await select([id]);

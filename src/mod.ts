@@ -2292,7 +2292,7 @@ function setKinds(kinds: WorldKind[]): void {
 // The World tab's Sectors sub-tab lists the game's streaming sectors (REDbridge's sector.find) around V,
 // around the camera, or by name or grid; the Sector drawer lists one sector's node data entries
 // (sector.nodes), marked when REDnode's registry has them streamed in. A row picked there goes into
-// Picked in the world, with the same actions as a door near V. REDcode calls the same through the
+// Selected Node, with the same actions as a door near V. REDcode calls the same through the
 // service (select, focus, scenesEditing).
 
 /** At most this many sectors in the list, and node rows in the drawer (the filter narrows them). */
@@ -2503,7 +2503,7 @@ async function sectorThing(view: SectorView, item: SectorItem): Promise<WorldThi
   };
 }
 
-/** Picks one of the open sector's entries into Picked in the world; whether it is streamed in now. */
+/** Picks one of the open sector's entries into Selected Node; whether it is streamed in now. */
 async function selectSectorEntry(entry: number): Promise<{ selected: boolean; streamed: boolean }> {
   const view = state.sectors.open;
   const item = sectorItems.find((i) => i.index === entry);
@@ -2857,7 +2857,7 @@ async function goTo(id: string): Promise<void> {
     } catch (err) {
       console.log(`Go to ${id}: ${(err as Error).message}`);
       await select([id]);
-      return say(`${id} is selected, but the game did not place its preview (the log says why). There is no gizmo without a preview; its numbers in the Selected panel still work.${noCamera}`, "warn");
+      return say(`${id} is selected, but the game did not place its preview (the log says why). There is no gizmo without a preview; its numbers in the Selected Object panel still work.${noCamera}`, "warn");
     }
   }
   await select([id]);

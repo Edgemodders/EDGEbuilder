@@ -23,7 +23,7 @@ The three pills at the top say whether everything is ready:
 
 1. **Library** tab: type a name in **Name**, pick a folder in the tree, press **New scene here**. The scene is saved after every change from now on.
 2. **Assets** tab: type `crate`. Typing anywhere on the tab goes into the search box.
-3. Click a result. **Picked** shows its size and its looks (appearances): click one.
+3. Click a result. **Selected Asset** shows its size and its looks (appearances): click one.
 4. Press **Drop where I look**, or **Drop at click** and click the spot in the world.
 5. Switch **Edit** on (top right of this window), click the crate, and drag its arrows.
 
@@ -68,7 +68,7 @@ Click an object to select it. Its **gizmo** has red, green and blue arrows (drag
 | <kbd>Ctrl</kbd>+<kbd>E</kbd> | Drop to the floor |
 | <kbd>Delete</kbd> | Remove it from the scene |
 
-**Selected** on the Scene tab takes exact numbers: X, Y, Z, Heading, Scale, and **Seen from**, how far off it is seen once baked. **Solid** makes a mesh stop V once baked, when its mesh carries collision data.
+**Selected Object** on the Scene tab takes exact numbers: X, Y, Z, Heading, Scale, and **Seen from**, how far off it is seen once baked. **Solid** makes a mesh stop V once baked, when its mesh carries collision data.
 
 ## Arrange
 
@@ -102,7 +102,7 @@ A move, turn or scale acts on the whole selection, around its middle.
 The **World** tab:
 
 - **Nearby** finds the doors near V (**Scan Doors**). With **Edit** on, a click picks a door. The switches choose what a click picks: doors, painted-on doors, meshes.
-- **Pick under the cursor** (in Picked in the world): what a click would pick is outlined as the mouse moves, and a click picks any mesh or door. Its details open in a drawer at the left of the screen: the model in 3D, its kind, size, place, node and sector, and whether it is **solid** where you clicked. **Drop a copy** puts a copy in your scene. **Show tooltip**, beside it, puts the name, kind, size and distance of whatever is under the mouse in a tooltip next to it in the world.
+- **Pick under the cursor** (in Selected Node): what a click would pick is outlined as the mouse moves, and a click picks any mesh or door. Its details open in a drawer at the left of the screen: the model in 3D, its kind, size, place, node and sector, and whether it is **solid** where you clicked. **Drop a copy** puts a copy in your scene. **Show tooltip**, beside it, puts the name, kind, size and distance of whatever is under the mouse in a tooltip next to it in the world.
 - **Remove from world** takes a door, a painted-on door or a mesh out, kept in the scene. **Restore** or Undo brings it back. A bake removes it for good.
 - **Open**, **Close**, **Lock** keep a door that way while the scene is open.
 - **Sectors** lists the pieces the game streams the world in: near V, near the camera, or by name. A sector's drawer lists every entry in it: pick, fly to, hide for the session or remove.
