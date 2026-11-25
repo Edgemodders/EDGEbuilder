@@ -99,6 +99,23 @@ export const DoorHeight = 2.2;
 export const DoorReach = 0.8;
 
 /**
+ * Whether a point is inside a node's box (REDnode's registry), with a margin. The box is in the world when the node's
+ * place is inside it (give or take a metre), else in the mesh's own space: then the point is taken there first.
+ */
+export function boxHolds(point: V3, box: { min: V3; max: V3 }, position: V3, orientation: [number, number, number, number] = [0, 0, 0, 1], scale: V3 = [1, 1, 1], margin = 0.05): boolean {
+  const inside = (p: V3, m: number) => p.every((v, i) => v >= box.min[i] - m && v <= box.max[i] + m);
+  if (inside(position, 1)) return inside(point, margin);
+  // Into the mesh's space: moved back, turned back by the conjugate, unscaled.
+  const [x, y, z, w] = [-orientation[0], -orientation[1], -orientation[2], orientation[3]];
+  const v: V3 = [point[0] - position[0], point[1] - position[1], point[2] - position[2]];
+  const tx = 2 * (y * v[2] - z * v[1]);
+  const ty = 2 * (z * v[0] - x * v[2]);
+  const tz = 2 * (x * v[1] - y * v[0]);
+  const r: V3 = [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)];
+  return inside([r[0] / (scale[0] || 1), r[1] / (scale[1] || 1), r[2] / (scale[2] || 1)], margin);
+}
+
+/**
  * The door a click means: the first the line reaches, among those whose line comes within `DoorReach`
  * of the ray and no further along than the first solid surface (plus a little: a door is in a wall's
  * opening). Two about as far along: the one nearer the line.

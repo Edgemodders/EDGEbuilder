@@ -578,6 +578,14 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "edgebuilder-smoke-"));
   assert.equal(m.doorUnderRay(o, dir, [far], 10), undefined, "a door behind a wall is no pick");
   assert.equal(m.doorUnderRay(o, dir, [far], 19.6)?.key, "c", "a door in the wall's opening");
   assert.equal(m.doorUnderRay(o, [-1, 0, 0], [near], undefined), undefined, "a door behind the camera");
+  // A node's box holding a physics hit: in the world, or in the mesh's own space (turned 90 degrees, scaled 2).
+  const worldBox = { min: [9, -1, 0], max: [11, 1, 1] };
+  assert.ok(m.boxHolds([10, 0, 1.02], worldBox, [10, 0, 0]), "a world box holds a hit on its top");
+  assert.ok(!m.boxHolds([10, 0, 1.5], worldBox, [10, 0, 0]), "not half a metre above it");
+  const meshBox = { min: [-1, -0.25, 0], max: [1, 0.25, 0.5] };
+  const turned = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
+  assert.ok(m.boxHolds([100, 101.5, 50.5], meshBox, [100, 100, 50], turned, [2, 2, 2]), "a mesh box, turned and scaled, holds a point along its long side");
+  assert.ok(!m.boxHolds([101.5, 100, 50.5], meshBox, [100, 100, 50], turned, [2, 2, 2]), "but not across it");
 
   assert.deepEqual(m.questWarnings("$/03_night_city/c_watson/little_china/.../{q001_door_v_flat}_prefab4EOA7RA/#q001_door_v_flat", "base\\worlds\\03_night_city\\_compiled\\default\\exterior_-22_19_1_0.streamingsector").length, 1, "V's door: a quest's");
   assert.equal(m.questWarnings("$/03_night_city/c_watson/lift_door_2", "base\\worlds\\03_night_city\\_compiled\\default\\quest_acd280b2b73c4d5b.streamingsector").length, 1, "a quest sector");

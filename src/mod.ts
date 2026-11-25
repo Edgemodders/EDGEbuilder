@@ -44,7 +44,7 @@ import {
 } from "./bake";
 import { Scene, forReader, readSceneFile, yawToQuaternion, type SceneFile, type SceneState } from "./scene";
 import { SectorKinds, bridgeKinds, editsInSector, levelsOf, nodeRows, placesEntity, sectorHash, sectorMatches, sectorName, sectorRows, shortKind, type FoundSector, type SectorItem } from "./sectors";
-import { DefaultKinds, KindLabels, MeshNodeKinds, doorActions, doorAfter, doorStateText, doorUnderRay, editFor, editId, idText, kindOfClass, questWarnings, readableEdits, registryId, sameId } from "./worldedits";
+import { DefaultKinds, KindLabels, MeshNodeKinds, boxHolds, doorActions, doorAfter, doorStateText, doorUnderRay, editFor, editId, idText, kindOfClass, questWarnings, readableEdits, registryId, sameId } from "./worldedits";
 import { movePreview, sameTransform } from "./move";
 import { checkModelPath, deskDir, filePlaces, listFolder, scanModels } from "./models";
 import { findTools } from "./tools";
@@ -1005,8 +1005,11 @@ async function travel(from: SceneState[], to: SceneState[], word: "Undo" | "Redo
   await select(changed.length ? changed : (s.selected ?? state.selected));
 }
 
-/** The collision groups a floor can be in. The first that answers is not always the nearest, so all are asked. */
-const FloorGroups = ["Static", "Terrain", "PlayerBlocker"];
+/**
+ * The collision groups a floor can be in. The first that answers is not always the nearest, so all are asked.
+ * Dynamic: a bake's solid objects (instanced destructibles, Kinematic, preset "World Dynamic") answer only there.
+ */
+const FloorGroups = ["Static", "Terrain", "PlayerBlocker", "Dynamic"];
 
 /** The nearest thing a straight line from `start` to `end` hits, across the floor groups, and what each said. */
 async function raycast(start: V3, end: V3): Promise<{ hit?: V3; tried: string[] }> {
@@ -1748,9 +1751,22 @@ async function pickTarget(origin: V3, dir: V3, kinds: WorldKind[]): Promise<{ do
   }
   if (kinds.includes("mesh") && typeof world.pick === "function") {
     try {
-      const r = await world.pick({ from: toPoint(origin), dir: toPoint(dir), max: 80, limit: 4, kinds: MeshNodeKinds });
-      const n = r.hits.find((h) => h.holdsHit) ?? (r.physicsHit ? undefined : r.hits[0]);
-      if (n) return { node: n, physicsHit: r.physicsHit };
+      const r = await world.pick({ from: toPoint(origin), dir: toPoint(dir), max: 80, limit: 8, kinds: MeshNodeKinds });
+      let n = r.hits.find((h) => h.holdsHit);
+      let physicsHit = r.physicsHit;
+      if (!n) {
+        // REDnode's physics line is the Static group alone, which a bake's solid objects are not in: our own line,
+        // over every floor group, and the node whose box holds where it stopped.
+        const { hit } = await raycast(origin, add(origin, mul(dir, 80)));
+        const d = hit ? Math.hypot(...sub(hit, origin)) : undefined;
+        if (hit && (!physicsHit || d! < physicsHit.distance - 0.05)) {
+          const holder = r.hits.find((h) => boxHolds(hit, h.bounds, h.position, h.orientation, h.scale));
+          physicsHit = { point: hit, distance: d! };
+          if (holder) n = { ...holder, holdsHit: true };
+        }
+      }
+      n ??= physicsHit ? undefined : r.hits[0];
+      if (n) return { node: n, physicsHit };
     } catch (err) {
       console.log(`Mesh pick: ${(err as Error).message}`);
     }

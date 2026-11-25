@@ -1409,6 +1409,17 @@ function scale(a, k) {
 }
 var DoorHeight = 2.2;
 var DoorReach = 0.8;
+function boxHolds(point, box, position, orientation = [0, 0, 0, 1], scale2 = [1, 1, 1], margin = 0.05) {
+  const inside = (p, m) => p.every((v3, i) => v3 >= box.min[i] - m && v3 <= box.max[i] + m);
+  if (inside(position, 1)) return inside(point, margin);
+  const [x, y, z, w] = [-orientation[0], -orientation[1], -orientation[2], orientation[3]];
+  const v2 = [point[0] - position[0], point[1] - position[1], point[2] - position[2]];
+  const tx = 2 * (y * v2[2] - z * v2[1]);
+  const ty = 2 * (z * v2[0] - x * v2[2]);
+  const tz = 2 * (x * v2[1] - y * v2[0]);
+  const r = [v2[0] + w * tx + (y * tz - z * ty), v2[1] + w * ty + (z * tx - x * tz), v2[2] + w * tz + (x * ty - y * tx)];
+  return inside([r[0] / (scale2[0] || 1), r[1] / (scale2[1] || 1), r[2] / (scale2[2] || 1)], margin);
+}
 function doorUnderRay(origin, dir, doors, wallAt) {
   let best;
   for (const door of doors) {
@@ -2685,7 +2696,7 @@ async function travel(from, to, word) {
   const changed = [...ch.spawn, ...ch.respawn, ...ch.move].map((o) => o.id);
   await select(changed.length ? changed : s.selected ?? state.selected);
 }
-var FloorGroups = ["Static", "Terrain", "PlayerBlocker"];
+var FloorGroups = ["Static", "Terrain", "PlayerBlocker", "Dynamic"];
 async function raycast(start, end) {
   const queries = await api.GameInstance.GetSpatialQueriesSystem(game.instance);
   if (!queries) return { tried: ["no spatial queries"] };
@@ -3264,9 +3275,20 @@ async function pickTarget(origin, dir, kinds) {
   }
   if (kinds.includes("mesh") && typeof world2.pick === "function") {
     try {
-      const r = await world2.pick({ from: toPoint(origin), dir: toPoint(dir), max: 80, limit: 4, kinds: MeshNodeKinds });
-      const n = r.hits.find((h) => h.holdsHit) ?? (r.physicsHit ? void 0 : r.hits[0]);
-      if (n) return { node: n, physicsHit: r.physicsHit };
+      const r = await world2.pick({ from: toPoint(origin), dir: toPoint(dir), max: 80, limit: 8, kinds: MeshNodeKinds });
+      let n = r.hits.find((h) => h.holdsHit);
+      let physicsHit = r.physicsHit;
+      if (!n) {
+        const { hit } = await raycast(origin, add(origin, mul(dir, 80)));
+        const d = hit ? Math.hypot(...sub(hit, origin)) : void 0;
+        if (hit && (!physicsHit || d < physicsHit.distance - 0.05)) {
+          const holder = r.hits.find((h) => boxHolds(hit, h.bounds, h.position, h.orientation, h.scale));
+          physicsHit = { point: hit, distance: d };
+          if (holder) n = { ...holder, holdsHit: true };
+        }
+      }
+      n ??= physicsHit ? void 0 : r.hits[0];
+      if (n) return { node: n, physicsHit };
     } catch (err) {
       console.log(`Mesh pick: ${err.message}`);
     }

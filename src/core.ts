@@ -31,7 +31,7 @@ export { NpcList, PersonBounds, isRecord, npcEntry } from "./npcs";
 export { ToolApiVersion, ToolRole, ToolWidths, findTools, readTool } from "./tools";
 export { AssetIndex, IndexPrefixes, exploreSegments, kindOf } from "./index";
 export { Scene, forReader, quaternionToYaw, readSceneFile, yawToQuaternion } from "./scene";
-export { DefaultKinds, DoorClasses, KindLabels, doorActions, doorAfter, doorStateText, doorUnderRay, editCounts, editFor, editId, editsDiff, idText, kindOfClass, questWarnings, rayToSegment, readableEdits, registryId, sameId } from "./worldedits";
+export { DefaultKinds, DoorClasses, KindLabels, boxHolds, doorActions, doorAfter, doorStateText, doorUnderRay, editCounts, editFor, editId, editsDiff, idText, kindOfClass, questWarnings, rayToSegment, readableEdits, registryId, sameId } from "./worldedits";
 export { cleanFolderName, fileNameOf, folderIn, freeFileName, libraryConfigFile, readLibraryRoot, refOf, scanShelf, slugOf, whereIs, writeLibraryRoot } from "./scenes";
 export { ModSources, NeedsNewerBridge, modArchives, sceneNeeds } from "./sources";
 export { PropEnding, checkModelPath, deskDir, filePlaces, listFolder, propName, propSlug, scanModels } from "./models";
