@@ -500,7 +500,7 @@ The logs: all five game starts of the test loaded; ArchiveXL merged the block in
 | S7 | Same look and shadows; `l_red` is red | Proven, but for how far each is seen, which the notes do not say |
 | S8 | All stood where they were after 150 m away and back. Nothing could be knocked, so a knocked object's return does not arise for `b` or `c`. Drawn before solid: not noted | Mostly proven |
 | S9 | Crates gone with the mod off, and the save loads | Proven for removal; nothing was knocked |
-| S10 | Bullets and melee stop at solid crates, and cars too. People: for the city test, B4-1 | Part proven |
+| S10 | Bullets and melee stop at solid crates, and cars too. People: for the city test, B4-1. **People walk through** (2026-11-25, the owner, a bake made with 0.14.0: a passing NPC walked through one side of a solid crate V could stand on). Whether it was a crowd walker on a lane or an AI person on the navigation mesh is not known | Proven: not for people |
 | S11 | No crash, no errors | Proven |
 
 **What it decides.** The second row of "what the answers decide" did not quite come: boxes did nothing, so it is the third. **Solid means an instanced destructible mesh node, Kinematic, `isDestructible` 0, no impulse**: the mesh's real shape, as `f_big` shows with its open top; Kinematic rather than Static because the game's own nodes use it and V got onto it more easily. A mesh with no collision data cannot be made solid this way, so the panel must know which those are and say so. The way to make one solid is an entity with a collider, as `crate_red.ent` in round 2.
