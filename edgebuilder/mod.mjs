@@ -1353,7 +1353,7 @@ import * as path7 from "node:path";
 
 // src/worldedits.ts
 var DoorClasses = /* @__PURE__ */ new Set(["Door", "BunkerDoor", "MovableWallScreen", "Window"]);
-var MeshNodeKinds = ["worldMeshNode", "worldInstancedMeshNode", "worldCookedStaticMeshNode", "worldStaticMeshNode", "worldBendedMeshNode", "worldFoliageNode"];
+var MeshNodeKinds = ["worldMeshNode", "worldInstancedMeshNode", "worldInstancedDestructibleMeshNode", "worldCookedStaticMeshNode", "worldStaticMeshNode", "worldBendedMeshNode", "worldFoliageNode"];
 function kindOfClass(type) {
   if (type === "FakeDoor") return "fakeDoor";
   if (DoorClasses.has(type) || /door/i.test(type)) return "door";

@@ -1773,13 +1773,18 @@ function renderLeft(): void {
   const worldOpen = previewWorld && !!state?.worldObjects.picked;
   const besideTiles = tileDetail && previewsOpen && !explorerOpen;
   const besideObjects = objectPreview && drawerOpen && !explorerOpen;
-  $("exPreview").classList.toggle("open", worldOpen || ((explorerOpen || previewAlone || besideTiles || besideObjects) && !!exPicked));
-  $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles && !besideObjects);
-  $("exPreview").classList.toggle("besidePreviews", besideTiles);
-  $("exPreview").classList.toggle("besideObjects", besideObjects);
-  ($("exPreview") as HTMLElement).style.right = explorerOpen && !previewWorld ? `${656 + exWidth + 8}px` : "";
+  const exOpen = worldOpen || ((explorerOpen || previewAlone || besideTiles || besideObjects) && !!exPicked);
+  $("exPreview").classList.toggle("open", exOpen);
+  // Where it stands changes only while it is open: closing, it fades out where it was (a pick cleared by a click on
+  // nothing took the world place away as it faded, and it jumped to the window's side).
+  if (exOpen) {
+    $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles && !besideObjects);
+    $("exPreview").classList.toggle("besidePreviews", besideTiles);
+    $("exPreview").classList.toggle("besideObjects", besideObjects);
+    ($("exPreview") as HTMLElement).style.right = explorerOpen && !previewWorld ? `${656 + exWidth + 8}px` : "";
+    $("exPreview").classList.toggle("world", previewWorld);
+  }
   for (const t of tiles.values()) t.el.classList.toggle("picked", besideTiles && t.el.dataset.path === exPicked?.path);
-  $("exPreview").classList.toggle("world", previewWorld);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
   $("fileDrawer").classList.toggle("open", filesOpen);
   $("toolDrawer").classList.toggle("open", toolOpen);

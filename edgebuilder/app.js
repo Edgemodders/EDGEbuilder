@@ -3123,13 +3123,16 @@ function renderLeft() {
   const worldOpen = previewWorld && !!state?.worldObjects.picked;
   const besideTiles = tileDetail && previewsOpen && !explorerOpen;
   const besideObjects = objectPreview && drawerOpen && !explorerOpen;
-  $("exPreview").classList.toggle("open", worldOpen || (explorerOpen || previewAlone || besideTiles || besideObjects) && !!exPicked);
-  $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles && !besideObjects);
-  $("exPreview").classList.toggle("besidePreviews", besideTiles);
-  $("exPreview").classList.toggle("besideObjects", besideObjects);
-  $("exPreview").style.right = explorerOpen && !previewWorld ? `${656 + exWidth + 8}px` : "";
+  const exOpen2 = worldOpen || (explorerOpen || previewAlone || besideTiles || besideObjects) && !!exPicked;
+  $("exPreview").classList.toggle("open", exOpen2);
+  if (exOpen2) {
+    $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles && !besideObjects);
+    $("exPreview").classList.toggle("besidePreviews", besideTiles);
+    $("exPreview").classList.toggle("besideObjects", besideObjects);
+    $("exPreview").style.right = explorerOpen && !previewWorld ? `${656 + exWidth + 8}px` : "";
+    $("exPreview").classList.toggle("world", previewWorld);
+  }
   for (const t of tiles.values()) t.el.classList.toggle("picked", besideTiles && t.el.dataset.path === exPicked?.path);
-  $("exPreview").classList.toggle("world", previewWorld);
   $("explorerOpen").setAttribute("aria-pressed", String(explorerOpen));
   $("fileDrawer").classList.toggle("open", filesOpen);
   $("toolDrawer").classList.toggle("open", toolOpen);

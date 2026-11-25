@@ -9,8 +9,11 @@ import type { DoorState, WorldEdit, WorldKind, WorldNodeRef } from "./protocol";
 /** The game classes of interactive doors (shutter windows among them: they are `Door`s), from D0. */
 export const DoorClasses = new Set(["Door", "BunkerDoor", "MovableWallScreen", "Window"]);
 
-/** The node classes a mesh pick looks at: static meshes, as REDnode's registry knows them. */
-export const MeshNodeKinds = ["worldMeshNode", "worldInstancedMeshNode", "worldCookedStaticMeshNode", "worldStaticMeshNode", "worldBendedMeshNode", "worldFoliageNode"];
+/**
+ * The node classes a mesh pick looks at, as REDnode's registry names them (it matches the class exactly): static meshes,
+ * and instanced destructibles, which is what a bake writes for a solid object and what the game uses for many props.
+ */
+export const MeshNodeKinds = ["worldMeshNode", "worldInstancedMeshNode", "worldInstancedDestructibleMeshNode", "worldCookedStaticMeshNode", "worldStaticMeshNode", "worldBendedMeshNode", "worldFoliageNode"];
 
 /** Which kind of the picker's list a game class is, or none. */
 export function kindOfClass(type: string): WorldKind | undefined {
