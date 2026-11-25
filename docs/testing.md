@@ -36,7 +36,7 @@ Last updated 2026-10-30.
 | [D2 Open, close, lock](#d2-open-close-lock-0130) | In the game | D2 | 2026-11-23 (0.13.0, 0.13.1) | Pass (step 12 as R1 to R5 on 0.13.1) |
 | [S1 Sectors](#s1-sectors-0130) | In the game | S1 | 2026-11-23 (0.13.0 to 0.13.2) | Pass |
 | [Project picker](#project-picker-0130) | In the game | Project picker | 2026-11-23 (0.13.1) | Pass; 0.13.2 released |
-| [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24 | Partly run: steps 1 to 35 passed on the morning's build; 36 to 51, and 6, 9, 11 and 33 again, to run on the newest (51 steps, P1 to P7) |
+| [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24 | Partly run: steps 1 to 35 passed on the morning's build; 36 to 52, and 6, 9, 11 and 33 again, to run on the newest (52 steps, P1 to P7) |
 | [T0 Tools probe](#t0-tools-probe) | In the game | T0 | 2026-11-24 | Not run (checked in REDnode's host; 10 steps) |
 
 ## Automated
@@ -1155,6 +1155,7 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | 49 | Rest the mouse on an object and fly around it (hold the right button: the tooltip goes while looking), close and far, and near the screen's edges | Back on it, the tooltip is to its right, else its left, else above or below; over the sky or the scene's own objects there is none | P6 |
 | 50 | Switch Pick under the cursor off with Show tooltip on; then Show tooltip off; then Edit off | Pick under the cursor off: the tooltip still follows the mouse (for the kinds switched on), with no hover outline. Show tooltip off: none. Edit off: none; the switches are kept | P6 |
 | 51 | Pick under the cursor on: click objects in the world, near and far, some where the pick takes a moment | A yellow disc turns at the top centre of the screen with "Picking..." until the object is picked (or nothing is found); a quick pick shows nothing, so there is no flicker | P6 |
+| 52 | Pick under the cursor and Show tooltip on: hover over and click a plain mesh you can walk through (a bench), a solid one (a wall, a crate), a mesh from a bake with Solid on, and a door | Picked in the world (World tab) and the tooltip each have **Solid: Yes** or **No** (a door: Yes while closed, No when open) and, for a mesh, **Collision data: Yes** or **No** ("reading..." for a moment in the panel the first time a mesh is read); the left drawer says the same in its Solid and Collision data rows. The bench from the G0 look: Solid No, Collision data No | P6 |
 
 | # | Question |
 |---|---|
