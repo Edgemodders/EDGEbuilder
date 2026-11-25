@@ -2722,6 +2722,18 @@ async function raycast(start, end) {
   }
   return { hit, tried };
 }
+var BringReach = 300;
+async function bringV() {
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  if (!editorCam) return say("Bring V needs the editor camera: switch Edit on (Settings: Editor camera) and fly where V should stand.", "warn");
+  const b = basisFromMatrix(await editorCam.component.GetLocalToWorld());
+  const { hit } = await raycast(b.pos, add(b.pos, [0, 0, -BringReach]));
+  if (!hit) return say(`No floor under the camera within ${BringReach} m, so V stays where V is. The ground is solid only near the camera: fly lower and try again.`, "warn");
+  const yaw = Math.atan2(-b.fwd[0], b.fwd[1]) * 180 / Math.PI;
+  await game.player.teleport({ x: hit[0], y: hit[1], z: hit[2] + 0.05, yaw });
+  console.log(`Bring V: to ${hit.map((v2) => v2.toFixed(2)).join(", ")}, ${(b.pos[2] - hit[2]).toFixed(1)} m below the camera`);
+  say(`V is on the floor under the camera, ${(b.pos[2] - hit[2]).toFixed(1)} m below it. Switch Edit off to play V there.`, "ok");
+}
 async function dropToFloor(ids) {
   const objects = ids.map((id) => scene.get(id)).filter((o) => !!o);
   if (!objects.length) return;
@@ -4776,6 +4788,9 @@ channel.on((m) => {
         break;
       case "floor":
         await inTurn("Drop to floor", () => dropToFloor(m.ids));
+        break;
+      case "bringV":
+        await inTurn("Bring V", () => bringV());
         break;
       case "solid":
         await inTurn("Solid", () => setSolid(m.ids, m.on));

@@ -1041,6 +1041,27 @@ async function raycast(start: V3, end: V3): Promise<{ hit?: V3; tried: string[] 
   return { hit, tried };
 }
 
+/** How far below the editor camera Bring V looks for a floor. */
+const BringReach = 300;
+
+/**
+ * Bring V: V stands on the first floor under the editor camera, facing the way it looks, so the author can try
+ * what they placed as V. Edit stays on (switched off, V's own camera comes back where V now is). Not an undo
+ * step: it changes no scene.
+ */
+async function bringV(): Promise<void> {
+  if (state.world !== "ready") return say(worldBlocker(), "warn");
+  if (!editorCam) return say("Bring V needs the editor camera: switch Edit on (Settings: Editor camera) and fly where V should stand.", "warn");
+  const b = basisFromMatrix((await editorCam.component.GetLocalToWorld()) as GameMatrix);
+  const { hit } = await raycast(b.pos, add(b.pos, [0, 0, -BringReach]));
+  if (!hit) return say(`No floor under the camera within ${BringReach} m, so V stays where V is. The ground is solid only near the camera: fly lower and try again.`, "warn");
+  // The game's yaw turns +Y towards -X; V faces the camera's heading.
+  const yaw = (Math.atan2(-b.fwd[0], b.fwd[1]) * 180) / Math.PI;
+  await game.player.teleport({ x: hit[0], y: hit[1], z: hit[2] + 0.05, yaw });
+  console.log(`Bring V: to ${hit.map((v) => v.toFixed(2)).join(", ")}, ${(b.pos[2] - hit[2]).toFixed(1)} m below the camera`);
+  say(`V is on the floor under the camera, ${(b.pos[2] - hit[2]).toFixed(1)} m below it. Switch Edit off to play V there.`, "ok");
+}
+
 /** Puts each object's lowest point on whatever is below it: one undo step. */
 async function dropToFloor(ids: string[]): Promise<void> {
   const objects = ids.map((id) => scene.get(id)).filter((o): o is SceneObject => !!o);
@@ -3525,6 +3546,9 @@ channel.on<PageMessage>((m) => {
         break;
       case "floor":
         await inTurn("Drop to floor", () => dropToFloor(m.ids));
+        break;
+      case "bringV":
+        await inTurn("Bring V", () => bringV());
         break;
       case "solid":
         await inTurn("Solid", () => setSolid(m.ids, m.on));

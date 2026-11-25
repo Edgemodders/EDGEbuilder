@@ -1758,6 +1758,7 @@ ${looked.path}`;
     $("dropClick").setAttribute("disabled", "");
   }
   $("objects").innerHTML = sceneRows(s);
+  requestAnimationFrame(fitObjects);
   const groupCount = s.scene.groups.length;
   $("sceneCount").textContent = `${holds(s.scene.objects.length, editCount(s).removals, false, editCount(s).doors)}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
   $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
@@ -1778,6 +1779,7 @@ ${looked.path}`;
   $("redo").toggleAttribute("disabled", !s.history.redo);
   $("undo").title = `Ctrl+Z (${s.history.undo} step${s.history.undo === 1 ? "" : "s"})`;
   $("redo").title = `Ctrl+Y (${s.history.redo} step${s.history.redo === 1 ? "" : "s"})`;
+  $("bringV").toggleAttribute("disabled", s.world !== "ready");
   viewport.setScene(s.scene.objects, s.selected);
   renderDrawer(s);
   renderWorld(s);
@@ -2054,23 +2056,43 @@ for (const panel of document.querySelectorAll(".pinnable")) {
   pin.addEventListener("click", () => set(!panel.classList.contains("pinned")));
 }
 var listCtrl = false;
+var lastSceneRow = { value: "", at: 0 };
+var flewAt = 0;
 $("objects").addEventListener(
   "click",
   (e) => {
     listCtrl = held(e).ctrl;
     const fold = e.target.closest?.(".fold");
-    if (!fold) return;
-    e.stopPropagation();
-    const g = fold.dataset.group;
-    if (closed.has(g)) closed.delete(g);
-    else closed.add(g);
-    if (state) render(state);
+    if (fold) {
+      e.stopPropagation();
+      const g = fold.dataset.group;
+      if (closed.has(g)) closed.delete(g);
+      else closed.add(g);
+      if (state) render(state);
+      return;
+    }
+    const value = e.target.closest?.("rn-item")?.getAttribute("value") ?? "";
+    if (!value.startsWith("o:") || !state) return;
+    const twice = value === lastSceneRow.value && performance.now() - lastSceneRow.at < 500;
+    lastSceneRow = twice ? { value: "", at: 0 } : { value, at: performance.now() };
+    const o = state.scene.objects.find((x) => x.id === value.slice(2));
+    if (!o) return;
+    if (twice) flewAt = performance.now();
+    setTimeout(() => twice ? state && goToObject(state, o.id) : previewInline(o), 0);
   },
   true
 );
+function previewInline(o) {
+  if (!o.resource && !o.record) return;
+  if (objectPreview && objectLike?.id === o.id) return;
+  if (!drawerOpen) openLeft("none");
+  previewObject(o);
+  if (state) render(state);
+}
 $("objects").addEventListener("keydown", () => listCtrl = false, true);
 $("objects").addEventListener("select", (e) => {
   if (!state) return;
+  if (performance.now() - flewAt < 100) return;
   const value = e.detail.value;
   const { objects, groups } = state.scene;
   const ids = value.startsWith("g:") ? membersOf(value.slice(2), objects, groups).map((o) => o.id) : [value.slice(2)];
@@ -2442,6 +2464,10 @@ $("mainTabs").addEventListener("change", (e) => {
     post({ type: "library.refresh" });
     if (libraryOut && !drawerOpen && !previewsOpen && !state?.sectors.open) openLeft("library");
   } else leaveSaveAs();
+  if (label === "Scene") {
+    if (objectsOut && !anyLeftOpen()) openObjectsDrawer();
+    requestAnimationFrame(fitObjects);
+  }
   if (label === "Bake") post({ type: "bake.refresh" });
   if (label === "World") post({ type: "world.refresh" });
 });
@@ -2621,7 +2647,9 @@ var lastDrawerRow = { id: "", at: 0 };
 var pendingGo;
 var drawerHtml = "";
 var TrashIcon = `<svg viewBox="0 0 16 16"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.8 9.5h6.4L12 4M6.7 6.5v4.5M9.3 6.5v4.5"/></svg>`;
+var drawerScene = "picked";
 function drawerFile(s) {
+  if (drawerScene === "open") return s.scene.file ?? "";
   const sc = picked?.kind === "scene" ? findScene(s, picked.file) : void 0;
   return sc && !sc.error ? sc.file : s.scene.file ?? "";
 }
@@ -2632,6 +2660,7 @@ function renderDrawer(s) {
     goToObject(s, id);
   }
   $("drawer").classList.toggle("open", drawerOpen);
+  $("drawerIn").hidden = !(objectsOut && drawerScene === "open");
   if (!drawerOpen) return;
   const file = drawerFile(s);
   const isOpen = sameFile(file, s.scene.file ?? "");
@@ -2674,13 +2703,16 @@ function goToObject(s, id) {
   post({ type: "scene.goTo", id });
 }
 $("pickedObjects").addEventListener("click", () => {
-  openLeft(drawerOpen ? "none" : "objects");
+  const same = drawerOpen && drawerScene === "picked";
+  drawerScene = "picked";
+  openLeft(same ? "none" : "objects");
   peekAsked = "";
   confirming = void 0;
   if (state) render(state);
 });
 $("drawerClose").addEventListener("click", () => {
   drawerOpen = false;
+  objectPreview = false;
   if (state) render(state);
 });
 $("drawerList").addEventListener(
@@ -2971,7 +3003,7 @@ function renderSectorDrawer(s) {
   }
   if (v2.path !== lastSector) {
     lastSector = v2.path;
-    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = previewWorld = filesOpen = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = previewWorld = filesOpen = objectPreview = false;
     renderLeft();
     $("sectorFilter").value = v2.filter;
   }
@@ -3123,7 +3155,8 @@ function renderLeft() {
   const worldOpen = previewWorld && !!state?.worldObjects.picked;
   const besideTiles = tileDetail && previewsOpen && !explorerOpen;
   const besideObjects = objectPreview && drawerOpen && !explorerOpen;
-  const exOpen2 = worldOpen || (explorerOpen || previewAlone || besideTiles || besideObjects) && !!exPicked;
+  const objectAlone = objectPreview && !drawerOpen && !explorerOpen;
+  const exOpen2 = worldOpen || (explorerOpen || previewAlone || besideTiles || besideObjects || objectAlone) && !!exPicked;
   $("exPreview").classList.toggle("open", exOpen2);
   if (exOpen2) {
     $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles && !besideObjects);
@@ -3137,7 +3170,7 @@ function renderLeft() {
   $("fileDrawer").classList.toggle("open", filesOpen);
   $("toolDrawer").classList.toggle("open", toolOpen);
   $("importBrowse").setAttribute("aria-pressed", String(filesOpen));
-  if (!worldOpen && (!explorerOpen && !previewAlone && !besideTiles && !besideObjects || !exPicked)) stopExView();
+  if (!worldOpen && (!explorerOpen && !previewAlone && !besideTiles && !besideObjects && !objectAlone || !exPicked)) stopExView();
 }
 var libraryOut = false;
 try {
@@ -3165,6 +3198,84 @@ function setLibraryOut(on) {
   openLeft(on ? "library" : drawerOpen ? "objects" : previewsOpen ? "previews" : "none");
 }
 $("libraryOut").addEventListener("click", () => setLibraryOut(!libraryOut));
+var objectsOut = false;
+try {
+  objectsOut = localStorage.getItem("edgebuilder.objectsOut") === "1";
+} catch {
+}
+function anyLeftOpen() {
+  return drawerOpen || libraryDrawerOpen || previewsOpen || explorerOpen || filesOpen || toolOpen || previewAlone || previewWorld || objectPreview || !!state?.sectors.open;
+}
+function openObjectsDrawer() {
+  drawerScene = "open";
+  openLeft("objects");
+}
+function placeObjects() {
+  $("objects").hidden = objectsOut;
+  $("objectsLabel").hidden = objectsOut;
+  $("objectsOpenRow").hidden = !objectsOut;
+  const icon = $("objectsOut");
+  icon.setAttribute("aria-pressed", String(objectsOut));
+  icon.title = objectsOut ? "Back into the window: the objects here again, and no drawer" : "Out of the window: the objects in a drawer to the left, with more room";
+  $("drawerIn").hidden = !(objectsOut && drawerScene === "open");
+  requestAnimationFrame(fitObjects);
+}
+function setObjectsOut(on) {
+  objectsOut = on;
+  try {
+    localStorage.setItem("edgebuilder.objectsOut", on ? "1" : "0");
+  } catch {
+  }
+  placeObjects();
+  if (on) openObjectsDrawer();
+  else if (drawerOpen && drawerScene === "open") openLeft("none");
+}
+$("objectsOut").addEventListener("click", () => setObjectsOut(!objectsOut));
+$("drawerIn").addEventListener("click", () => setObjectsOut(false));
+$("objectsOpen").addEventListener("click", () => drawerOpen && drawerScene === "open" ? openLeft("none") : openObjectsDrawer());
+$("bringV").addEventListener("click", () => post({ type: "bringV" }));
+var MinimizeIcon = `<svg viewBox="0 0 16 16"><path d="M3.5 12.5h9"/></svg>`;
+var RestoreIcon = `<svg viewBox="0 0 16 16"><path d="M3.5 3.5h9v9h-9z"/></svg>`;
+for (const panel of document.querySelectorAll(".collapsible")) {
+  const mini = panel.querySelector(".mini");
+  if (!mini) continue;
+  const key = `edgebuilder.collapsed.${panel.id}`;
+  const set = (on2) => {
+    panel.classList.toggle("collapsed", on2);
+    mini.setAttribute("aria-pressed", String(on2));
+    mini.innerHTML = on2 ? RestoreIcon : MinimizeIcon;
+    mini.title = on2 ? "Show it all again" : "Minimize: only this title row, at the bottom of the tab, and the list above gets the room";
+    try {
+      localStorage.setItem(key, on2 ? "1" : "0");
+    } catch {
+    }
+    requestAnimationFrame(fitObjects);
+  };
+  let on = false;
+  try {
+    on = localStorage.getItem(key) === "1";
+  } catch {
+  }
+  set(on);
+  mini.addEventListener("click", () => set(!panel.classList.contains("collapsed")));
+}
+function fitObjects() {
+  const list = $("objects");
+  const panel = $("selectedPanel");
+  const tab = list.closest("rn-tab");
+  if (!panel.classList.contains("collapsed") || list.hidden) {
+    if (list.style.getPropertyValue("--rn-list-height")) list.style.removeProperty("--rn-list-height");
+    return;
+  }
+  if (!tab?.hasAttribute("active")) return;
+  const box = list.shadowRoot?.querySelector(".scroll") ?? list;
+  const lb = list.getBoundingClientRect();
+  const gap = Math.max(0, panel.getBoundingClientRect().top - lb.bottom - 12);
+  const spare = tab.clientHeight - (tab.scrollHeight - gap);
+  const h = Math.max(200, Math.floor(box.getBoundingClientRect().height + spare));
+  if (list.style.getPropertyValue("--rn-list-height") !== `${h}px`) list.style.setProperty("--rn-list-height", `${h}px`);
+}
+window.addEventListener("resize", () => requestAnimationFrame(fitObjects));
 $("libraryDrawerIn").addEventListener("click", () => setLibraryOut(false));
 $("libraryDrawerClose").addEventListener("click", () => openLeft("none"));
 $("libraryOpen").addEventListener("click", () => openLeft(libraryDrawerOpen ? "none" : "library"));
@@ -3189,6 +3300,7 @@ function drawerWidths(drawer, shrink, grow, widths, key, changed) {
   $(shrink).addEventListener("click", () => size(step - 1));
   size(step);
 }
+placeObjects();
 drawerWidths("libraryDrawer", "libraryShrink", "libraryGrow", [420, 540, 680, 840], "edgebuilder.libraryWidth");
 drawerWidths("explorerDrawer", "exShrink", "exGrow", [480, 600, 720, 840], "edgebuilder.explorerWidth", (w) => {
   exWidth = w;
@@ -3627,7 +3739,7 @@ function qRotateV(q, v2) {
   return [v2[0] + w * tx + (y * tz - z * ty), v2[1] + w * ty + (z * tx - x * tz), v2[2] + w * tz + (x * ty - y * tx)];
 }
 function showWorldPreview() {
-  drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = filesOpen = false;
+  drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = filesOpen = objectPreview = false;
   previewWorld = true;
   if (state?.sectors.open) post({ type: "sectors.close" });
 }
@@ -3932,7 +4044,7 @@ async function showExView(path) {
 var kindOfPath = (p) => /\.(mesh|ent)$/i.test(p);
 function renderExPreview(s) {
   if (previewWorld) return renderWorldPreview(s);
-  const copying = objectPreview && drawerOpen && !explorerOpen;
+  const copying = objectPreview && !explorerOpen;
   $("exDrop").textContent = copying ? "Drop a copy" : "Drop";
   $("exDrop").removeAttribute("disabled");
   $("exDrop").title = copying ? "A copy of this object, with its look, scale, Solid and Seen from: the drawers close and Drop at click starts with its outline" : "Closes the drawers and starts Drop at click: the object's outline follows the cursor, a click puts it there, Esc cancels";

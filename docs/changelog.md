@@ -25,6 +25,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - The Explorer's two arrows make it wider (in steps, up to 840 px) or narrower again, remembered; its Preview drawer moves with it.
 - With the Explorer open, a search result shown in the Preview drawer is also found in the Explorer: its folders open down to it, its row is picked and scrolled to, and the Explorer's filter then looks in its folder.
 - Import: the folder button beside the path box on the Library tab opens a wide drawer to find a GLB on your disk: the Library, the project's `source\raw`, EDGEfab's Desk, Desktop, Documents, Downloads and every drive on the left; the folder's folders, GLB files (with size and date) and Desk props on the right, with Up, a typed path and a filter. **Use this file** or a double-click puts it in the box and picks it for Import. The last folder is remembered.
+- The Scene tab's object list has an **Objects** title and, at its right, the out-of-window icon: the list moves into the Objects drawer to the left (on the open scene), with an Objects button in its place. The drawer's own icon, or the tab's, brings it back. EDGEbuilder remembers the choice.
+- The Scene tab's list: one click on an object's row selects it and shows its preview to the left of the window (3D, its settings, Drop a copy); two quick clicks fly the camera to it and select it, as in the Objects drawer.
+- Selected on the Scene tab has a minimize button beside its pin: minimized, only its title row shows, at the bottom of the tab, and the object list grows into the room. Remembered.
+- **Bring V** on the Scene tab: with the editor camera, V stands on the floor under the camera, facing the way it looks, so you can try what you placed as V. Edit stays on; switch it off to play V there.
 - The About tab is a one-page quickstart: the pills, a first scene in five steps, finding, dropping, the camera, positioning and arranging keys, scenes and the Library, Import, the game's own objects, baking and settings.
 
 **Changed**

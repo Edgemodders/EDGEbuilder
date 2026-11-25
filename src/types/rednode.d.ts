@@ -35,7 +35,11 @@ declare module "rednode" {
     state(): Promise<GameState>;
     onState(handler: (state: GameState) => void): () => void;
     on<T = GameEvent>(name: string, handler: (event: T) => void | Promise<void>): () => void;
-    player: { position(): Promise<{ x: number; y: number; z: number }> };
+    player: {
+      position(): Promise<{ x: number; y: number; z: number }>;
+      /** Moves V: `yaw` in degrees, the game's way (0 faces +Y, turning +Y towards -X). REDnode 0.32.0 and later. */
+      teleport(to: { x: number; y: number; z: number; yaw?: number }): Promise<void>;
+    };
     audio: { play(name: string): Promise<void> };
   };
 

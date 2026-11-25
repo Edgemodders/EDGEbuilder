@@ -506,6 +506,8 @@ export type PageMessage =
   | { type: "seenFrom"; ids: string[]; metres: number | null }
   /** Drop the objects onto whatever is below each. */
   | { type: "floor"; ids: string[] }
+  /** Bring V: V on the floor under the editor camera, facing where it looks. */
+  | { type: "bringV" }
   /** Group the selected objects; ungroup them; rename a group. */
   | { type: "group"; ids: string[] }
   | { type: "ungroup"; ids: string[] }

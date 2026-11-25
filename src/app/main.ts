@@ -158,6 +158,7 @@ function render(s: Snapshot): void {
 
   // Scene.
   $("objects").innerHTML = sceneRows(s);
+  requestAnimationFrame(fitObjects);
   const groupCount = s.scene.groups.length;
   $("sceneCount").textContent = `${holds(s.scene.objects.length, editCount(s).removals, false, editCount(s).doors)}${groupCount ? `, ${groupCount} group${groupCount === 1 ? "" : "s"}` : ""}${s.selected.length > 1 ? `; ${s.selected.length} selected` : ""}`;
   $("needs").textContent = s.scene.needs.length ? `This scene needs: ${s.scene.needs.join(", ")}` : "";
@@ -178,6 +179,7 @@ function render(s: Snapshot): void {
   $("redo").toggleAttribute("disabled", !s.history.redo);
   $("undo").title = `Ctrl+Z (${s.history.undo} step${s.history.undo === 1 ? "" : "s"})`;
   $("redo").title = `Ctrl+Y (${s.history.redo} step${s.history.redo === 1 ? "" : "s"})`;
+  $("bringV").toggleAttribute("disabled", s.world !== "ready");
   viewport.setScene(s.scene.objects, s.selected);
   renderDrawer(s);
   renderWorld(s);
@@ -507,24 +509,52 @@ for (const panel of document.querySelectorAll<HTMLElement>(".pinnable")) {
 }
 // The Scene list: a group's arrow opens or closes it; a group's row selects the group, an object's
 // row that object; Ctrl adds to the selection or takes out.
+// One click on an object's row also shows its preview to the left of the window (with Drop a copy); two clicks
+// fly the camera to it and select it, as in the Objects drawer. Not the browser's dblclick: the select between
+// the clicks redraws the rows.
 let listCtrl = false;
+let lastSceneRow = { value: "", at: 0 };
+let flewAt = 0;
 $("objects").addEventListener(
   "click",
   (e) => {
     listCtrl = held(e).ctrl;
     const fold = (e.target as HTMLElement).closest?.(".fold") as HTMLElement | null;
-    if (!fold) return;
-    e.stopPropagation();
-    const g = fold.dataset.group!;
-    if (closed.has(g)) closed.delete(g);
-    else closed.add(g);
-    if (state) render(state);
+    if (fold) {
+      e.stopPropagation();
+      const g = fold.dataset.group!;
+      if (closed.has(g)) closed.delete(g);
+      else closed.add(g);
+      if (state) render(state);
+      return;
+    }
+    const value = (e.target as HTMLElement).closest?.("rn-item")?.getAttribute("value") ?? "";
+    if (!value.startsWith("o:") || !state) return;
+    const twice = value === lastSceneRow.value && performance.now() - lastSceneRow.at < 500;
+    lastSceneRow = twice ? { value: "", at: 0 } : { value, at: performance.now() };
+    const o = state.scene.objects.find((x) => x.id === value.slice(2));
+    if (!o) return;
+    if (twice) flewAt = performance.now();
+    // After this click: a render now would redraw the rows under it, and the list would never hear it (no select).
+    setTimeout(() => (twice ? state && goToObject(state, o.id) : previewInline(o)), 0);
   },
   true,
 );
+
+/** A row of the Scene tab's list: the object's preview to the left of the window, or beside the Objects drawer when that is open. */
+function previewInline(o: SceneObject): void {
+  if (!o.resource && !o.record) return;
+  if (objectPreview && objectLike?.id === o.id) return;
+  // One left drawer at a time: the preview takes the place of the Library, the Explorer and the rest.
+  if (!drawerOpen) openLeft("none");
+  previewObject(o);
+  if (state) render(state);
+}
 $("objects").addEventListener("keydown", () => (listCtrl = false), true);
 $("objects").addEventListener("select", (e) => {
   if (!state) return;
+  // The second of two clicks flew there and selected the object: a Ctrl here would take it out again.
+  if (performance.now() - flewAt < 100) return;
   const value = (e as CustomEvent<{ value: string }>).detail.value;
   const { objects, groups } = state.scene;
   const ids = value.startsWith("g:") ? membersOf(value.slice(2), objects, groups).map((o) => o.id) : [value.slice(2)];
@@ -968,6 +998,11 @@ $("mainTabs").addEventListener("change", (e) => {
     if (libraryOut && !drawerOpen && !previewsOpen && !state?.sectors.open) openLeft("library");
   }
   else leaveSaveAs();
+  if (label === "Scene") {
+    // Out of the window, the objects come back into view with their tab, unless another drawer is open.
+    if (objectsOut && !anyLeftOpen()) openObjectsDrawer();
+    requestAnimationFrame(fitObjects);
+  }
   if (label === "Bake") post({ type: "bake.refresh" });
   if (label === "World") post({ type: "world.refresh" });
 });
@@ -1162,7 +1197,11 @@ let pendingGo: { file: string; id: string } | undefined;
 let drawerHtml = "";
 const TrashIcon = `<svg viewBox="0 0 16 16"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.8 9.5h6.4L12 4M6.7 6.5v4.5M9.3 6.5v4.5"/></svg>`;
 
+/** What the Objects drawer lists: the Library's picked scene (its Objects button), or the open one (the Scene tab's). */
+let drawerScene: "picked" | "open" = "picked";
+
 function drawerFile(s: Snapshot): string {
+  if (drawerScene === "open") return s.scene.file ?? "";
   const sc = picked?.kind === "scene" ? findScene(s, picked.file) : undefined;
   return sc && !sc.error ? sc.file : (s.scene.file ?? "");
 }
@@ -1174,6 +1213,7 @@ function renderDrawer(s: Snapshot): void {
     goToObject(s, id);
   }
   $("drawer").classList.toggle("open", drawerOpen);
+  $("drawerIn").hidden = !(objectsOut && drawerScene === "open");
   if (!drawerOpen) return;
   const file = drawerFile(s);
   const isOpen = sameFile(file, s.scene.file ?? "");
@@ -1223,13 +1263,16 @@ function goToObject(s: Snapshot, id: string): void {
 }
 
 $("pickedObjects").addEventListener("click", () => {
-  openLeft(drawerOpen ? "none" : "objects");
+  const same = drawerOpen && drawerScene === "picked";
+  drawerScene = "picked";
+  openLeft(same ? "none" : "objects");
   peekAsked = "";
   confirming = undefined;
   if (state) render(state);
 });
 $("drawerClose").addEventListener("click", () => {
   drawerOpen = false;
+  objectPreview = false;
   if (state) render(state);
 });
 $("drawerList").addEventListener(
@@ -1584,7 +1627,7 @@ function renderSectorDrawer(s: Snapshot): void {
   }
   if (v.path !== lastSector) {
     lastSector = v.path;
-    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = previewWorld = filesOpen = false;
+    drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = previewWorld = filesOpen = objectPreview = false;
     renderLeft();
     ($("sectorFilter") as HTMLInputElement).value = v.filter;
   }
@@ -1773,7 +1816,9 @@ function renderLeft(): void {
   const worldOpen = previewWorld && !!state?.worldObjects.picked;
   const besideTiles = tileDetail && previewsOpen && !explorerOpen;
   const besideObjects = objectPreview && drawerOpen && !explorerOpen;
-  const exOpen = worldOpen || ((explorerOpen || previewAlone || besideTiles || besideObjects) && !!exPicked);
+  // A row of the Scene tab's list clicked: its preview alone, to the left of the window.
+  const objectAlone = objectPreview && !drawerOpen && !explorerOpen;
+  const exOpen = worldOpen || ((explorerOpen || previewAlone || besideTiles || besideObjects || objectAlone) && !!exPicked);
   $("exPreview").classList.toggle("open", exOpen);
   // Where it stands changes only while it is open: closing, it fades out where it was (a pick cleared by a click on
   // nothing took the world place away as it faded, and it jumped to the window's side).
@@ -1789,7 +1834,7 @@ function renderLeft(): void {
   $("fileDrawer").classList.toggle("open", filesOpen);
   $("toolDrawer").classList.toggle("open", toolOpen);
   $("importBrowse").setAttribute("aria-pressed", String(filesOpen));
-  if (!worldOpen && ((!explorerOpen && !previewAlone && !besideTiles && !besideObjects) || !exPicked)) stopExView();
+  if (!worldOpen && ((!explorerOpen && !previewAlone && !besideTiles && !besideObjects && !objectAlone) || !exPicked)) stopExView();
 }
 
 // ---- the Library out of the window (0.14.0) ------------------------------------------------------------
@@ -1829,6 +1874,109 @@ function setLibraryOut(on: boolean): void {
 }
 
 $("libraryOut").addEventListener("click", () => setLibraryOut(!libraryOut));
+
+// ---- the Scene tab's objects out of the window, and Selected minimized -----------------------------------
+//
+// The icon at the top right of the Objects list hides the list and opens the Objects drawer on the open scene;
+// an Objects button and the same icon stay where it was. Selected's minimize leaves only its title row, at the
+// bottom of the tab, and the list grows into the room. Both choices are kept in this page's storage.
+
+let objectsOut = false;
+try {
+  objectsOut = localStorage.getItem("edgebuilder.objectsOut") === "1";
+} catch {
+  // No storage: in the window.
+}
+
+/** Any drawer to the left of the window open now. */
+function anyLeftOpen(): boolean {
+  return drawerOpen || libraryDrawerOpen || previewsOpen || explorerOpen || filesOpen || toolOpen || previewAlone || previewWorld || objectPreview || !!state?.sectors.open;
+}
+
+function openObjectsDrawer(): void {
+  drawerScene = "open";
+  openLeft("objects");
+}
+
+function placeObjects(): void {
+  $("objects").hidden = objectsOut;
+  $("objectsLabel").hidden = objectsOut;
+  $("objectsOpenRow").hidden = !objectsOut;
+  const icon = $("objectsOut");
+  icon.setAttribute("aria-pressed", String(objectsOut));
+  icon.title = objectsOut ? "Back into the window: the objects here again, and no drawer" : "Out of the window: the objects in a drawer to the left, with more room";
+  $("drawerIn").hidden = !(objectsOut && drawerScene === "open");
+  requestAnimationFrame(fitObjects);
+}
+
+function setObjectsOut(on: boolean): void {
+  objectsOut = on;
+  try {
+    localStorage.setItem("edgebuilder.objectsOut", on ? "1" : "0");
+  } catch {
+    // No storage: for this session only.
+  }
+  placeObjects();
+  if (on) openObjectsDrawer();
+  else if (drawerOpen && drawerScene === "open") openLeft("none");
+}
+
+$("objectsOut").addEventListener("click", () => setObjectsOut(!objectsOut));
+$("drawerIn").addEventListener("click", () => setObjectsOut(false));
+$("objectsOpen").addEventListener("click", () => (drawerOpen && drawerScene === "open" ? openLeft("none") : openObjectsDrawer()));
+$("bringV").addEventListener("click", () => post({ type: "bringV" }));
+
+const MinimizeIcon = `<svg viewBox="0 0 16 16"><path d="M3.5 12.5h9"/></svg>`;
+const RestoreIcon = `<svg viewBox="0 0 16 16"><path d="M3.5 3.5h9v9h-9z"/></svg>`;
+for (const panel of document.querySelectorAll<HTMLElement>(".collapsible")) {
+  const mini = panel.querySelector<HTMLElement>(".mini");
+  if (!mini) continue;
+  const key = `edgebuilder.collapsed.${panel.id}`;
+  const set = (on: boolean) => {
+    panel.classList.toggle("collapsed", on);
+    mini.setAttribute("aria-pressed", String(on));
+    mini.innerHTML = on ? RestoreIcon : MinimizeIcon;
+    mini.title = on ? "Show it all again" : "Minimize: only this title row, at the bottom of the tab, and the list above gets the room";
+    try {
+      localStorage.setItem(key, on ? "1" : "0");
+    } catch {
+      // No storage: for this session only.
+    }
+    requestAnimationFrame(fitObjects);
+  };
+  let on = false;
+  try {
+    on = localStorage.getItem(key) === "1";
+  } catch {
+    // No storage: shown.
+  }
+  set(on);
+  mini.addEventListener("click", () => set(!panel.classList.contains("collapsed")));
+}
+
+/**
+ * With Selected minimized, the Scene tab's list as tall as the tab has room for (200 px at least); else 200 px.
+ * Measured on its scrolling box inside the list, so the list's own frame does not make it grow each time.
+ */
+function fitObjects(): void {
+  const list = $("objects");
+  const panel = $("selectedPanel");
+  const tab = list.closest("rn-tab") as HTMLElement | null;
+  if (!panel.classList.contains("collapsed") || list.hidden) {
+    if (list.style.getPropertyValue("--rn-list-height")) list.style.removeProperty("--rn-list-height");
+    return;
+  }
+  if (!tab?.hasAttribute("active")) return;
+  const box = (list.shadowRoot?.querySelector(".scroll") as HTMLElement | null) ?? list;
+  const lb = list.getBoundingClientRect();
+  // The room the minimized panel's auto margin takes now, which the list may have; or how far the tab overflows.
+  const gap = Math.max(0, panel.getBoundingClientRect().top - lb.bottom - 12);
+  const spare = tab.clientHeight - (tab.scrollHeight - gap);
+  const h = Math.max(200, Math.floor(box.getBoundingClientRect().height + spare));
+  if (list.style.getPropertyValue("--rn-list-height") !== `${h}px`) list.style.setProperty("--rn-list-height", `${h}px`);
+}
+window.addEventListener("resize", () => requestAnimationFrame(fitObjects));
+
 $("libraryDrawerIn").addEventListener("click", () => setLibraryOut(false));
 $("libraryDrawerClose").addEventListener("click", () => openLeft("none"));
 $("libraryOpen").addEventListener("click", () => openLeft(libraryDrawerOpen ? "none" : "library"));
@@ -1860,6 +2008,7 @@ function drawerWidths(drawer: string, shrink: string, grow: string, widths: numb
   $(shrink).addEventListener("click", () => size(step - 1));
   size(step);
 }
+placeObjects();
 drawerWidths("libraryDrawer", "libraryShrink", "libraryGrow", [420, 540, 680, 840], "edgebuilder.libraryWidth");
 // The Explorer's Preview drawer stays beside it as it grows.
 drawerWidths("explorerDrawer", "exShrink", "exGrow", [480, 600, 720, 840], "edgebuilder.explorerWidth", (w) => {
@@ -2399,7 +2548,7 @@ function qRotateV(q: Q, v: V3): V3 {
 
 /** Opens the Preview drawer at the screen's left for the thing picked in the world; the other left drawers close. */
 function showWorldPreview(): void {
-  drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = filesOpen = false;
+  drawerOpen = libraryDrawerOpen = previewsOpen = explorerOpen = previewAlone = filesOpen = objectPreview = false;
   previewWorld = true;
   if (state?.sectors.open) post({ type: "sectors.close" });
 }
@@ -2639,7 +2788,7 @@ $("explorerClose").addEventListener("click", () => openLeft("none"));
 $("exPreviewClose").addEventListener("click", () => {
   if (previewAlone || previewWorld) return openLeft("none");
   if (objectPreview) {
-    // Back to the Objects drawer alone.
+    // Back to the Objects drawer alone (or nothing, for a row of the Scene tab's list).
     objectPreview = false;
     if (state) render(state);
     else renderLeft();
@@ -2750,7 +2899,7 @@ const kindOfPath = (p: string) => /\.(mesh|ent)$/i.test(p);
 
 function renderExPreview(s: Snapshot): void {
   if (previewWorld) return renderWorldPreview(s);
-  const copying = objectPreview && drawerOpen && !explorerOpen;
+  const copying = objectPreview && !explorerOpen;
   $("exDrop").textContent = copying ? "Drop a copy" : "Drop";
   $("exDrop").removeAttribute("disabled");
   $("exDrop").title = copying
