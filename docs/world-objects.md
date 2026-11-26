@@ -154,7 +154,7 @@ REDcode's request ([EDGEbuilder #9](https://github.com/Edgemodders/EDGEbuilder/i
 | **S2 The 3D view** | REDcode's drawing package (`world-view`) at the top of the drawer | After S1, when the package is on npm |
 | **S3 Previews** | `preview` and `clearPreviews` for REDcode's edits | After S1 |
 
-Not in S1: **Open in REDcode**. REDcode's extension has `openSector(path, { select })`, but its REDnode service does not offer it yet, so the game has no way to ask for it. It needs REDcode's service to carry it (a request to file).
+Not in S1: **Open in REDcode**. REDcode's extension has `openSector(path, { select })`, but its REDnode service did not offer it then. Asked in [EDGEbuilder #11](https://github.com/Edgemodders/EDGEbuilder/issues/11); REDcode's `redcode` package 0.4.0 (REDcode 0.10.18) has `openSector({ sector, entry })`, and **0.14.0 adds the buttons** (built 2026-11-25): an arrow in the Sector drawer's title row (the sector, with the picked entry) and **Open in REDcode** in Selected Node, shown when REDcode's service is there. EDGEbuilder's manifest lists `redcode.openSector` in `"calls"` (REDnode 0.66.0 and later ask the player once). [Test steps](testing.md#open-in-redcode-0140).
 
 ## Not in this plan
 

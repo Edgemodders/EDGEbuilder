@@ -2300,10 +2300,12 @@ async function connectRedcode() {
     });
     redcode = handle;
     redcodeFailed = false;
+    state.sources.redcode = true;
     await readRedcodeProjects();
   } catch (err) {
     redcode = void 0;
     redcodeFailed = true;
+    state.sources.redcode = false;
     console.log(`REDcode's service is not there (${err.message}); looking again in a minute, or at Refresh. Browse lists the game and mods meanwhile.`);
     redcodeRetry = setTimeout(() => void connectRedcode(), 6e4);
     lookAtBakes();
@@ -2316,6 +2318,24 @@ async function readRedcodeProjects() {
   const list2 = await redcode.$call("projects").catch(() => null);
   redcodeProjects = Array.isArray(list2) ? list2 : focusedProject ? [focusedProject] : [];
   applyProjects();
+}
+async function openInRedcode(sector, entry) {
+  if (!sector) return say("This node's sector is not known yet: REDbridge names it once it has read the sector.", "warn");
+  if (!redcode) await connectRedcode();
+  if (!redcode) return say("REDcode is not there: its REDnode package comes with REDcode, in VS Code. Open in REDcode needs REDcode 0.10.18 or later.", "warn");
+  const name = sector.split(/[\\/]/).pop()?.replace(/\.streamingsector$/i, "") ?? sector;
+  const where = entry === void 0 ? name : `${name}, entry #${entry}`;
+  try {
+    const answer = await redcode.$call("openSector", { sector, entry });
+    if (answer?.opened) say(`Opened in REDcode: ${where}. VS Code does not come to the front by itself.`, "ok");
+    else say(`REDcode did not open ${where}: ${(answer?.why ?? "no answer").replace(/\.$/, "")}.`, "warn");
+  } catch (err) {
+    const text2 = err.message ?? String(err);
+    if (/has no function "openSector"/.test(text2)) say("This REDcode cannot open a sector from the game yet: Open in REDcode needs REDcode 0.10.18 or later.", "warn");
+    else if (/not allowed/i.test(text2)) say("Open in REDcode needs your OK once: in REDnode's Mod Manager, EDGEbuilder, Calls, allow redcode.openSector.", "warn");
+    else if (/switched off/i.test(text2)) say("REDcode's openSector is switched off for mods: switch it on in REDnode's Tools Manager.", "warn");
+    else say(`REDcode did not open ${where}: ${text2}`, "warn");
+  }
 }
 async function askRedcodeAgain() {
   if (!redcode) return connectRedcode();
@@ -4651,6 +4671,9 @@ channel.on((m) => {
         break;
       case "sectors.hide":
         await hideSectorEntry(m.entry, m.hidden);
+        break;
+      case "redcode.openSector":
+        await openInRedcode(m.sector, m.entry);
         break;
       case "world.door":
         await inTurn("Door", () => doorAction(m.act));

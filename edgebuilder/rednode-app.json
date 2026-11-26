@@ -22,6 +22,9 @@
     "solo",
     "archives"
   ],
+  "calls": [
+    "redcode.openSector"
+  ],
   "requires": {
     "codeware": ">=1.14",
     "rednode": ">=0.58.0"

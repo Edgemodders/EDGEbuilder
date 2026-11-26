@@ -1410,6 +1410,7 @@ function renderWorld(s: Snapshot): void {
     $("worldRestore").hidden = true;
     for (const id of DoorButtons) $(id).hidden = true;
     $("worldGo").setAttribute("disabled", "");
+    $("worldRedcode").hidden = true;
     return;
   }
   const node = picked.node;
@@ -1453,6 +1454,17 @@ function renderWorld(s: Snapshot): void {
   $("doorRestore").hidden = !canSet || !kept;
   for (const id of ["doorOpen", "doorClose", "doorLock"]) if (!s.scene.file) $(id).title = "Open a scene first: a door's state is kept in the open scene";
   $("worldGo").toggleAttribute("disabled", s.world !== "ready");
+  // EDGEbuilder #11: its sector in REDcode's sector view, when REDcode's service is there and the sector is named.
+  $("worldRedcode").hidden = !s.sources.redcode || !redcodePlace(s);
+}
+
+/** Selected Node's sector and entry for Open in REDcode: its node once found, else the Sector drawer row it was picked from. */
+function redcodePlace(s: Snapshot): { sector: string; entry?: number } | null {
+  const picked = s.worldObjects.picked;
+  if (picked?.node?.sector) return { sector: picked.node.sector, entry: picked.node.entry };
+  const v = s.sectors.open;
+  if (picked?.fromSector && v?.path === picked.fromSector) return { sector: v.path, entry: v.selected ?? undefined };
+  return null;
 }
 
 /** The Scene tab's world edits: what the open scene removes from the game's world, each with Restore. */
@@ -1634,6 +1646,7 @@ function renderSectorDrawer(s: Snapshot): void {
   const name = shortName(v.path).replace(/\.streamingsector$/i, "");
   $("sectorTitle").textContent = `Sector: ${name}`;
   $("sectorTitle").title = v.path;
+  $("sectorRedcode").hidden = !s.sources.redcode;
   const streamed = v.loaded === true ? "streamed in now" : v.loaded === false ? "not streamed in now: go near it for its nodes to be in the game" : "";
   $("sectorInfo").textContent =
     v.status === "reading"
@@ -1698,6 +1711,14 @@ $("sectorsList").addEventListener("select", (e) => {
   if (p) post({ type: "sectors.open", path: p });
 });
 $("sectorClose").addEventListener("click", () => post({ type: "sectors.close" }));
+$("sectorRedcode").addEventListener("click", () => {
+  const v = state?.sectors.open;
+  if (v) post({ type: "redcode.openSector", sector: v.path, entry: v.selected ?? undefined });
+});
+$("worldRedcode").addEventListener("click", () => {
+  const place = state && redcodePlace(state);
+  if (place) post({ type: "redcode.openSector", ...place });
+});
 $("sectorFilter").addEventListener("input", () => {
   clearTimeout(sectorFiltered);
   sectorFiltered = setTimeout(() => post({ type: "sectors.filter", text: ($("sectorFilter") as HTMLInputElement).value ?? "" }), 250);

@@ -478,7 +478,7 @@ function pickProject(dir: string | null): void {
 }
 
 /** The project open in REDcode, through REDcode's REDnode service (REDcode 0.10.5 and later). Without it, mods only. */
-let redcode: { project(): Promise<RedcodeProject | null>; $call(fn: string): Promise<unknown> } | undefined;
+let redcode: { project(): Promise<RedcodeProject | null>; $call(fn: string, ...args: unknown[]): Promise<unknown> } | undefined;
 let redcodeRetry: ReturnType<typeof setTimeout> | undefined;
 /** The last try to reach REDcode's service failed: its package is not in the game. */
 let redcodeFailed = false;
@@ -495,12 +495,14 @@ async function connectRedcode(): Promise<void> {
       redcodeProjects = Array.isArray(list) ? list : [];
       applyProjects();
     });
-    redcode = handle as unknown as { project(): Promise<RedcodeProject | null>; $call(fn: string): Promise<unknown> };
+    redcode = handle as unknown as { project(): Promise<RedcodeProject | null>; $call(fn: string, ...args: unknown[]): Promise<unknown> };
     redcodeFailed = false;
+    state.sources.redcode = true;
     await readRedcodeProjects();
   } catch (err) {
     redcode = undefined;
     redcodeFailed = true;
+    state.sources.redcode = false;
     console.log(`REDcode's service is not there (${(err as Error).message}); looking again in a minute, or at Refresh. Browse lists the game and mods meanwhile.`);
     redcodeRetry = setTimeout(() => void connectRedcode(), 60_000);
     lookAtBakes();
@@ -515,6 +517,31 @@ async function readRedcodeProjects(): Promise<void> {
   const list = await redcode.$call("projects").catch(() => null);
   redcodeProjects = Array.isArray(list) ? (list as RedcodeProject[]) : focusedProject ? [focusedProject] : [];
   applyProjects();
+}
+
+/**
+ * Open in REDcode (EDGEbuilder #11): REDcode's openSector, in its `redcode` package 0.4.0 (REDcode 0.10.18), opens
+ * the sector in the 3D sector view of the REDcode window used last with a project, with the entry picked. It
+ * answers within about 4 seconds; VS Code does not come to the front.
+ */
+async function openInRedcode(sector: string, entry?: number): Promise<void> {
+  if (!sector) return say("This node's sector is not known yet: REDbridge names it once it has read the sector.", "warn");
+  if (!redcode) await connectRedcode();
+  if (!redcode) return say("REDcode is not there: its REDnode package comes with REDcode, in VS Code. Open in REDcode needs REDcode 0.10.18 or later.", "warn");
+  const name = sector.split(/[\\/]/).pop()?.replace(/\.streamingsector$/i, "") ?? sector;
+  const where = entry === undefined ? name : `${name}, entry #${entry}`;
+  try {
+    const answer = (await redcode.$call("openSector", { sector, entry })) as { opened?: boolean; window?: number; why?: string } | null;
+    if (answer?.opened) say(`Opened in REDcode: ${where}. VS Code does not come to the front by itself.`, "ok");
+    else say(`REDcode did not open ${where}: ${(answer?.why ?? "no answer").replace(/\.$/, "")}.`, "warn");
+  } catch (err) {
+    // REDnode 0.66.0 and later ask the player once for a call that changes something (manifest "calls").
+    const text = (err as Error).message ?? String(err);
+    if (/has no function "openSector"/.test(text)) say("This REDcode cannot open a sector from the game yet: Open in REDcode needs REDcode 0.10.18 or later.", "warn");
+    else if (/not allowed/i.test(text)) say("Open in REDcode needs your OK once: in REDnode's Mod Manager, EDGEbuilder, Calls, allow redcode.openSector.", "warn");
+    else if (/switched off/i.test(text)) say("REDcode's openSector is switched off for mods: switch it on in REDnode's Tools Manager.", "warn");
+    else say(`REDcode did not open ${where}: ${text}`, "warn");
+  }
 }
 
 /** Refresh on the Bake and Library tabs: ask REDcode for its project again, now (B3c test on the laptop). */
@@ -3408,6 +3435,9 @@ channel.on<PageMessage>((m) => {
         break;
       case "sectors.hide":
         await hideSectorEntry(m.entry, m.hidden);
+        break;
+      case "redcode.openSector":
+        await openInRedcode(m.sector, m.entry);
         break;
       case "world.door":
         await inTurn("Door", () => doorAction(m.act));

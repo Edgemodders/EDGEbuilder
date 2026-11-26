@@ -222,7 +222,7 @@
     <rn-list id="drawerList"></rn-list>
   </div>
   <div id="sectorDrawer">
-    <div id="sectorHead"><span id="sectorTitle" class="section"></span><button id="sectorClose" class="act" title="Close"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+    <div id="sectorHead"><span id="sectorTitle" class="section"></span><button id="sectorRedcode" class="icon" hidden title="Open in REDcode: this sector in REDcode's 3D sector view, with the picked entry picked (REDcode 0.10.18 or later, in VS Code)"><svg viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13.5 2.5L7 9M11.5 9.5v4h-9v-9h4"/></svg></button><button id="sectorClose" class="act" title="Close"><svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
     <div id="sectorInfo" class="count"></div>
     <rn-input id="sectorFilter" placeholder="Filter: a class, a file or an entry, such as door or #288"></rn-input>
     <rn-list id="sectorList"></rn-list>
@@ -439,6 +439,7 @@
             <rn-button id="doorLock" hidden title="Lock the door, and keep it locked while this scene is open">Lock</rn-button>
             <rn-button id="doorRestore" variant="ghost" hidden title="Take the door's state out of the scene: it goes back as it was">Restore</rn-button>
             <rn-button id="worldGo" variant="ghost" disabled title="Fly the camera to it">Go to</rn-button>
+            <rn-button id="worldRedcode" variant="ghost" hidden title="Open its sector in REDcode's 3D sector view, with this entry picked (REDcode 0.10.18 or later, in VS Code)">Open in REDcode</rn-button>
           </div>
         </rn-panel>
       </rn-tab>

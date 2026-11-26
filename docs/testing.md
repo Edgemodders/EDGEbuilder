@@ -1176,6 +1176,18 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 
 **Results, 2026-11-24 (the owner, in game): steps 1 to 35 passed** on the build deployed that morning (dbb20bf: the Library drawer's widths, the Import file picker and the About guide, before everything after it). P1 to P6 are answered yes on that build: the pictures come and look like the objects, the overlay drawing them costs no noticeable frame rate, the crosshair and outline show where a drop lands, the Library works from its drawer, objects are found and placed from the game's folders, and Pick under the cursor finds what is under the mouse with Solid as V meets it. Two findings on the way were fixed after that build: the right button cancelled Drop at click at once (now a tap cancels and a hold looks, steps 9 and 11) and Drop a copy's outline showed where the door had been clicked (step 33). **Still to run, on the newest build:** steps 36 to 59, and steps 6, 9, 11 and 33 again, since what they expect changed after the build tested.
 
+### Open in REDcode (0.14.0)
+
+[EDGEbuilder #11](https://github.com/Edgemodders/EDGEbuilder/issues/11), part 1, built on 2026-11-25: REDcode's `openSector` (its `redcode` REDnode package 0.4.0, REDcode 0.10.18) from the Sector drawer and Selected Node. EDGEbuilder's manifest lists `redcode.openSector` in `"calls"`, so REDnode asks the player once. Checked in REDnode's host on 2026-11-25 with REDcode's package from its checkout and a scratch `LOCALAPPDATA`: shown with the package, hidden without; refused with the Mod Manager hint until allowed; allowed, the request carries the sector's depot path and entry 288; "No REDcode window answered" after 4 s with no window, "Opened in REDcode" when a window claims it. Needs REDcode 0.10.18 installed in VS Code with a project open, so it waits on REDcode's release.
+
+| Step | Do | Expect |
+|---|---|---|
+| 1 | With REDcode 0.10.18 in VS Code and a project open, start the game and load a save. World > Sectors, **Near V**, open V's exterior sector | The drawer's title row has an arrow beside the close cross |
+| 2 | Pick an entry (V's door, `#288` in `exterior_-22_19_1_0`), press the arrow | The first time: "Open in REDcode needs your OK once: in REDnode's Mod Manager, EDGEbuilder, Calls, allow redcode.openSector." |
+| 3 | Allow it in the Mod Manager, press the arrow again | "Opened in REDcode: exterior_-22_19_1_0, entry #288"; VS Code (not brought to the front) shows the sector's 3D view with that entry picked |
+| 4 | Selected Node, **Open in REDcode** | The same, from the panel |
+| 5 | Close VS Code, press it again | After about 4 s: "REDcode did not open ...: No REDcode window answered" |
+
 ### T0 Tools probe
 
 The probe for [Tools](tools.md) (T0, built 2026-11-24): a tool from another package opens in a drawer of EDGEbuilder's. No change for players without a tool: the **Tools (T0 probe)** box in Settings shows only when one is installed. The probe is `probes/tool-probe` (EDGEbuilder tool probe 0.1.0, in the EDGEdeck library as `edgebuilder-tool-probe`), with EDGEbuilder's newest build. Already checked in REDnode's host ([T0 results](tools.md#t0-results)); this is the same in the overlay over the game.

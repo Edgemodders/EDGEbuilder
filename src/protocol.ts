@@ -328,6 +328,8 @@ export interface Snapshot {
      */
     projects?: { name: string; dir: string }[];
     picked?: string | null;
+    /** REDcode's REDnode service is there, so Open in REDcode can be offered (EDGEbuilder #11). */
+    redcode?: boolean;
   };
   /** The asset the page last looked at, with what the bridge said about it. */
   looked?: { path: string; info?: AssetInfo };
@@ -588,6 +590,8 @@ export type PageMessage =
   | { type: "sectors.select"; entry: number }
   /** Hides an entry for the session (not kept in the scene), or shows it again. */
   | { type: "sectors.hide"; entry: number; hidden: boolean }
+  /** EDGEbuilder #11: REDcode's openSector (its `redcode` package 0.4.0, REDcode 0.10.18): the sector in its 3D view, the entry picked. */
+  | { type: "redcode.openSector"; sector: string; entry?: number }
   /** Take a world edit out of the scene: what it removed is back. One undo step. */
   | { type: "world.restore"; id: string }
   | { type: "undo" }
