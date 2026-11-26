@@ -184,6 +184,7 @@
   .section { font-family: var(--rn-mono, monospace); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
   .fold { display: inline-block; width: 14px; color: var(--rn-dim, #999); cursor: pointer; }
   .row { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; align-items: center; }
+  #bringV { margin-left: auto; }
   [hidden] { display: none !important; }
   /* A panel's pin (top right): pinned, the panel sticks to the bottom of its tab while the tab scrolls (Selected Asset, Selected Scene, Selected Object, Selected Node). */
   .pinnable { position: relative; }
@@ -283,7 +284,8 @@
         <div id="sources" class="count"></div>
         <div class="headRow"><div id="count" class="count grow"></div><rn-toggle id="previewPick" label="Preview" title="On: a click on a result also shows it in 3D in a drawer to the left, with what is known about it and a Drop button"></rn-toggle><button id="previewsEye" class="icon" aria-pressed="false" title="Previews: the results as small 3D pictures, in a drawer to the left. A click on one starts Drop at click"><svg viewBox="0 0 16 16"><path d="M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8z"/><circle cx="8" cy="8" r="2.2"/></svg></button></div>
         <rn-list id="results"></rn-list>
-        <rn-panel id="pickedPanel" class="pinnable" title="Selected Asset" data-pin-note="so the Drop buttons stay in view">
+        <rn-panel id="pickedPanel" class="pinnable collapsible" data-grows="results" title="Selected Asset" data-pin-note="so the Drop buttons stay in view">
+          <button class="mini" aria-pressed="false"></button>
           <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
           <div id="lookedPath" class="path">Pick an asset</div>
           <div id="lookedSize" class="detail"></div>
@@ -304,8 +306,9 @@
           <rn-button id="newScene" variant="ghost" title="An empty scene. This opens the Library tab: type a name, pick a folder, then press &quot;New scene here&quot;">New</rn-button>
           <rn-button id="openScene" variant="ghost" title="The Library tab">Open</rn-button>
           <rn-button id="closeScene" variant="ghost" title="Its objects leave the world and no scene is open. It stays saved">Close</rn-button>
+          <rn-button id="bringV" variant="ghost" disabled title="V stands on the floor under the editor camera, facing where it looks, so you can try what you placed as V. Edit stays on: switch it off to play">Bring V</rn-button>
         </div>
-        <div class="headRow"><div id="sceneCount" class="count grow"></div><rn-button id="bringV" variant="ghost" disabled title="V stands on the floor under the editor camera, facing where it looks, so you can try what you placed as V. Edit stays on: switch it off to play">Bring V</rn-button></div>
+        <div id="sceneCount" class="count"></div>
         <div id="needs" class="count"></div>
         <div id="editsTitle" class="count" hidden></div>
         <rn-list id="worldEdits" hidden></rn-list>
@@ -318,7 +321,7 @@
         </div>
         <div class="headRow"><span id="objectsLabel" class="section grow">Objects</span><span id="objectsOpenRow" class="grow" hidden><rn-button id="objectsOpen" variant="ghost" title="Open the Objects drawer again">Objects</rn-button></span><button id="objectsOut" class="icon" aria-pressed="false" title="Out of the window: the objects in a drawer to the left, with more room"><svg viewBox="0 0 16 16"><path d="M7 2.5h6.5v11H7M10 8H1.5M4.5 5L1.5 8l3 3"/></svg></button></div>
         <rn-list id="objects"></rn-list>
-        <rn-panel id="selectedPanel" class="pinnable collapsible" title="Selected Object" data-pin-note="so its numbers and buttons stay in view">
+        <rn-panel id="selectedPanel" class="pinnable collapsible" data-grows="objects" title="Selected Object" data-pin-note="so its numbers and buttons stay in view">
           <button class="mini" aria-pressed="false"></button>
           <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
           <pre id="selected">Nothing selected</pre>
@@ -352,7 +355,8 @@
         <div class="flushRow"><rn-input id="importPath" placeholder="A .glb to import: its path, or the folder button" title="A .glb file (a textured glTF in one file), or a prop's .prop.asset folder"></rn-input><button id="importBrowse" class="flushBtn" aria-pressed="false" title="Find the file: a drawer that walks your folders and drives"><svg viewBox="0 0 16 16"><path d="M1.5 4.5V13h13V5.5H7.5L6 3.5H1.5z"/></svg></button><rn-button id="importPathGo" variant="ghost" title="Pick the file typed in, for Import">Pick</rn-button></div>
         <div class="headRow"><span id="libraryLabel" class="section grow">Library</span><span id="libraryOpenRow" class="grow" hidden><rn-button id="libraryOpen" variant="ghost" title="Open the Library's drawer again">Library</rn-button></span><button id="libraryOut" class="icon" aria-pressed="false" title="Out of the window: the Library in a drawer to the left, with more room"><svg viewBox="0 0 16 16"><path d="M7 2.5h6.5v11H7M10 8H1.5M4.5 5L1.5 8l3 3"/></svg></button></div>
         <div id="libraryHome"><rn-list id="shelves"></rn-list></div>
-        <rn-panel id="libraryPanel" class="pinnable" title="Selected Scene" data-pin-note="so Open, Close, Show in world and the rest stay in view">
+        <rn-panel id="libraryPanel" class="pinnable collapsible" data-grows="shelves" title="Selected Scene" data-pin-note="so Open, Close, Show in world and the rest stay in view">
+          <button class="mini" aria-pressed="false"></button>
           <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
           <div id="pickedText" class="detail">Pick a scene or a folder</div>
           <div id="importBox" hidden>
@@ -418,7 +422,8 @@
         <rn-list id="sectorsList"></rn-list>
         </rn-tab>
         </rn-tabs>
-        <rn-panel id="worldPanel" class="pinnable" title="Selected Node" data-pin-note="so Remove from world stays in view">
+        <rn-panel id="worldPanel" class="pinnable collapsible" data-grows="worldList sectorsList" title="Selected Node" data-pin-note="so Remove from world stays in view">
+          <button class="mini" aria-pressed="false"></button>
           <button class="pin" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M10 1.5l4.5 4.5-2 .7-2.6 2.6.3 3.2-1.4 1.4-2.8-2.8L2 15l-1-1 4.1-4.1-2.8-2.8 1.4-1.4 3.2.3 2.6-2.6z"/></svg></button>
           <div class="row">
             <rn-toggle id="freePick" label="Pick under the cursor" title="With Edit on: what a click would pick is outlined as the mouse moves, a click picks any mesh or door there (whatever the Meshes switch says), and its details open in a drawer at the left of the screen"></rn-toggle>

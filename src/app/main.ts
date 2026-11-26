@@ -1001,8 +1001,8 @@ $("mainTabs").addEventListener("change", (e) => {
   if (label === "Scene") {
     // Out of the window, the objects come back into view with their tab, unless another drawer is open.
     if (objectsOut && !anyLeftOpen()) openObjectsDrawer();
-    requestAnimationFrame(fitObjects);
   }
+  requestAnimationFrame(fitObjects);
   if (label === "Bake") post({ type: "bake.refresh" });
   if (label === "World") post({ type: "world.refresh" });
 });
@@ -1689,7 +1689,10 @@ $("sectorLevel").addEventListener("change", (e) => {
   sectorLevel = SectorLevels[(e as CustomEvent<{ index: number }>).detail.index] ?? null;
   if (state?.sectors.around) findSectors(state.sectors.around);
 });
-$("worldTabs").addEventListener("change", (e) => e.stopPropagation());
+$("worldTabs").addEventListener("change", (e) => {
+  e.stopPropagation();
+  requestAnimationFrame(fitObjects);
+});
 $("sectorsList").addEventListener("select", (e) => {
   const p = (e as CustomEvent<{ value: string }>).detail.value;
   if (p) post({ type: "sectors.open", path: p });
@@ -1860,6 +1863,7 @@ function placeLibrary(): void {
   icon.setAttribute("aria-pressed", String(libraryOut));
   icon.title = libraryOut ? "Back into the window: the Library here again, and no drawer" : "Out of the window: the Library in a drawer to the left, with more room";
   renderLeft();
+  requestAnimationFrame(fitObjects);
 }
 
 function setLibraryOut(on: boolean): void {
@@ -1955,25 +1959,28 @@ for (const panel of document.querySelectorAll<HTMLElement>(".collapsible")) {
 }
 
 /**
- * With Selected minimized, the Scene tab's list as tall as the tab has room for (200 px at least); else 200 px.
- * Measured on its scrolling box inside the list, so the list's own frame does not make it grow each time.
+ * With a Selected panel minimized (Selected Asset, Object, Scene or Node), the list above it (its `data-grows`, the
+ * one shown on the World tab's sub-tabs) as tall as the tab has room for, 200 px at least; shown, its own height.
+ * Measured on the list's scrolling box, so the list's own frame does not make it grow each time. A list moved out
+ * of its tab (the Library in its drawer) keeps the drawer's height.
  */
 function fitObjects(): void {
-  const list = $("objects");
-  const panel = $("selectedPanel");
-  const tab = list.closest("rn-tab") as HTMLElement | null;
-  if (!panel.classList.contains("collapsed") || list.hidden) {
-    if (list.style.getPropertyValue("--rn-list-height")) list.style.removeProperty("--rn-list-height");
-    return;
+  for (const panel of document.querySelectorAll<HTMLElement>(".collapsible")) {
+    const tab = panel.closest("rn-tab") as HTMLElement | null;
+    const lists = (panel.dataset.grows ?? "").split(" ").filter(Boolean).map((id) => $(id));
+    const shown = lists.find((l) => !l.hidden && tab?.contains(l) && l.getClientRects().length > 0);
+    const on = panel.classList.contains("collapsed");
+    for (const l of lists) {
+      if ((l !== shown || !on) && l.style.getPropertyValue("--rn-list-height")) l.style.removeProperty("--rn-list-height");
+    }
+    if (!on || !shown || !tab?.hasAttribute("active")) continue;
+    const box = (shown.shadowRoot?.querySelector(".scroll") as HTMLElement | null) ?? shown;
+    // The room the minimized panel's auto margin takes now, which the list may have; or how far the tab overflows.
+    const gap = Math.max(0, parseFloat(getComputedStyle(panel).marginTop) || 0);
+    const spare = tab.clientHeight - (tab.scrollHeight - gap);
+    const h = Math.max(200, Math.floor(box.getBoundingClientRect().height + spare));
+    if (shown.style.getPropertyValue("--rn-list-height") !== `${h}px`) shown.style.setProperty("--rn-list-height", `${h}px`);
   }
-  if (!tab?.hasAttribute("active")) return;
-  const box = (list.shadowRoot?.querySelector(".scroll") as HTMLElement | null) ?? list;
-  const lb = list.getBoundingClientRect();
-  // The room the minimized panel's auto margin takes now, which the list may have; or how far the tab overflows.
-  const gap = Math.max(0, panel.getBoundingClientRect().top - lb.bottom - 12);
-  const spare = tab.clientHeight - (tab.scrollHeight - gap);
-  const h = Math.max(200, Math.floor(box.getBoundingClientRect().height + spare));
-  if (list.style.getPropertyValue("--rn-list-height") !== `${h}px`) list.style.setProperty("--rn-list-height", `${h}px`);
 }
 window.addEventListener("resize", () => requestAnimationFrame(fitObjects));
 

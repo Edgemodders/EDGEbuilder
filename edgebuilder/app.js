@@ -2466,8 +2466,8 @@ $("mainTabs").addEventListener("change", (e) => {
   } else leaveSaveAs();
   if (label === "Scene") {
     if (objectsOut && !anyLeftOpen()) openObjectsDrawer();
-    requestAnimationFrame(fitObjects);
   }
+  requestAnimationFrame(fitObjects);
   if (label === "Bake") post({ type: "bake.refresh" });
   if (label === "World") post({ type: "world.refresh" });
 });
@@ -3052,7 +3052,10 @@ $("sectorLevel").addEventListener("change", (e) => {
   sectorLevel = SectorLevels[e.detail.index] ?? null;
   if (state?.sectors.around) findSectors(state.sectors.around);
 });
-$("worldTabs").addEventListener("change", (e) => e.stopPropagation());
+$("worldTabs").addEventListener("change", (e) => {
+  e.stopPropagation();
+  requestAnimationFrame(fitObjects);
+});
 $("sectorsList").addEventListener("select", (e) => {
   const p = e.detail.value;
   if (p) post({ type: "sectors.open", path: p });
@@ -3187,6 +3190,7 @@ function placeLibrary() {
   icon.setAttribute("aria-pressed", String(libraryOut));
   icon.title = libraryOut ? "Back into the window: the Library here again, and no drawer" : "Out of the window: the Library in a drawer to the left, with more room";
   renderLeft();
+  requestAnimationFrame(fitObjects);
 }
 function setLibraryOut(on) {
   libraryOut = on;
@@ -3260,20 +3264,21 @@ for (const panel of document.querySelectorAll(".collapsible")) {
   mini.addEventListener("click", () => set(!panel.classList.contains("collapsed")));
 }
 function fitObjects() {
-  const list = $("objects");
-  const panel = $("selectedPanel");
-  const tab = list.closest("rn-tab");
-  if (!panel.classList.contains("collapsed") || list.hidden) {
-    if (list.style.getPropertyValue("--rn-list-height")) list.style.removeProperty("--rn-list-height");
-    return;
+  for (const panel of document.querySelectorAll(".collapsible")) {
+    const tab = panel.closest("rn-tab");
+    const lists = (panel.dataset.grows ?? "").split(" ").filter(Boolean).map((id) => $(id));
+    const shown = lists.find((l) => !l.hidden && tab?.contains(l) && l.getClientRects().length > 0);
+    const on = panel.classList.contains("collapsed");
+    for (const l of lists) {
+      if ((l !== shown || !on) && l.style.getPropertyValue("--rn-list-height")) l.style.removeProperty("--rn-list-height");
+    }
+    if (!on || !shown || !tab?.hasAttribute("active")) continue;
+    const box = shown.shadowRoot?.querySelector(".scroll") ?? shown;
+    const gap = Math.max(0, parseFloat(getComputedStyle(panel).marginTop) || 0);
+    const spare = tab.clientHeight - (tab.scrollHeight - gap);
+    const h = Math.max(200, Math.floor(box.getBoundingClientRect().height + spare));
+    if (shown.style.getPropertyValue("--rn-list-height") !== `${h}px`) shown.style.setProperty("--rn-list-height", `${h}px`);
   }
-  if (!tab?.hasAttribute("active")) return;
-  const box = list.shadowRoot?.querySelector(".scroll") ?? list;
-  const lb = list.getBoundingClientRect();
-  const gap = Math.max(0, panel.getBoundingClientRect().top - lb.bottom - 12);
-  const spare = tab.clientHeight - (tab.scrollHeight - gap);
-  const h = Math.max(200, Math.floor(box.getBoundingClientRect().height + spare));
-  if (list.style.getPropertyValue("--rn-list-height") !== `${h}px`) list.style.setProperty("--rn-list-height", `${h}px`);
 }
 window.addEventListener("resize", () => requestAnimationFrame(fitObjects));
 $("libraryDrawerIn").addEventListener("click", () => setLibraryOut(false));
