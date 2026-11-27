@@ -837,7 +837,10 @@ let bakeConfirm: string | undefined;
 function renderBake(s: Snapshot): void {
   const b = s.bake;
   const n = s.scene.objects.length;
-  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${holds(n, editCount(s).removals, false, editCount(s).doors)}` : "No scene open";
+  // A headline: "Scene: <name>" on the left, what it adds and removes on the right (the owner, 2026-11-27).
+  $("bakeWhatName").textContent = s.scene.file ? `Scene: ${s.scene.name}` : "No scene open";
+  $("bakeWhatName").title = s.scene.file ?? ""; // A long name is cut short: the whole file on hover.
+  $("bakeWhatCounts").textContent = s.scene.file ? holds(n, editCount(s).removals, false, editCount(s).doors) : "";
   $("bakeInto").textContent = b.project ? `Into the REDcode project ${b.project.name}` : "";
   renderProjects("bakeProjects", s);
   renderProjects("importProjects", s);

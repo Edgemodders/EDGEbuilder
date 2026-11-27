@@ -171,6 +171,10 @@
   .progress:empty { display: none; }
   .progress, .count, .path, .detail { font-family: var(--rn-mono, monospace); font-size: 11px; color: var(--rn-dim, #999); white-space: pre-wrap; word-break: break-all; }
   .path { color: var(--rn-fg, #eee); }
+  /* The Bake tab's headline: in the panels' title font, a size up; the counts at the right. */
+  #bakeWhat { display: flex; align-items: baseline; gap: 12px; margin: 4px 0 6px; }
+  #bakeWhatName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 15px var(--rn-display, sans-serif); letter-spacing: .1em; color: var(--rn-fg, #eee); }
+  #bakeWhatCounts { flex: none; text-align: right; font-family: var(--rn-mono, monospace); font-size: 12px; color: var(--rn-dim, #999); white-space: nowrap; }
   rn-list { --rn-list-height: 300px; display: block; }
   #appearances { --rn-list-height: 76px; margin-top: 6px; }
   #objects { --rn-list-height: 200px; }
@@ -449,7 +453,7 @@
         </rn-panel>
       </rn-tab>
       <rn-tab label="Bake">
-        <div id="bakeWhat" class="path"></div>
+        <div id="bakeWhat"><span id="bakeWhatName"></span><span id="bakeWhatCounts"></span></div>
         <div id="bakeInto" class="detail"></div>
         <div id="bakeProjects" class="row projects" hidden></div>
         <div id="bakeChecks"></div>

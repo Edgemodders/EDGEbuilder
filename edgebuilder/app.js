@@ -2308,7 +2308,9 @@ var bakeConfirm;
 function renderBake(s) {
   const b = s.bake;
   const n = s.scene.objects.length;
-  $("bakeWhat").textContent = s.scene.file ? `${s.scene.name}: ${holds(n, editCount(s).removals, false, editCount(s).doors)}` : "No scene open";
+  $("bakeWhatName").textContent = s.scene.file ? `Scene: ${s.scene.name}` : "No scene open";
+  $("bakeWhatName").title = s.scene.file ?? "";
+  $("bakeWhatCounts").textContent = s.scene.file ? holds(n, editCount(s).removals, false, editCount(s).doors) : "";
   $("bakeInto").textContent = b.project ? `Into the REDcode project ${b.project.name}` : "";
   renderProjects("bakeProjects", s);
   renderProjects("importProjects", s);

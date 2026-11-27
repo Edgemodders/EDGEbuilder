@@ -45,6 +45,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - The search box has a ✕ inside it on the right (dimmed while it is empty) that empties it and the result list, and the Explorer's button sits flush against it, as high as the box. The Explorer's filter has a ✕ too. With no text, the list is empty (Mods and Project still list all they hold), rather than the first 120 assets.
 - One drawer at a time to the left of the window: Objects, the Library, Previews, the Explorer (with its Preview), Import's file picker or a sector.
 - The Import path box on the Library tab is wider.
+- The Bake tab's top line is a headline: **Scene:** and the scene's name in the panels' title font, a size larger, with what it adds and removes at the right.
 - The Preview drawer: **Properties** and **Appearances** have header rows of their own, Appearances sits right under Properties and fills the drawer down to Drop, which stays at the bottom.
 
 **Fixed**
