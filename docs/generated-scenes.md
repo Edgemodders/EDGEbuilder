@@ -129,7 +129,7 @@ Every command takes `--json` and then prints one JSON report: the scene's name a
 | Objects that overlap | Each object's box from its size and transform, tested against its neighbours; reported above a share of overlap the caller sets, since props on a table overlap the table's box on purpose | `check`, offline |
 | Objects that float or sink | Needs the world's collision, which only the running game has | Not offline. In the editor (G2): a raycast down from each object, listed in the Objects drawer |
 
-### G1 as built (2026-11-23 on the `cosmic` branch; merged into `main` on 2026-11-27, for 0.14.0 once tested)
+### G1 as built (2026-11-23 on the `cosmic` branch; merged into `main` on 2026-11-27; its test passed the same day, for 0.14.0)
 
 The first slice is built and checked outside the game: the schemas, `generator` and `meta`, `check`, and `bake` with `--out`, `--project`, `--pack`, `--dry-run` and `--json`. `diff` is G3. It runs from a checkout or from the installed package:
 

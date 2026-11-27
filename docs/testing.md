@@ -38,7 +38,7 @@ Last updated 2026-10-30.
 | [Project picker](#project-picker-0130) | In the game | Project picker | 2026-11-23 (0.13.1) | Pass; 0.13.2 released |
 | [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24, 2026-11-27 | Partly run: steps 1 to 64 passed (1 to 35 on 2026-11-24, 36 to 64 and six rechecks on 2026-11-27, on test 22 last); 65, the Bake tab's headline, added after, to run (65 steps, P1 to P7) |
 | [T0 Tools probe](#t0-tools-probe) | In the game | T0 | 2026-11-24 | Not run (checked in REDnode's host; 10 steps) |
-| [G1 The command line and the scene contract](#g1-the-command-line-and-the-scene-contract-0140) | By hand, steps 1 to 8 without the game; 9 to 11 in the game | G1 | 2026-11-27 | Partly run: steps 1 to 8 passed (by script, no game), 9 and 10 in game; 11 in the game to run. A release gate for 0.14.0 |
+| [G1 The command line and the scene contract](#g1-the-command-line-and-the-scene-contract-0140) | By hand, steps 1 to 8 without the game; 9 to 11 in the game | G1 | 2026-11-27 | Pass: steps 1 to 8 by script (no game), 9 to 11 in game on test 22. A release gate for 0.14.0 |
 | [G0 Generated scenes: the look](#g0-generated-scenes-the-look) | In the game | G0, G1 | 2026-11-23 | Partly run: steps 1 and 2 passed (a command-line bake loads and draws; G1's end is met); step 7 in part; 3, 4, 6 and 8 to run |
 
 ## Automated
@@ -1265,7 +1265,9 @@ Before: `npm run build` on `main` (or 0.14.0's zip, `edgebuilder/cli.mjs` inside
 
 C1 is answered yes.
 
-**Step 9 passed in game on 2026-11-27** (the owner, test 22): `out1\packed`, installed with EDGEdeck as a mod of its own, puts the three crates where the scene says. C2 is answered yes on 0.14.0. **Step 10 passed the same day**: the owner opened `small` from the Library, moved `crate2`, duplicated it and closed the scene; the file Claude read afterwards keeps `generator` (`test`, `1`, `a`) unchanged, `crate2` at its new place with `meta` `{ "room": 4 }`, the duplicate `crate2_2` with the same `meta`, and `crate1` (appearance `default`) and `third` as they were, still format 1. **Still to run: step 11**, for the rest of C3.
+**Step 9 passed in game on 2026-11-27** (the owner, test 22): `out1\packed`, installed with EDGEdeck as a mod of its own, puts the three crates where the scene says. C2 is answered yes on 0.14.0. **Step 10 passed the same day**: the owner opened `small` from the Library, moved `crate2`, duplicated it and closed the scene; the file Claude read afterwards keeps `generator` (`test`, `1`, `a`) unchanged, `crate2` at its new place with `meta` `{ "room": 4 }`, the duplicate `crate2_2` with the same `meta`, and `crate1` (appearance `default`) and `third` as they were, still format 1. **Step 11 passed the same day**: the owner baked `small` from the Bake tab into a test project; the sector Claude read afterwards (`small.streamingsector`, as WolvenKit JSON through REDcode) holds four `worldMeshNode`s and no `room`, `generator` or `meta`, and `small.bake.json` says 4 objects, REDbridge 0.20.0, no needs. C3 is answered yes.
+
+**G1's test passed on 2026-11-27, all 11 steps** (1 to 8 by script, 9 to 11 in game on test 22).
 
 ### G0 Generated scenes: the look
 
