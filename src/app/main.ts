@@ -573,15 +573,22 @@ $("objects").addEventListener(
   true,
 );
 
-/** The eye on a row of the Scene tab's list (or a pick in the view, with its setting): the object's preview to the left of the window, or beside the Objects drawer when that is open. */
-function previewInline(o: SceneObject): void {
+/**
+ * The eye on a row of the Scene tab's list: the object's preview to the left of the window, or beside the Objects
+ * drawer when that is open. From a pick in the view (`atEdge`, Settings' "A picked object's card"): at the screen's
+ * left edge, as Selected Node's card, so the picked object in the middle stays clear (the owner, 2026-11-27).
+ */
+function previewInline(o: SceneObject, atEdge = false): void {
   if (!o.resource && !o.record) return;
-  if (objectPreview && objectLike?.id === o.id) return;
+  if (objectPreview && objectLike?.id === o.id && objectAtEdge === atEdge) return;
+  objectAtEdge = atEdge;
   // One left drawer at a time: the preview takes the place of the Library, the Explorer and the rest.
   if (!drawerOpen) openLeft("none");
   previewObject(o);
   if (state) render(state);
 }
+/** The object's card stands at the screen's left edge (it came from a pick in the view), not beside the window. */
+let objectAtEdge = false;
 $("objects").addEventListener("keydown", () => (listCtrl = false), true);
 $("objects").addEventListener("select", (e) => {
   if (!state) return;
@@ -1912,7 +1919,10 @@ function renderLeft(): void {
   // Where it stands changes only while it is open: closing, it fades out where it was (a pick cleared by a click on
   // nothing took the world place away as it faded, and it jumped to the window's side).
   if (exOpen) {
-    $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles && !besideObjects);
+    // A scene object picked in the view: its card at the screen's left edge, as Selected Node's.
+    const edge = objectAlone && objectAtEdge && !previewWorld && !previewAlone && !besideTiles;
+    $("exPreview").classList.toggle("edge", edge);
+    $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles && !besideObjects && !edge);
     $("exPreview").classList.toggle("besidePreviews", besideTiles);
     $("exPreview").classList.toggle("besideObjects", besideObjects);
     ($("exPreview") as HTMLElement).style.right = explorerOpen && !previewWorld ? `${656 + exWidth + 8}px` : "";
@@ -3180,7 +3190,7 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
       showSceneTab();
       // Settings' "A picked object's card": the object clicked on (not the rest of its group) to the left.
       const o = pickCards && id ? state.scene.objects.find((x) => x.id === id && ids.includes(x.id)) : undefined;
-      if (o) previewInline(o);
+      if (o) previewInline(o, true);
     } else if (ray) {
       // None of the scene's objects: the game's own door (or mesh) there, if any (D1).
       worldClickAt = performance.now();

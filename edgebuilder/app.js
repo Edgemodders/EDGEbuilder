@@ -2089,13 +2089,15 @@ $("objects").addEventListener(
   },
   true
 );
-function previewInline(o) {
+function previewInline(o, atEdge = false) {
   if (!o.resource && !o.record) return;
-  if (objectPreview && objectLike?.id === o.id) return;
+  if (objectPreview && objectLike?.id === o.id && objectAtEdge === atEdge) return;
+  objectAtEdge = atEdge;
   if (!drawerOpen) openLeft("none");
   previewObject(o);
   if (state) render(state);
 }
+var objectAtEdge = false;
 $("objects").addEventListener("keydown", () => listCtrl = false, true);
 $("objects").addEventListener("select", (e) => {
   if (!state) return;
@@ -3215,7 +3217,9 @@ function renderLeft() {
   const exOpen2 = worldOpen || (explorerOpen || previewAlone || besideTiles || besideObjects || objectAlone) && !!exPicked;
   $("exPreview").classList.toggle("open", exOpen2);
   if (exOpen2) {
-    $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles && !besideObjects);
+    const edge = objectAlone && objectAtEdge && !previewWorld && !previewAlone && !besideTiles;
+    $("exPreview").classList.toggle("edge", edge);
+    $("exPreview").classList.toggle("alone", !explorerOpen && !previewWorld && !besideTiles && !besideObjects && !edge);
     $("exPreview").classList.toggle("besidePreviews", besideTiles);
     $("exPreview").classList.toggle("besideObjects", besideObjects);
     $("exPreview").style.right = explorerOpen && !previewWorld ? `${656 + exWidth + 8}px` : "";
@@ -4259,7 +4263,7 @@ var viewport = new Viewport($("view"), {
     if (ids.length) {
       showSceneTab();
       const o = pickCards && id ? state.scene.objects.find((x) => x.id === id && ids.includes(x.id)) : void 0;
-      if (o) previewInline(o);
+      if (o) previewInline(o, true);
     } else if (ray) {
       worldClickAt = performance.now();
       pickWaitFrom = state.worldObjects.picks ?? 0;
