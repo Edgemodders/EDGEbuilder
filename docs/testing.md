@@ -38,7 +38,7 @@ Last updated 2026-10-30.
 | [Project picker](#project-picker-0130) | In the game | Project picker | 2026-11-23 (0.13.1) | Pass; 0.13.2 released |
 | [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24 | Partly run: steps 1 to 35 passed on the morning's build; 36 to 59, and 6, 9, 11 and 33 again, to run on the newest (59 steps, P1 to P7) |
 | [T0 Tools probe](#t0-tools-probe) | In the game | T0 | 2026-11-24 | Not run (checked in REDnode's host; 10 steps) |
-| [G1 The command line and the scene contract](#g1-the-command-line-and-the-scene-contract-0140) | By hand, steps 1 to 8 without the game; 9 to 11 in the game | G1 | | Not run (the smoke test passes; 11 steps, C1 to C3). A release gate for 0.14.0 |
+| [G1 The command line and the scene contract](#g1-the-command-line-and-the-scene-contract-0140) | By hand, steps 1 to 8 without the game; 9 to 11 in the game | G1 | 2026-11-27 | Partly run: steps 1 to 8 passed (by script, no game); 9 to 11 in the game to run. A release gate for 0.14.0 |
 | [G0 Generated scenes: the look](#g0-generated-scenes-the-look) | In the game | G0, G1 | 2026-11-23 | Partly run: steps 1 and 2 passed (a command-line bake loads and draws; G1's end is met); step 7 in part; 3, 4, 6 and 8 to run |
 
 ## Automated
@@ -1241,6 +1241,21 @@ Before: `npm run build` on `main` (or 0.14.0's zip, `edgebuilder/cli.mjs` inside
 | C1 | Does the command line check and bake a scene with the game closed, with the right exit codes and reports? |
 | C2 | Does a command-line bake load in the game? (G0's look, step 2, answered yes on the `cosmic` build on 2026-11-23; step 9 is the same on 0.14.0) |
 | C3 | Does the editor keep `generator` and `meta` and leave them out of the bake? |
+
+**Results, 2026-11-27: steps 1 to 8 passed**, run by script by EDGEweb's session on `main` 67a5565, the `edgebuilder/cli.mjs` built from the merge (37c5645), with REDbridge 0.20.0 (the release) and the game's files from the Steam folder. The scenes used three `cargo_crate_a.mesh` objects (no barrel), one with appearance `default`, one with `meta`. The project in step 6 was made by hand (a `.cpmodproj` with empty `source\archive` and `source\resources`), not by REDcode's New Project. What each step gave:
+
+| # | Result |
+|---|---|
+| 1 | Exit 0, `ok: true`, counts `{ mesh: 3 }`, one `not-checked` warning |
+| 2 | Exit 1, `schema`: "transform.position is a string, not array", ids `[crate2]` |
+| 3 | Exit 0; `appearance` on `third` ("It has no appearance no_such_look. It has: default, black, lime, ... and 10 more."), `same-place` on `crate2 = crate2b` |
+| 4 | Exit 0, `dryRun: true`; `written` lists the sector, the block, `small.archive.xl` and `small.bake.json`; `out1` not created |
+| 5 | Exit 0; the four files under `out1\source`, and `out1\packed\archive\pc\mod\small.archive` (8,192 bytes) with `small.archive.xl`; streaming box 207 × 201 × 201 m around objects 6 m apart (about 100 m around them) |
+| 6 | Exit 0; the same four files in the project's `source` |
+| 7 | Exit 2 both times, the usage printed after the line. Found: `bake small.scene.json --offline` (no `--out`) named the missing `--out` first, not `--offline`. Fixed the same day: an option that cannot go with `bake` is named first ("--offline is for check: a bake needs REDbridge.") |
+| 8 | Plain lines with the same findings ("Nothing stops a bake.", "[schema] crate2: ...", "Stopped: see the errors above.", "A bake would write:", "Baked 3 objects in 0.2 s.", "Streaming box: 207 x 201 x 201 m.") |
+
+C1 is answered yes. **Still to run: steps 9 to 11 in the game** (the owner), for C2 on 0.14.0 and C3.
 
 ### G0 Generated scenes: the look
 

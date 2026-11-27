@@ -81,8 +81,9 @@ function readArgs(argv: string[]): Options {
   }
   if (!o.scene) throw new UsageError("Name the scene file.");
   if (o.command === "bake") {
-    if (!o.out === !o.project) throw new UsageError("bake needs where to write: --out <folder> or --project <path>, one of them.");
+    // An option that cannot go with bake is named before what is missing (G1 test, step 7).
     if (o.offline) throw new UsageError("--offline is for check: a bake needs REDbridge.");
+    if (!o.out === !o.project) throw new UsageError("bake needs where to write: --out <folder> or --project <path>, one of them.");
     if (o.pack && !o.out) throw new UsageError("--pack goes with --out. A project is packed by REDcode or WolvenKit, which know its settings.");
   } else if (o.out || o.project || o.pack || o.dryRun) throw new UsageError("--out, --project, --pack and --dry-run are for bake.");
   if (o.name && !o.pack) throw new UsageError("--name goes with --pack.");

@@ -12,7 +12,7 @@ Last updated 2026-11-27.
 
 | | |
 |---|---|
-| **Built, not released yet** | The command line (`check`, `bake`, `--pack`, `--dry-run`, `--json`), a JSON Schema for each scene format, the rule for how the format may change, and `generator` and `meta` fields. Planned for EDGEbuilder **0.14.0**, which ships only after its test passes ([the test](testing.md#g1-the-command-line-and-the-scene-contract-0140)) |
+| **Built, not released yet** | The command line (`check`, `bake`, `--pack`, `--dry-run`, `--json`), a JSON Schema for each scene format, the rule for how the format may change, and `generator` and `meta` fields. Planned for EDGEbuilder **0.14.0**, which ships only after its test passes ([the test](testing.md#g1-the-command-line-and-the-scene-contract-0140)). The part of the test that runs without the game passed on 2026-11-27; the in-game steps are still to run |
 | **Running now** | The in-game look at your club map, baked by the command line. It loads and draws. Not all of it has been checked yet |
 | **Next** | Test the command line, finish the in-game look, release 0.14.0 once its tests pass, then **B4-4 Detail** (level of detail), then **B5-4 Colliders** (your boxes) |
 | **Needed from you** | Your archives (asked on 2026-11-27). Later: a check under Mod Organizer 2. See [What we need from you](#what-we-need-from-you) |
