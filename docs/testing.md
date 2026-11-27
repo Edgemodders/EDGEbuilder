@@ -39,7 +39,7 @@ Last updated 2026-10-30.
 | [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24, 2026-11-27 | Partly run: steps 1 to 64 passed (1 to 35 on 2026-11-24, 36 to 64 and six rechecks on 2026-11-27, on test 22 last); 65, the Bake tab's headline, added after, to run (65 steps, P1 to P7) |
 | [T0 Tools probe](#t0-tools-probe) | In the game | T0 | 2026-11-24 | Not run (checked in REDnode's host; 10 steps) |
 | [G1 The command line and the scene contract](#g1-the-command-line-and-the-scene-contract-0140) | By hand, steps 1 to 8 without the game; 9 to 11 in the game | G1 | 2026-11-27 | Pass: steps 1 to 8 by script (no game), 9 to 11 in game on test 22. A release gate for 0.14.0 |
-| [G0 Generated scenes: the look](#g0-generated-scenes-the-look) | In the game | G0, G1 | 2026-11-23 | Partly run: steps 1 and 2 passed (a command-line bake loads and draws; G1's end is met); step 7 in part; 3, 4, 6 and 8 to run |
+| [G0 Generated scenes: the look](#g0-generated-scenes-the-look) | In the game | G0, G1 | 2026-11-23 | Partly run: steps 1 and 2 passed (a command-line bake loads and draws; G1's end is met); step 7 in part; 3, 4, 6 and 8 to run. Not a release gate for 0.14.0 (the owner, 2026-11-27): it runs after the release |
 
 ## Automated
 
