@@ -762,20 +762,19 @@ export class Viewport {
    * at word breaks; lines stack upwards.
    */
   /**
-   * The picked object's tooltip, beside its box on screen and never over it: to its right, else its left,
-   * else above or below; a thin line joins them. Only the world left of EDGEbuilder's window is used.
+   * The tooltip of what is under the cursor, following it: its bottom right corner hangs just off the
+   * cursor's tip, so the arrow never covers it (the owner's choice on 2026-11-27, over a place beside the
+   * object's box, for readability). Where that would leave the world between the open drawers, it goes to
+   * the cursor's right, past the arrow, or below it.
    */
   private drawWorldTip(tip: WorldTip): void {
-    const cam = this.cam;
-    if (!cam) return;
-    const pts = tip.corners.map((c) => project(cam, c)).filter((p): p is [number, number] => !!p);
-    if (!pts.length) return;
-    const r = { l: Math.min(...pts.map((p) => p[0])), r: Math.max(...pts.map((p) => p[0])), t: Math.min(...pts.map((p) => p[1])), b: Math.max(...pts.map((p) => p[1])) };
+    if (!this.cam) return;
     const free = tip.area?.() ?? { left: 0, right: this.canvas.width - 24 - 624 };
     const L = free.left + 8;
     const W = free.right - 16;
     const H = this.canvas.height;
-    if (r.r < L || r.l > W || r.b < 0 || r.t > H) return;
+    const [mx, my] = this.mouse;
+    if (mx < free.left || mx > free.right) return;
     const middle = tip.corners.reduce((a, c) => add(a, mul(c, 1 / tip.corners.length)), [0, 0, 0] as V3);
     const far = this.lastPos ? Math.hypot(...sub(middle, this.lastPos)) : undefined;
     const lines = [...tip.lines, ...(far !== undefined ? [`${far.toFixed(1)} m from the camera`] : [])];
@@ -785,31 +784,15 @@ export class Viewport {
     ctx.font = "12px 'JetBrains Mono', Consolas, monospace";
     const w = Math.ceil(Math.max(titleW, ...lines.map((l) => ctx.measureText(l).width))) + 22;
     const h = 30 + lines.length * 17;
-    const gap = 22;
-    const clampY = (y: number) => Math.max(8, Math.min(H - h - 8, y));
-    const clampX = (x: number) => Math.max(L, Math.min(W - w, x));
-    let x: number;
-    let y: number;
-    if (r.r + gap + w <= W) [x, y] = [r.r + gap, clampY((r.t + r.b) / 2 - h / 2)];
-    else if (r.l - gap - w >= L) [x, y] = [r.l - gap - w, clampY((r.t + r.b) / 2 - h / 2)];
-    else if (r.t - gap - h >= 8) [x, y] = [clampX((r.l + r.r) / 2 - w / 2), r.t - gap - h];
-    else if (r.b + gap + h <= H - 8) [x, y] = [clampX((r.l + r.r) / 2 - w / 2), r.b + gap];
-    else [x, y] = [L, 8]; // The object fills the view: a corner.
-    // The line from the tooltip's nearest edge to the box.
-    const ax = x > r.r ? x : x + w < r.l ? x + w : x + w / 2;
-    const ay = y > r.b ? y : y + h < r.t ? y + h : y + h / 2;
-    const bx = Math.max(r.l, Math.min(r.r, ax));
-    const by = Math.max(r.t, Math.min(r.b, ay));
-    ctx.strokeStyle = "rgba(252,238,10,0.7)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(bx, by);
-    ctx.stroke();
-    ctx.fillStyle = "#fcee0a";
-    ctx.beginPath();
-    ctx.arc(bx, by, 2.5, 0, Math.PI * 2);
-    ctx.fill();
+    // Just off the tip, up and to the left; the arrow (about 12 x 20 px) points down and right from it.
+    const off = 4;
+    const arrow = { w: 14, h: 22 };
+    let x = mx - off - w;
+    let y = my - off - h;
+    if (x < L) x = mx + arrow.w; // No room to the left: to the right, past the arrow.
+    if (y < 8) y = my + arrow.h; // No room above: below the arrow.
+    x = Math.max(L, Math.min(W - w, x));
+    y = Math.max(8, Math.min(H - h - 8, y));
     ctx.fillStyle = "rgba(8,9,13,0.9)";
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = "#fcee0a";
