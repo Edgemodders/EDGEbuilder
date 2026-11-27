@@ -2416,6 +2416,7 @@ function renderLibrary(s) {
   if (picked?.kind === "bake" && !findBake(s, picked.dir)) picked = void 0;
   if (picked?.kind === "model" && !findModel(s, picked.file) && !typedModel) picked = void 0;
   $("shelves").innerHTML = libraryRows(s);
+  renderLibraryFold(s);
   const sc = picked?.kind === "scene" ? findScene(s, picked.file) : void 0;
   const lb = picked?.kind === "bake" ? findBake(s, picked.dir) : void 0;
   const open = !!sc && sameFile(sc.file, s.scene.file ?? "");
@@ -2491,6 +2492,33 @@ $("shelves").addEventListener(
   },
   true
 );
+function folderKeys(s) {
+  const keys = [];
+  for (const sh of s.library.shelves) keys.push(`${sh.place}|`, ...sh.folders.map((f) => `${sh.place}|${f}`));
+  for (const mp of s.library.modelPlaces.filter((x) => x.place !== "library")) keys.push(`model:${mp.place}|`);
+  return keys;
+}
+var CollapseIcon = `<svg viewBox="0 0 16 16"><path d="M4.5 2.5L8 6l3.5-3.5M4.5 13.5L8 10l3.5 3.5M2 8h12"/></svg>`;
+var ExpandIcon = `<svg viewBox="0 0 16 16"><path d="M4.5 5.5L8 2l3.5 3.5M4.5 10.5L8 14l3.5-3.5M2 8h12"/></svg>`;
+function renderLibraryFold(s) {
+  const keys = folderKeys(s);
+  const allClosed = keys.length > 0 && keys.every((k) => closedFolders.has(k));
+  const b = $("libraryFold");
+  const html = allClosed ? ExpandIcon : CollapseIcon;
+  if (b.dataset.shows !== (allClosed ? "expand" : "collapse")) {
+    b.innerHTML = html;
+    b.dataset.shows = allClosed ? "expand" : "collapse";
+  }
+  b.title = allClosed ? "Expand all: every folder of the tree open" : "Collapse all: every folder of the tree closed, the places at the top";
+  b.toggleAttribute("disabled", !keys.length);
+}
+$("libraryFold").addEventListener("click", () => {
+  if (!state) return;
+  const keys = folderKeys(state);
+  if (keys.every((k) => closedFolders.has(k))) closedFolders.clear();
+  else for (const k of keys) closedFolders.add(k);
+  render(state);
+});
 $("shelves").addEventListener("select", (e) => {
   const value = e.detail.value;
   lbakeAsking = false;

@@ -142,6 +142,7 @@
   .icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
   .icon:hover { border-color: var(--rn-line, #333); color: var(--rn-fg, #eee); }
   .icon[aria-pressed="true"] { color: var(--rn-accent, #fcee0a); }
+  .icon:disabled { opacity: .35; cursor: default; border-color: transparent; }
   .icon:focus-visible { outline: 1px solid var(--rn-accent, #fcee0a); }
   .icon[disabled] { opacity: .35; cursor: default; }
   .headRow { display: flex; align-items: center; gap: 6px; margin: 6px 0 2px; }
@@ -356,7 +357,7 @@
         <div id="libraryInfo" class="count"></div>
         <div class="row" id="libraryMakeRow" hidden><rn-button id="libraryMake">Make the Library</rn-button></div>
         <div class="flushRow"><rn-input id="importPath" placeholder="A .glb to import: its path, or the folder button" title="A .glb file (a textured glTF in one file), or a prop's .prop.asset folder"></rn-input><button id="importBrowse" class="flushBtn" aria-pressed="false" title="Find the file: a drawer that walks your folders and drives"><svg viewBox="0 0 16 16"><path d="M1.5 4.5V13h13V5.5H7.5L6 3.5H1.5z"/></svg></button><rn-button id="importPathGo" variant="ghost" title="Pick the file typed in, for Import">Pick</rn-button></div>
-        <div class="headRow"><span id="libraryLabel" class="section grow">Library</span><span id="libraryOpenRow" class="grow" hidden><rn-button id="libraryOpen" variant="ghost" title="Open the Library's drawer again">Library</rn-button></span><button id="libraryOut" class="icon" aria-pressed="false" title="Out of the window: the Library in a drawer to the left, with more room"><svg viewBox="0 0 16 16"><path d="M7 2.5h6.5v11H7M10 8H1.5M4.5 5L1.5 8l3 3"/></svg></button></div>
+        <div class="headRow"><span id="libraryLabel" class="section grow">Library</span><span id="libraryOpenRow" class="grow" hidden><rn-button id="libraryOpen" variant="ghost" title="Open the Library's drawer again">Library</rn-button></span><button id="libraryFold" class="icon" title="Collapse all: every folder of the tree closed, the places at the top"></button><button id="libraryOut" class="icon" aria-pressed="false" title="Out of the window: the Library in a drawer to the left, with more room"><svg viewBox="0 0 16 16"><path d="M7 2.5h6.5v11H7M10 8H1.5M4.5 5L1.5 8l3 3"/></svg></button></div>
         <div id="libraryHome"><rn-list id="shelves"></rn-list></div>
         <rn-panel id="libraryPanel" class="pinnable collapsible" data-grows="shelves" title="Selected Scene" data-pin-note="so Open, Close, Show in world and the rest stay in view">
           <button class="mini" aria-pressed="false"></button>

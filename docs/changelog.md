@@ -36,6 +36,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - A scene file can say which program wrote it (`generator`) and carry the writer's own data on each object (`meta`). EDGEbuilder keeps both when it saves, copies `meta` to a duplicate, and never bakes them.
 - Settings, Previews, **A picked object's card** (off by default): on, a click on one of the scene's objects in the view, with Edit on, opens its card to the left of the window (the model in 3D, its size, looks and Drop a copy), as the eye on its row in the Scene tab does.
 - The Scene tab's objects list has an eye and a Delete button at the far right of each row, as the Objects drawer has. The eye shows the object's card to the left of the window, and hides it again; Delete asks once. A click on a row only selects the object, and two clicks fly to it, with no card in the way.
+- The Library tab: a **Collapse all** button beside the Library's out-of-the-window icon closes every folder of the tree, leaving the places at the top; once all are closed it turns into **Expand all**.
 
 **Changed**
 
