@@ -2454,6 +2454,23 @@ $("tileDetails").addEventListener("change", (e) => {
   }
 });
 
+// Settings: a scene object picked in the view with Edit on opens its card to the left, as its Scene tab row does (off by default).
+let pickCards = false;
+try {
+  pickCards = localStorage.getItem("edgebuilder.pickCards") === "1";
+} catch {
+  // No storage: off.
+}
+($("pickCards") as HTMLElement & { checked: boolean }).checked = pickCards;
+$("pickCards").addEventListener("change", (e) => {
+  pickCards = !!(e as CustomEvent<{ checked: boolean }>).detail.checked;
+  try {
+    localStorage.setItem("edgebuilder.pickCards", pickCards ? "1" : "0");
+  } catch {
+    // No storage: for this session only.
+  }
+});
+
 // ---- the Explorer (0.14.0) ------------------------------------------------------------------------------
 //
 // The folder icon beside the search box opens the Explorer, a wider drawer to the left: the game's folders,
@@ -3094,8 +3111,12 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
     if (!state) return;
     const ids = pickSelection(id, state.selected, state.scene.objects, state.scene.groups, opts);
     post({ type: "select", ids });
-    if (ids.length) showSceneTab();
-    else if (ray) {
+    if (ids.length) {
+      showSceneTab();
+      // Settings' "A picked object's card": the object clicked on (not the rest of its group) to the left.
+      const o = pickCards && id ? state.scene.objects.find((x) => x.id === id && ids.includes(x.id)) : undefined;
+      if (o) previewInline(o);
+    } else if (ray) {
       // None of the scene's objects: the game's own door (or mesh) there, if any (D1).
       worldClickAt = performance.now();
       // The spinner turns until the mod has finished this pick (or for 15 s at most).

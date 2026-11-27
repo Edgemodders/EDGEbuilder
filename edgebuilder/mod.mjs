@@ -2993,6 +2993,10 @@ async function pauseBuilder() {
     await playerCameraBack();
   }
   await hudOn();
+  for (const id of state.selected) await highlight(scene.get(id), false);
+  outlinesOff = true;
+  if (state.worldObjects.picked) await outlineThing(state.worldObjects.picked.key, 0);
+  if (hovered) await hoverThing(null);
   console.log("Builder mode paused (the overlay is not interactive): V's camera and HUD are back");
   publishCamera();
 }
@@ -3008,6 +3012,9 @@ async function resumeBuilder() {
     }
   }
   if (settings.hideHud !== false) await hudOff();
+  outlinesOff = false;
+  for (const id of state.selected) await highlight(scene.get(id), true);
+  if (state.worldObjects.picked) await outlineThing(state.worldObjects.picked.key, WorldOutline);
   console.log("Builder mode resumed");
   publishCamera();
 }

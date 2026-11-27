@@ -3674,6 +3674,19 @@ $("tileDetails").addEventListener("change", (e) => {
     renderLeft();
   }
 });
+var pickCards = false;
+try {
+  pickCards = localStorage.getItem("edgebuilder.pickCards") === "1";
+} catch {
+}
+$("pickCards").checked = pickCards;
+$("pickCards").addEventListener("change", (e) => {
+  pickCards = !!e.detail.checked;
+  try {
+    localStorage.setItem("edgebuilder.pickCards", pickCards ? "1" : "0");
+  } catch {
+  }
+});
 var explorerOpen = false;
 var previewAlone = false;
 var previewWorld = false;
@@ -4208,8 +4221,11 @@ var viewport = new Viewport($("view"), {
     if (!state) return;
     const ids = pickSelection(id, state.selected, state.scene.objects, state.scene.groups, opts);
     post({ type: "select", ids });
-    if (ids.length) showSceneTab();
-    else if (ray) {
+    if (ids.length) {
+      showSceneTab();
+      const o = pickCards && id ? state.scene.objects.find((x) => x.id === id && ids.includes(x.id)) : void 0;
+      if (o) previewInline(o);
+    } else if (ray) {
       worldClickAt = performance.now();
       pickWaitFrom = state.worldObjects.picks ?? 0;
       viewport.setWorking(worldClickAt);

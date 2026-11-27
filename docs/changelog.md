@@ -34,6 +34,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - A command line that checks and bakes a scene file with the game closed: `node edgebuilder/cli.mjs check <scene>` and `bake <scene> --out <folder>` or `--project <path>`, with `--pack`, `--dry-run` and a `--json` report of what was left out, what is wrong and what was written. For scenes a program writes: https://edgemodders.github.io/EDGEbuilder/generated-scenes.html
 - A JSON Schema for each scene format, a rule for how the format may change, and a format changelog: https://edgemodders.github.io/EDGEbuilder/scene.html
 - A scene file can say which program wrote it (`generator`) and carry the writer's own data on each object (`meta`). EDGEbuilder keeps both when it saves, copies `meta` to a duplicate, and never bakes them.
+- Settings, Previews, **A picked object's card** (off by default): on, a click on one of the scene's objects in the view, with Edit on, opens its card to the left of the window (the model in 3D, its size, looks and Drop a copy), as a click on its row in the Scene tab does.
 
 **Changed**
 
@@ -43,6 +44,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - One drawer at a time to the left of the window: Objects, the Library, Previews, the Explorer (with its Preview), Import's file picker or a sector.
 - The Import path box on the Library tab is wider.
 - The Preview drawer: **Properties** and **Appearances** have header rows of their own, Appearances sits right under Properties and fills the drawer down to Drop, which stays at the bottom.
+
+**Fixed**
+
+- With Edit on, hiding the overlay (F10) takes the green outline off selected objects, and off a picked world object, as Edit off does; F10 again puts it back. It stayed on, showing through walls while you played.
 
 **Other**
 

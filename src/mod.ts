@@ -1398,6 +1398,12 @@ async function pauseBuilder(): Promise<void> {
     await playerCameraBack();
   }
   await hudOn();
+  // The outlines go too, as with Edit off (found in game on 2026-11-27: a dropped object kept its
+  // green outline through F10); resumeBuilder puts them back.
+  for (const id of state.selected) await highlight(scene.get(id), false);
+  outlinesOff = true;
+  if (state.worldObjects.picked) await outlineThing(state.worldObjects.picked.key, 0);
+  if (hovered) await hoverThing(null);
   console.log("Builder mode paused (the overlay is not interactive): V's camera and HUD are back");
   publishCamera();
 }
@@ -1415,6 +1421,9 @@ async function resumeBuilder(): Promise<void> {
     }
   }
   if (settings.hideHud !== false) await hudOff();
+  outlinesOff = false;
+  for (const id of state.selected) await highlight(scene.get(id), true);
+  if (state.worldObjects.picked) await outlineThing(state.worldObjects.picked.key, WorldOutline);
   console.log("Builder mode resumed");
   publishCamera();
 }
