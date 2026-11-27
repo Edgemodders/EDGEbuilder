@@ -35,6 +35,8 @@ nav:
     url: /requests.html
   - title: Generated scenes
     url: /generated-scenes.html
+  - title: Arena maps
+    url: /arena.html
   - title: Detail
     url: /detail.html
   - title: Tools

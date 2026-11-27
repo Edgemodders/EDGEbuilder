@@ -8,7 +8,7 @@ Feature requests that reach EDGEbuilder from people using it, and where each one
 
 ## 2026-11-22: a team building generated arena maps
 
-**Status: placed on 2026-11-22 and agreed with the owner the same day**: the new phases G0 to G3 and B4-4, B5 split by kind, and the order below. Whether decals (B5-2) move ahead of B3b is not decided.
+**Status: placed on 2026-11-22 and agreed with the owner the same day**: the new phases G0 to G3 and B4-4, B5 split by kind, and the order below. Whether decals (B5-2) move ahead of B3b is not decided. **2026-11-27:** G1's first slice is merged into `main` and ships with 0.14.0; B5-4 colliders moves up to right after B4-4; the owner has asked the team for their archives, so G0's look can draw their own meshes.
 
 **Who asked.** A team building two arena maps for a roguelike mode. A generator of their own writes about 5,000 placements per build; two AI agents build and check through REDcode's MCP server and REDbridge; a person tests in the game under Mod Organizer 2. Today they place everything with another world builder at run time, which spawns the 5,000 objects every session. Their document covers every EDGE tool; the requests are ranked by the test time each would save them.
 
@@ -57,9 +57,10 @@ The agreed order stays. Two new pieces go in where they cost least, and B5 is sp
 | 2 | **G0**, a probe: one generated scene of 5,000 objects through the bake and into the game | A script and one in-game look. It decides G1's and G2's shape, and whether the bake must split a big scene into several sectors |
 | 3 | **G1** The contract and the command line | No interface in the game, so no long test. It also delivers what 1.0 promises anyway (a frozen format) and what [REDcode #2](https://github.com/Edgemodders/REDcode/issues/2) wants (a bake from outside the game) |
 | 4 | **B4-4 Detail** | A probe and one row in the Selected panel. Pop-in was their top playtest complaint |
-| 5 | S2, S3, B3b, B4b, B4c | As agreed |
-| 6 | **B5**, split: **B5-1** lights (1.0 needs them), **B5-2** decals, **B5-3** particles and effects, **B5-4** colliders, **B5-5** sounds | Each kind is its own probe, bake change and test. Whether B5-2 moves ahead of B3b for this team is the owner's choice |
-| 7 | **G2** Big scenes in the editor, **G3** the round trip | G2 needs G0's answers; G3 is worth most once decals exist, since those are what a person adjusts by eye |
+| 5 | **B5-4 Colliders** (moved up on 2026-11-27) | G0's look showed the club map cannot be walked without the team's boxes: three of its four floor pieces carry no collision data. Starts with the probe of the [nine fields](generated-scenes.md#collision) |
+| 6 | S2, S3, B3b, B4b, B4c | As agreed |
+| 7 | **B5**, the rest: **B5-1** lights (1.0 needs them), **B5-2** decals, **B5-3** particles and effects, **B5-5** sounds | Each kind is its own probe, bake change and test. Whether B5-2 moves ahead of B3b for this team is the owner's choice |
+| 8 | **G2** Big scenes in the editor, **G3** the round trip | G2 needs G0's answers; G3 is worth most once decals exist, since those are what a person adjusts by eye |
 
 ### What is not taken up
 
