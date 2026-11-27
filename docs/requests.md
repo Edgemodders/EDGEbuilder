@@ -8,7 +8,7 @@ Feature requests that reach EDGEbuilder from people using it, and where each one
 
 ## 2026-11-22: a team building generated arena maps
 
-**Status: placed on 2026-11-22 and agreed with the owner the same day**: the new phases G0 to G3 and B4-4, B5 split by kind, and the order below. Whether decals (B5-2) move ahead of B3b is not decided. **2026-11-27:** G1's first slice is merged into `main` and ships with 0.14.0; B5-4 colliders moves up to right after B4-4; the owner has asked the team for their archives, so G0's look can draw their own meshes.
+**Status: placed on 2026-11-22 and agreed with the owner the same day**: the new phases G0 to G3 and B4-4, B5 split by kind, and the order below. Whether decals (B5-2) move ahead of B3b is not decided. **2026-11-27:** G1's first slice is merged into `main`, for 0.14.0, with its test as one of that release's gates; B5-4 colliders moves up to right after B4-4; the owner has asked the team for their archives, so G0's look can draw their own meshes.
 
 **Who asked.** A team building two arena maps for a roguelike mode. A generator of their own writes about 5,000 placements per build; two AI agents build and check through REDcode's MCP server and REDbridge; a person tests in the game under Mod Organizer 2. Today they place everything with another world builder at run time, which spawns the 5,000 objects every session. Their document covers every EDGE tool; the requests are ranked by the test time each would save them.
 

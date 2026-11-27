@@ -38,6 +38,7 @@ Last updated 2026-10-30.
 | [Project picker](#project-picker-0130) | In the game | Project picker | 2026-11-23 (0.13.1) | Pass; 0.13.2 released |
 | [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24 | Partly run: steps 1 to 35 passed on the morning's build; 36 to 59, and 6, 9, 11 and 33 again, to run on the newest (59 steps, P1 to P7) |
 | [T0 Tools probe](#t0-tools-probe) | In the game | T0 | 2026-11-24 | Not run (checked in REDnode's host; 10 steps) |
+| [G1 The command line and the scene contract](#g1-the-command-line-and-the-scene-contract-0140) | By hand, steps 1 to 8 without the game; 9 to 11 in the game | G1 | | Not run (the smoke test passes; 11 steps, C1 to C3). A release gate for 0.14.0 |
 | [G0 Generated scenes: the look](#g0-generated-scenes-the-look) | In the game | G0, G1 | 2026-11-23 | Partly run: steps 1 and 2 passed (a command-line bake loads and draws; G1's end is met); step 7 in part; 3, 4, 6 and 8 to run |
 
 ## Automated
@@ -1209,6 +1210,37 @@ Before: the game closed, EDGEbuilder's newest build and the probe deployed with 
 | 10 | **Close** (in the tool) | The drawer closes; Settings says **Open** again |
 
 Not in the game check: hot reload (a change to `tool.js` remounts the tool) and the failing mounts, which were checked in REDnode's host and need a file edited while the game runs.
+
+### G1 The command line and the scene contract (0.14.0)
+
+For [Generated scenes](generated-scenes.md#the-command-line-g1), G1's first slice, merged into `main` on 2026-11-27. **A release gate for 0.14.0** (the owner, 2026-11-27): 0.14.0 is released only once this test has passed, as for everything that ships. The smoke test already covers the schemas, `check` and `bake` against REDbridge; this is the same by hand from a built package, and the editor half in the game. Steps 1 to 8 need no running game (REDbridge and the game's files on disk), so they can run by script.
+
+Before: `npm run build` on `main` (or 0.14.0's zip, `edgebuilder/cli.mjs` inside it). A scratch folder holding:
+
+- `small.scene.json`: format 1, three objects on the game's own meshes (for example `base\environment\decoration\containers\cargo\cargo_crate_a.mesh` twice and a barrel), one with `appearance` set to a name the mesh has, a top-level `generator` (`{ "name": "test", "version": "1", "build": "a" }`) and `meta` (`{ "room": 4 }`) on one object.
+- `bad.scene.json`: a copy with one object's `position` a string.
+- `twice.scene.json`: a copy with one object duplicated at the same place under a new id, and another object's `appearance` a name the mesh does not have.
+- A scratch REDcode or WolvenKit project (an empty one from REDcode's New Project).
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | `node edgebuilder/cli.mjs check small.scene.json --offline --json` | Exit 0; `ok: true`, counts by kind, one `not-checked` warning |
+| 2 | `check bad.scene.json --offline --json` | Exit 1; a `schema` or `bad-number` error naming the object and the field |
+| 3 | `check twice.scene.json --json` (REDbridge and the game found, or `--bridge`, `--game`) | Exit 0; warnings `same-place` (or `overlap`) naming the two ids, and `appearance` naming the object and the look |
+| 4 | `bake small.scene.json --out out1 --dry-run --json` | Exit 0; `written` lists the sector, the block, the `.xl` and the bake record; `out1` is not created |
+| 5 | `bake small.scene.json --out out1 --pack --json` | Exit 0; the files of step 4 under `out1/source/...`, and `out1/packed/archive/pc/mod/small.archive` with its `.xl` beside it; `streamingBox` around the three objects |
+| 6 | `bake small.scene.json --project <scratch project> --json` | Exit 0; the same files in the project's `source`, as the Bake tab writes them |
+| 7 | `bake small.scene.json --offline`, then `bake` with no scene | Exit 2 both times, with a line saying what is wrong |
+| 8 | `check` and `bake` without `--json` | Plain lines a person can read, the same findings |
+| 9 | In the game (0.14.0 deployed): install `out1/packed` as a mod with EDGEdeck, start the game, go to the objects | The three objects stand where the scene puts them, the set appearance on its object |
+| 10 | In EDGEbuilder, open `small.scene.json` (Library tab), move the object with `meta`, Duplicate it, close the scene. Open the file in a text editor | `generator` is still there; both the object and its duplicate carry `meta` `{ "room": 4 }`; the rest saved as before |
+| 11 | Bake tab: bake `small` into the scratch project | It bakes as before, four objects now; the baked sector (opened in REDcode) has four nodes and no `room` or `generator` in it |
+
+| # | Question |
+|---|---|
+| C1 | Does the command line check and bake a scene with the game closed, with the right exit codes and reports? |
+| C2 | Does a command-line bake load in the game? (G0's look, step 2, answered yes on the `cosmic` build on 2026-11-23; step 9 is the same on 0.14.0) |
+| C3 | Does the editor keep `generator` and `meta` and leave them out of the bake? |
 
 ### G0 Generated scenes: the look
 

@@ -12,9 +12,9 @@ Last updated 2026-11-27.
 
 | | |
 |---|---|
-| **Built, not released yet** | The command line (`check`, `bake`, `--pack`, `--dry-run`, `--json`), a JSON Schema for each scene format, the rule for how the format may change, and `generator` and `meta` fields. It ships in EDGEbuilder **0.14.0** |
+| **Built, not released yet** | The command line (`check`, `bake`, `--pack`, `--dry-run`, `--json`), a JSON Schema for each scene format, the rule for how the format may change, and `generator` and `meta` fields. Planned for EDGEbuilder **0.14.0**, which ships only after its test passes ([the test](testing.md#g1-the-command-line-and-the-scene-contract-0140)) |
 | **Running now** | The in-game look at your club map, baked by the command line. It loads and draws. Not all of it has been checked yet |
-| **Next** | Finish the in-game look, release 0.14.0, then **B4-4 Detail** (level of detail), then **B5-4 Colliders** (your boxes) |
+| **Next** | Test the command line, finish the in-game look, release 0.14.0 once its tests pass, then **B4-4 Detail** (level of detail), then **B5-4 Colliders** (your boxes) |
 | **Needed from you** | Your archives (asked on 2026-11-27). Later: a check under Mod Organizer 2. See [What we need from you](#what-we-need-from-you) |
 
 ## Your requests
@@ -23,8 +23,8 @@ The numbers are the ones on [Requests](requests.md), where each is explained.
 
 | # | Request | Status |
 |---|---|---|
-| E1 | A versioned scene format with a schema and a changelog | **Built**, ships in 0.14.0. Schemas `scene-1`, `scene-2`, `scene-3`, the rule for change and the format changelog are on [Scene format](scene.md) |
-| E2 | Check and bake from a command line, game closed, with a report | **Built**, ships in 0.14.0. See [The command line](#the-command-line). `npx` comes later |
+| E1 | A versioned scene format with a schema and a changelog | **Built**, for 0.14.0 once tested. Schemas `scene-1`, `scene-2`, `scene-3`, the rule for change and the format changelog are on [Scene format](scene.md) |
+| E2 | Check and bake from a command line, game closed, with a report | **Built**, for 0.14.0 once tested. See [The command line](#the-command-line). `npx` comes later |
 | E3 | Decals and particles in the bake | Planned: B5-2 decals, B5-3 particles and effects. After the Sector Tools and world-object phases. Whether decals come earlier is still open |
 | E4 | Forced LOD and a hide distance per object | **Hide distance works today** for meshes: Seen from, since 0.8.1. LOD is **B4-4 Detail**, which starts with a probe. It is next after 0.14.0 |
 | E5 | Collision from your boxes, or none | **None works today**: leave `solid` out. **Boxes are B5-4**. On 2026-11-27 it moved up to come right after B4-4 |
@@ -72,7 +72,7 @@ Three of the four floor pieces and many wall pieces have no collision data. **Th
 
 ## The command line
 
-It ships in 0.14.0, in the package as `edgebuilder/cli.mjs`, and runs with Node. It needs REDbridge and the game's folder (it was tested with REDbridge 0.17.0). Until 0.14.0 is released it runs from the repository's `main` branch: `npm install`, `npm run build`.
+It is planned for 0.14.0, in the package as `edgebuilder/cli.mjs`, once [its test](testing.md#g1-the-command-line-and-the-scene-contract-0140) passes. It runs with Node. It needs REDbridge and the game's folder (it was tested with REDbridge 0.17.0). Until 0.14.0 is released, it runs untested from the repository's `main` branch: `npm install`, `npm run build`.
 
 ```
 node edgebuilder/cli.mjs check my_arena.scene.json
@@ -101,7 +101,7 @@ In order:
 | # | Step | What it gives you |
 |---|---|---|
 | 1 | Finish the in-game look (G-2 to G-5): the hitch and frame rate, pop-in distances, opening the scene in the editor, all three maps in one sector, and whether a swapped-in bake is used | Whether a big scene must be baked as several sectors, and whether big scenes are edited in the game or in REDcode's sector view (G2) |
-| 2 | Release **0.14.0** | The command line and the schemas, released |
+| 2 | Test the command line and the scene contract (11 steps), then release **0.14.0** once all its tests pass | The command line and the schemas, released |
 | 3 | **B4-4 Detail**: a probe of what a baked mesh node can hold (it has no forced LOD field, and `lodLevelScales` is untried), then a Detail setting per object | Props that keep their finest shape at a distance (E4) |
 | 4 | **B5-4 Colliders**: a probe of the nine fields where your `worldCollisionNode` differs from ours, then a `collider` kind in the scene and the bake | Your boxes baked by EDGEbuilder (E5), so the maps can be walked |
 | 5 | Sector Tools (the 3D view and previews), world objects, editing the world, quest places | EDGEbuilder's other planned work |
