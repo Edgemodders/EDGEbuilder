@@ -282,7 +282,15 @@ function sceneRows(s: Snapshot): string {
       if (!closed.has(g.id)) walk(g.id, depth + 1);
     }
     for (const o of objects.filter((x) => (x.group ?? null) === parent)) {
-      rows.push(`<rn-item value="o:${esc(o.id)}"${s.selected.includes(o.id) ? " selected" : ""}${pad(depth)}>${esc(o.id)}<span slot="end">${o.entityId ? o.kind : "not in world"}</span></rn-item>`);
+      // The eye at the far right shows its card to the left of the window (a click on the row only selects: the card
+      // covered the object when two clicks flew to it, the owner, 2026-11-27).
+      // Delete beside it, as in the Objects drawer, asked once.
+      const eye = o.resource || o.record ? `<button class="icon" data-act="eye" data-id="${esc(o.id)}" aria-pressed="${objectPreview && objectLike?.id === o.id}" title="Its card to the left of the window: the model in 3D, its size, looks and Drop a copy">${EyeIcon}</button>` : "";
+      const end =
+        confirming === o.id
+          ? `<span slot="end" class="confirm">Delete?<button data-act="yes" data-id="${esc(o.id)}">Yes</button><button data-act="no">No</button></span>`
+          : `<span slot="end">${o.entityId ? o.kind : "not in world"}${eye}<button class="act" data-act="trash" data-id="${esc(o.id)}" title="Delete">${TrashIcon}</button></span>`;
+      rows.push(`<rn-item value="o:${esc(o.id)}"${s.selected.includes(o.id) ? " selected" : ""}${pad(depth)}>${esc(o.id)}${end}</rn-item>`);
     }
   };
   walk(null, 0);
@@ -528,20 +536,44 @@ $("objects").addEventListener(
       if (state) render(state);
       return;
     }
+    const act = (e.target as HTMLElement).closest?.("[data-act]") as HTMLElement | null;
+    if (act) {
+      // The row's buttons work without selecting the row.
+      e.stopPropagation();
+      lastSceneRow = { value: "", at: 0 };
+      const id = act.dataset.id;
+      if (act.dataset.act === "eye") {
+        // Its card on or off.
+        const o = state?.scene.objects.find((x) => x.id === id);
+        if (objectPreview && objectLike?.id === id) {
+          objectPreview = false;
+          if (state) render(state);
+        } else if (o) previewInline(o);
+        return;
+      }
+      if (act.dataset.act === "trash") confirming = id;
+      else {
+        confirming = undefined;
+        if (act.dataset.act === "yes" && id) post({ type: "delete", ids: [id] });
+      }
+      if (state) render(state);
+      return;
+    }
     const value = (e.target as HTMLElement).closest?.("rn-item")?.getAttribute("value") ?? "";
     if (!value.startsWith("o:") || !state) return;
     const twice = value === lastSceneRow.value && performance.now() - lastSceneRow.at < 500;
     lastSceneRow = twice ? { value: "", at: 0 } : { value, at: performance.now() };
+    if (!twice) return; // One click selects (the list's own select); the eye shows the card.
     const o = state.scene.objects.find((x) => x.id === value.slice(2));
     if (!o) return;
-    if (twice) flewAt = performance.now();
+    flewAt = performance.now();
     // After this click: a render now would redraw the rows under it, and the list would never hear it (no select).
-    setTimeout(() => (twice ? state && goToObject(state, o.id) : previewInline(o)), 0);
+    setTimeout(() => state && goToObject(state, o.id), 0);
   },
   true,
 );
 
-/** A row of the Scene tab's list: the object's preview to the left of the window, or beside the Objects drawer when that is open. */
+/** The eye on a row of the Scene tab's list (or a pick in the view, with its setting): the object's preview to the left of the window, or beside the Objects drawer when that is open. */
 function previewInline(o: SceneObject): void {
   if (!o.resource && !o.record) return;
   if (objectPreview && objectLike?.id === o.id) return;

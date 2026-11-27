@@ -172,6 +172,9 @@
   rn-list { --rn-list-height: 300px; display: block; }
   #appearances { --rn-list-height: 76px; margin-top: 6px; }
   #objects { --rn-list-height: 200px; }
+  /* A row's eye and Delete, at the far right after its kind. */
+  #objects .icon { margin-left: 6px; vertical-align: middle; }
+  #objects .act { vertical-align: middle; }
   #shelves { --rn-list-height: 380px; }
   .tag { font-family: var(--rn-mono, monospace); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--rn-ok, #5dffa1); margin-left: 6px; }
   .tag.warn { color: var(--rn-warn, #ffcc4d); }
@@ -471,7 +474,7 @@
         </rn-panel>
         <rn-panel title="Previews">
           <rn-toggle id="tileDetails" label="A picture's details before Drop" checked title="On: a click on a picture in the Previews drawer opens its details beside it (the model in 3D, its size, looks and a Drop button). Off: a click starts Drop at click at once"></rn-toggle>
-          <rn-toggle id="pickCards" label="A picked object's card" title="On: a click on one of the scene's objects in the view, with Edit on, opens its card to the left of the window (the model in 3D, its size, looks and Drop a copy), as a click on its row in the Scene tab does"></rn-toggle>
+          <rn-toggle id="pickCards" label="A picked object's card" title="On: a click on one of the scene's objects in the view, with Edit on, opens its card to the left of the window (the model in 3D, its size, looks and Drop a copy), as the eye on its row in the Scene tab does"></rn-toggle>
         </rn-panel>
         <div id="toolsBox" hidden>
           <rn-panel title="Tools (T0 probe)">

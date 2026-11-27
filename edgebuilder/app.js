@@ -1843,7 +1843,9 @@ function sceneRows(s) {
       if (!closed.has(g.id)) walk(g.id, depth + 1);
     }
     for (const o of objects.filter((x) => (x.group ?? null) === parent)) {
-      rows.push(`<rn-item value="o:${esc(o.id)}"${s.selected.includes(o.id) ? " selected" : ""}${pad(depth)}>${esc(o.id)}<span slot="end">${o.entityId ? o.kind : "not in world"}</span></rn-item>`);
+      const eye = o.resource || o.record ? `<button class="icon" data-act="eye" data-id="${esc(o.id)}" aria-pressed="${objectPreview && objectLike?.id === o.id}" title="Its card to the left of the window: the model in 3D, its size, looks and Drop a copy">${EyeIcon}</button>` : "";
+      const end = confirming === o.id ? `<span slot="end" class="confirm">Delete?<button data-act="yes" data-id="${esc(o.id)}">Yes</button><button data-act="no">No</button></span>` : `<span slot="end">${o.entityId ? o.kind : "not in world"}${eye}<button class="act" data-act="trash" data-id="${esc(o.id)}" title="Delete">${TrashIcon}</button></span>`;
+      rows.push(`<rn-item value="o:${esc(o.id)}"${s.selected.includes(o.id) ? " selected" : ""}${pad(depth)}>${esc(o.id)}${end}</rn-item>`);
     }
   };
   walk(null, 0);
@@ -2054,14 +2056,36 @@ $("objects").addEventListener(
       if (state) render(state);
       return;
     }
+    const act = e.target.closest?.("[data-act]");
+    if (act) {
+      e.stopPropagation();
+      lastSceneRow = { value: "", at: 0 };
+      const id = act.dataset.id;
+      if (act.dataset.act === "eye") {
+        const o2 = state?.scene.objects.find((x) => x.id === id);
+        if (objectPreview && objectLike?.id === id) {
+          objectPreview = false;
+          if (state) render(state);
+        } else if (o2) previewInline(o2);
+        return;
+      }
+      if (act.dataset.act === "trash") confirming = id;
+      else {
+        confirming = void 0;
+        if (act.dataset.act === "yes" && id) post({ type: "delete", ids: [id] });
+      }
+      if (state) render(state);
+      return;
+    }
     const value = e.target.closest?.("rn-item")?.getAttribute("value") ?? "";
     if (!value.startsWith("o:") || !state) return;
     const twice = value === lastSceneRow.value && performance.now() - lastSceneRow.at < 500;
     lastSceneRow = twice ? { value: "", at: 0 } : { value, at: performance.now() };
+    if (!twice) return;
     const o = state.scene.objects.find((x) => x.id === value.slice(2));
     if (!o) return;
-    if (twice) flewAt = performance.now();
-    setTimeout(() => twice ? state && goToObject(state, o.id) : previewInline(o), 0);
+    flewAt = performance.now();
+    setTimeout(() => state && goToObject(state, o.id), 0);
   },
   true
 );
