@@ -1539,13 +1539,13 @@ async function pathOf(hash: string | null | undefined): Promise<string> {
   if (!hash) return "";
   const known = pathNames.get(hash);
   if (known !== undefined) return known;
+  // Without REDbridge nothing is known yet: asked again next time, not kept as unknown for the session.
+  if (!bridge?.running) return "";
   let name = "";
-  if (bridge?.running) {
-    try {
-      name = (await bridge.call<{ path?: string }>("hash.resolve", { hash }))?.path ?? "";
-    } catch {
-      // Not known to REDbridge's hash list: the hash stays.
-    }
+  try {
+    name = (await bridge.call<{ path?: string }>("hash.resolve", { hash }))?.path ?? "";
+  } catch {
+    // Not known to REDbridge's hash list: the hash stays.
   }
   pathNames.set(hash, name);
   return name;
@@ -1734,9 +1734,20 @@ async function findNode(p: WorldPicked, seq: number): Promise<void> {
     p.note = undefined;
     if (bridge?.running && sector) {
       try {
-        const r = await bridge.call<{ items?: { index?: number; ref?: string | null }[] }>("sector.nodes", { path: sector });
-        const ref = (r.items ?? []).find((i) => i.index === found.instance)?.ref;
-        if (ref) p.ref = ref;
+        const r = await bridge.call<{ items?: { index?: number; ref?: string | null; resource?: string | null; appearance?: string | null }[] }>("sector.nodes", { path: sector });
+        const item = (r.items ?? []).find((i) => i.index === found.instance);
+        if (item?.ref) p.ref = item.ref;
+        // REDnode's registry names no file for some kinds (a worldCookedStaticMeshNode, found in game on
+        // 2026-11-27): the sector's own record does, so the drawer can draw it and Drop a copy has a file.
+        if (!p.resource && item?.resource) {
+          p.resource = item.resource;
+          if (!p.appearance && item.appearance) p.appearance = item.appearance;
+          if (p.what === "mesh") p.label = `${found.kind.replace(/^world|Node$/g, "")} ${path.basename(item.resource)}`;
+          if (p.what === "mesh" && p.collision === undefined) {
+            const c = await meshCollision(item.resource).catch(() => undefined);
+            if (c !== undefined) p.collision = c;
+          }
+        }
       } catch (err) {
         console.log(`${p.label}: its sector record was not read (${(err as Error).message})`);
       }

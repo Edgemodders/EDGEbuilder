@@ -3103,12 +3103,11 @@ async function pathOf(hash) {
   if (!hash) return "";
   const known = pathNames.get(hash);
   if (known !== void 0) return known;
+  if (!bridge?.running) return "";
   let name = "";
-  if (bridge?.running) {
-    try {
-      name = (await bridge.call("hash.resolve", { hash }))?.path ?? "";
-    } catch {
-    }
+  try {
+    name = (await bridge.call("hash.resolve", { hash }))?.path ?? "";
+  } catch {
   }
   pathNames.set(hash, name);
   return name;
@@ -3259,8 +3258,17 @@ async function findNode(p, seq) {
     if (bridge?.running && sector) {
       try {
         const r = await bridge.call("sector.nodes", { path: sector });
-        const ref = (r.items ?? []).find((i) => i.index === found.instance)?.ref;
-        if (ref) p.ref = ref;
+        const item = (r.items ?? []).find((i) => i.index === found.instance);
+        if (item?.ref) p.ref = item.ref;
+        if (!p.resource && item?.resource) {
+          p.resource = item.resource;
+          if (!p.appearance && item.appearance) p.appearance = item.appearance;
+          if (p.what === "mesh") p.label = `${found.kind.replace(/^world|Node$/g, "")} ${path12.basename(item.resource)}`;
+          if (p.what === "mesh" && p.collision === void 0) {
+            const c = await meshCollision(item.resource).catch(() => void 0);
+            if (c !== void 0) p.collision = c;
+          }
+        }
       } catch (err) {
         console.log(`${p.label}: its sector record was not read (${err.message})`);
       }

@@ -72,6 +72,8 @@ Fixed: F10 takes the green outline off selected objects while you play
 
 **Fixed**
 
+- A picked object of the game's whose node REDnode names no file for (such as the merged nodes, `worldCookedStaticMeshNode`) gets its file from its sector, so the drawer shows it in 3D, with its collision data, and Drop a copy works. It said "Its file is not known".
+- A door looked at before REDbridge was ready no longer stays without its file for the rest of the session.
 - With Edit on, hiding the overlay (F10) takes the green outline off selected objects, and off a picked world object, as Edit off does; F10 again puts it back. It stayed on, showing through walls while you played.
 
 **Other**
