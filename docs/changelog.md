@@ -20,7 +20,7 @@ Built, switched off until their tests pass (`Features` in `src/protocol.ts`):
 <!-- nexus
 New: Previews: search results as small 3D pictures that turn under the mouse, with details and Drop
 New: The Explorer: the game's folders, each mod, the project and the game's people, with a 3D preview
-New: Pick under the cursor: outline and pick any mesh the game placed, with its details and Drop a copy
+New: Pick under the cursor: outline and pick any mesh the game placed, details, Drop a copy; a right tap unpicks
 New: Show tooltip: name, size, Solid and distance of what is under the mouse, following the cursor
 New: Solid and Collision data, Yes or No, for a picked object and in the tooltip
 New: The Library and the Scene tab's objects can leave the window for a drawer; Collapse all in the Library
@@ -41,6 +41,7 @@ Fixed: F10 takes the green outline off selected objects while you play
 - Selected Node and the tooltip say **Solid: Yes** or **No** in plain words, and for a mesh **Collision data: Yes** or **No**: whether its file carries collision data, so you can tell an object that is not solid but whose copy can be made solid from one that needs a collision box.
 - Pick under the cursor also picks meshes placed as instanced destructibles: a bake's solid objects and many of the game's own props. Before, a click on a baked solid object picked what was behind it.
 - Drop at click, Drop to floor and the outline under the cursor land on a bake's solid objects. They fell through them, to whatever was below: a bake's solid objects are in the game's Dynamic collision group, which EDGEbuilder did not ask. A pick under the cursor also sees them as solid.
+- With Edit on, a quick tap of the right button unpicks the world object picked (the World tab, Pick under the cursor or a sector's entry) and closes its drawer. Holding the right button still looks around.
 - A click on nothing in the world closes the picked object's drawer where it stands, at the screen's left; it no longer jumps beside the window as it fades.
 - The Library can leave the window: the icon at the top right of the Library tree puts it in a drawer to the left, with more room. A Library button opens the drawer again, the same icon brings the Library back, and a pick in the drawer shows the Library tab's Selected Scene panel. EDGEbuilder remembers the choice. The drawer's two arrows make it wider (in steps, up to 840 px) or narrower again, also remembered.
 - The Objects drawer: an eye on each object's row shows it in the Preview drawer beside it, with the object as it is now: its size at its scale, its look, Solid, Seen from and place. **Drop a copy** there starts Drop at click with a copy that keeps the original's look, scale, Solid and Seen from (a person's settings too).

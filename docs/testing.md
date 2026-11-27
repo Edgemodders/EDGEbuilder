@@ -36,7 +36,7 @@ Last updated 2026-10-30.
 | [D2 Open, close, lock](#d2-open-close-lock-0130) | In the game | D2 | 2026-11-23 (0.13.0, 0.13.1) | Pass (step 12 as R1 to R5 on 0.13.1) |
 | [S1 Sectors](#s1-sectors-0130) | In the game | S1 | 2026-11-23 (0.13.0 to 0.13.2) | Pass |
 | [Project picker](#project-picker-0130) | In the game | Project picker | 2026-11-23 (0.13.1) | Pass; 0.13.2 released |
-| [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24, 2026-11-27 | Pass: steps 1 to 35 on 2026-11-24, 36 to 65 and six rechecks on 2026-11-27, on test 23 last (65 steps, P1 to P7) |
+| [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24, 2026-11-27 | Partly run: steps 1 to 65 passed (1 to 35 on 2026-11-24, 36 to 65 and six rechecks on 2026-11-27, on test 23 last); 66, the right-button tap, added after, to run on test 25 (66 steps, P1 to P7) |
 | [T0 Tools probe](#t0-tools-probe) | In the game | T0 | 2026-11-24 | Not run (checked in REDnode's host; 10 steps) |
 | [G1 The command line and the scene contract](#g1-the-command-line-and-the-scene-contract-0140) | By hand, steps 1 to 8 without the game; 9 to 11 in the game | G1 | 2026-11-27 | Pass: steps 1 to 8 by script (no game), 9 to 11 in game on test 22. A release gate for 0.14.0 |
 | [G0 Generated scenes: the look](#g0-generated-scenes-the-look) | In the game | G0, G1 | 2026-11-23 | Partly run: steps 1 and 2 passed (a command-line bake loads and draws; G1's end is met); step 7 in part; 3, 4, 6 and 8 to run. Not a release gate for 0.14.0 (the owner, 2026-11-27): it runs after the release |
@@ -1171,6 +1171,7 @@ Before: the game closed; Claude deploys 0.14.0 with EDGEdeck. A save loaded, a s
 | 63 | Scene tab: the bin at the far right of a row; No; the bin again; Yes; then Ctrl+Z | The row says "Delete?" with Yes and No, and the row is not selected by it; No puts the buttons back; Yes deletes the object (its preview goes from the world); Ctrl+Z brings it back (asked for during this test on 2026-11-27) | P7 |
 | 64 | Library tab, with folders open: the button left of the out-of-the-window icon; again; then open one folder by its arrow and press it; then the same with the Library out of the window | Collapse all: only the places (Library, This PC, the project's models, the Desk) are left, each closed, and the button turns into Expand all; Expand all opens every folder. With one open, it is Collapse all again. Out of the window, it works on the tree in the drawer (asked for during this test on 2026-11-27) | P7 |
 | 65 | Bake tab with a scene open; then with a scene with a long name; then with no scene | The top line reads **Scene:** and the name, larger, in the panels' title font, with "N added, N removed" at the right of the same line; a long name is cut short with "..." and the counts stay in view, the file on hover; with no scene, "No scene open" and no counts (asked for on 2026-11-27, after the test above passed) | P7 |
+| 66 | Edit on, the editor camera: pick a world object (Pick under the cursor, or a door on World > Nearby) so its drawer opens; a quick tap of the right button. Pick it again; hold the right button and look around, then let go. Then Drop at click and a tap. Then Settings, editor camera off: pick one, right-click | The tap unpicks it: its outline goes and its drawer closes. The hold looks around and keeps it picked. During Drop at click the tap cancels the drop, as before, and leaves any pick alone. With V's camera, a right-click unpicks at once (asked for on 2026-11-27, during the release check) | P6 |
 
 | # | Question |
 |---|---|
@@ -1195,6 +1196,8 @@ Open in REDcode and the T0 Tools probe were built for 0.14.0 but have not passed
 | 1 | World > Sectors, open a sector; pick an entry. Then World > Nearby, pick a door | No arrow beside the Sector drawer's close cross; no **Open in REDcode** in Selected Node; the rest of the drawer and the panel as before |
 | 2 | Settings | No Tools box, though the tool probe is installed; the other settings as before |
 | 3 | REDnode's Mod Manager, EDGEbuilder | No Calls entry for `redcode.openSector`; EDGEbuilder starts and opens as before |
+
+**Passed in game on 2026-11-27** (the owner, test 24): all three. The Sector drawer and Selected Node have no Open in REDcode, Settings has no Tools (T0 probe) panel with the tool probe installed, and the Mod Manager shows no Calls section for EDGEbuilder, its Permissions as before.
 
 ### Open in REDcode (0.14.0)
 

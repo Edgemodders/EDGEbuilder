@@ -3219,6 +3219,13 @@ const viewport = new Viewport($<HTMLCanvasElement>("view"), {
   builderStart: (pose) => post({ type: "builder.start", pose }),
   builderStop: () => post({ type: "builder.stop" }),
   probe: (seq, ray) => post({ type: "drop.probe", seq, origin: ray.o, dir: ray.d }),
+  // A quick right-click with nothing waiting: the picked world object is unpicked, and its drawer closes (the owner, 2026-11-27).
+  rightTap: () => {
+    if (!state?.worldObjects.picked) return;
+    previewWorld = false;
+    post({ type: "world.clear" });
+    renderLeft();
+  },
   hoverWorld: (ray) => {
     // Pick under the cursor outlines what a click would pick; Show tooltip describes it. Either asks.
     const want = freePick || worldTip;

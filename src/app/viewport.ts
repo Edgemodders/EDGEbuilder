@@ -71,6 +71,8 @@ export interface ViewportHooks {
   probe(seq: number, ray: { o: V3; d: V3 }): void;
   /** Pick under the cursor: the line through the cursor while it moves over the world with Edit on (null: over one of the scene's objects, or gone). */
   hoverWorld?(ray: { o: V3; d: V3 } | null): void;
+  /** A quick tap of the right button with nothing waiting on it (no drop, drag or box): the page unpicks the world object. */
+  rightTap?(): void;
 }
 
 /** What Drop at click draws while it waits: the object's own edges once the page has them, else its box, the size of its bounds when known. */
@@ -1101,10 +1103,12 @@ export class Viewport {
         this.hooks.status("Drop at click cancelled.");
       } else if (this.box) this.box = undefined;
       else if (this.camEntity) {
+        // A tap (judged on release) unpicks the world object; a hold looks around.
+        this.rightTap = { at: performance.now(), moved: 0 };
         this.rmb = true;
         this.canvas.setPointerCapture(e.pointerId);
         this.lock();
-      }
+      } else this.hooks.rightTap?.(); // V's own camera: nothing to look with, so a right-click is a tap at once.
       return;
     }
     if (e.button === 1) {
@@ -1146,10 +1150,11 @@ export class Viewport {
         this.rmb = false;
         const tap = this.rightTap;
         this.rightTap = undefined;
-        if (tap && this.placing && performance.now() - tap.at < RightTapMs && tap.moved < RightTapPx) {
+        const tapped = !!tap && performance.now() - tap.at < RightTapMs && tap.moved < RightTapPx;
+        if (tapped && this.placing) {
           this.disarm();
           this.hooks.status("Drop at click cancelled.");
-        }
+        } else if (tapped) this.hooks.rightTap?.();
       } else this.mmb = false;
       if (!this.rmb && !this.mmb) this.unlock();
       try {

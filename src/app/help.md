@@ -102,7 +102,7 @@ A move, turn or scale acts on the whole selection, around its middle.
 The **World** tab:
 
 - **Nearby** finds the doors near V (**Scan Doors**). With **Edit** on, a click picks a door. The switches choose what a click picks: doors, painted-on doors, meshes.
-- **Pick under the cursor** (in Selected Node): what a click would pick is outlined as the mouse moves, and a click picks any mesh or door. Its details open in a drawer at the left of the screen: the model in 3D, its kind, size, place, node and sector, and whether it is **solid** where you clicked. **Drop a copy** puts a copy in your scene. **Show tooltip**, beside it, puts the name, kind, size and distance of whatever is under the mouse in a tooltip that follows the cursor.
+- **Pick under the cursor** (in Selected Node): what a click would pick is outlined as the mouse moves, and a click picks any mesh or door. Its details open in a drawer at the left of the screen: the model in 3D, its kind, size, place, node and sector, and whether it is **solid** where you clicked. **Drop a copy** puts a copy in your scene. A quick tap of the right button unpicks it and closes the drawer. **Show tooltip**, beside it, puts the name, kind, size and distance of whatever is under the mouse in a tooltip that follows the cursor.
 - **Remove from world** takes a door, a painted-on door or a mesh out, kept in the scene. **Restore** or Undo brings it back. A bake removes it for good.
 - **Open**, **Close**, **Lock** keep a door that way while the scene is open.
 - **Sectors** lists the pieces the game streams the world in: near V, near the camera, or by name. A sector's drawer lists every entry in it: pick, fly to, hide for the session or remove.
