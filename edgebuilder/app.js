@@ -230,6 +230,9 @@ function seenFromBySize(o) {
 }
 var SeenFromRange = [5, 2e3];
 
+// src/protocol.ts
+var Features = { openInRedcode: false, tools: false };
+
 // src/app/held.ts
 import { game } from "rednode";
 var down = /* @__PURE__ */ new Set();
@@ -2899,7 +2902,7 @@ function renderWorld(s) {
   $("doorRestore").hidden = !canSet || !kept;
   for (const id of ["doorOpen", "doorClose", "doorLock"]) if (!s.scene.file) $(id).title = "Open a scene first: a door's state is kept in the open scene";
   $("worldGo").toggleAttribute("disabled", s.world !== "ready");
-  $("worldRedcode").hidden = !s.sources.redcode || !redcodePlace(s);
+  $("worldRedcode").hidden = !Features.openInRedcode || !s.sources.redcode || !redcodePlace(s);
 }
 function redcodePlace(s) {
   const picked2 = s.worldObjects.picked;
@@ -3058,7 +3061,7 @@ function renderSectorDrawer(s) {
   const name = shortName(v2.path).replace(/\.streamingsector$/i, "");
   $("sectorTitle").textContent = `Sector: ${name}`;
   $("sectorTitle").title = v2.path;
-  $("sectorRedcode").hidden = !s.sources.redcode;
+  $("sectorRedcode").hidden = !Features.openInRedcode || !s.sources.redcode;
   const streamed = v2.loaded === true ? "streamed in now" : v2.loaded === false ? "not streamed in now: go near it for its nodes to be in the game" : "";
   $("sectorInfo").textContent = v2.status === "reading" ? "Reading the sector through REDbridge..." : v2.status === "error" ? v2.error ?? "It could not be read." : [
     `${v2.kind}${v2.kind ? ", " : ""}level ${v2.level}. ${v2.total} entr${v2.total === 1 ? "y" : "ies"}${streamed ? `, ${streamed}` : ""}.`,

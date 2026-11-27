@@ -1955,6 +1955,7 @@ function isTextureLine(line) {
 }
 
 // src/protocol.ts
+var Features = { openInRedcode: false, tools: false };
 var AnyLook = "Any: the game picks";
 
 // src/mod.ts
@@ -2194,6 +2195,10 @@ async function refreshMods() {
 }
 var toolWatchers = /* @__PURE__ */ new Map();
 function scanTools() {
+  if (!Features.tools) {
+    state.tools = [];
+    return;
+  }
   let dirs = [];
   try {
     dirs = pkg.appsDirs ?? [];
@@ -2325,6 +2330,7 @@ async function readRedcodeProjects() {
   applyProjects();
 }
 async function openInRedcode(sector, entry) {
+  if (!Features.openInRedcode) return;
   if (!sector) return say("This node's sector is not known yet: REDbridge names it once it has read the sector.", "warn");
   if (!redcode) await connectRedcode();
   if (!redcode) return say("REDcode is not there: its REDnode package comes with REDcode, in VS Code. Open in REDcode needs REDcode 0.10.18 or later.", "warn");

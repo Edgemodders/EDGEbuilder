@@ -3,6 +3,7 @@ import { channel } from "rednode";
 import { applyChange, boxOf, centreOf, collisionKey, membersOf, seenFromBySize, SeenFromRange, pickMany, pickSelection, selectionUnits } from "../arrange";
 import { AXES, add, qAxisAngle, qMul, qNorm, qYaw, sub, type Q, type V3 } from "../math";
 import type { AssetEntry, AssetFrom, AssetKind, DropLike, ImportCollision, LibraryBake, ModelEntry, ExploreReply, ExploreRoot, FilesReply, ModMessage, PageMessage, Place, PreviewReply, SceneEntry, SceneObject, SceneTransform, Snapshot, WorldKind, WorldThing } from "../protocol";
+import { Features } from "../protocol";
 import type { Part, Previews } from "./previews";
 import { held } from "./held";
 import { Viewport, busyText, fieldFocused, type WorldTip } from "./viewport";
@@ -1530,7 +1531,7 @@ function renderWorld(s: Snapshot): void {
   for (const id of ["doorOpen", "doorClose", "doorLock"]) if (!s.scene.file) $(id).title = "Open a scene first: a door's state is kept in the open scene";
   $("worldGo").toggleAttribute("disabled", s.world !== "ready");
   // EDGEbuilder #11: its sector in REDcode's sector view, when REDcode's service is there and the sector is named.
-  $("worldRedcode").hidden = !s.sources.redcode || !redcodePlace(s);
+  $("worldRedcode").hidden = !Features.openInRedcode || !s.sources.redcode || !redcodePlace(s);
 }
 
 /** Selected Node's sector and entry for Open in REDcode: its node once found, else the Sector drawer row it was picked from. */
@@ -1721,7 +1722,7 @@ function renderSectorDrawer(s: Snapshot): void {
   const name = shortName(v.path).replace(/\.streamingsector$/i, "");
   $("sectorTitle").textContent = `Sector: ${name}`;
   $("sectorTitle").title = v.path;
-  $("sectorRedcode").hidden = !s.sources.redcode;
+  $("sectorRedcode").hidden = !Features.openInRedcode || !s.sources.redcode;
   const streamed = v.loaded === true ? "streamed in now" : v.loaded === false ? "not streamed in now: go near it for its nodes to be in the game" : "";
   $("sectorInfo").textContent =
     v.status === "reading"

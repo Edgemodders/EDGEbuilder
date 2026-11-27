@@ -10,6 +10,28 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+Built, switched off until their tests pass (`Features` in `src/protocol.ts`):
+
+- **Open in REDcode** (https://github.com/Edgemodders/EDGEbuilder/issues/11): the arrow at the top of the Sector drawer and the button in Selected Node open the sector in REDcode's 3D sector view in VS Code, with the picked entry picked. Shown when REDcode's REDnode package is in the game; needs REDcode 0.10.18 or later, and your OK once in REDnode's Mod Manager (EDGEbuilder, Calls, redcode.openSector).
+- Tools, a first probe (T0, https://edgemodders.github.io/EDGEbuilder/tools.html): a REDnode package can add a tool that opens in a drawer of EDGEbuilder's. Settings lists installed tools, and only when there is one; the Tools tab follows.
+
+## 0.14.0 (2026-11-27)
+
+<!-- nexus
+New: Previews: search results as small 3D pictures that turn under the mouse, with details and Drop
+New: The Explorer: the game's folders, each mod, the project and the game's people, with a 3D preview
+New: Pick under the cursor: outline and pick any mesh the game placed, with its details and Drop a copy
+New: Show tooltip: name, size, Solid and distance of what is under the mouse, following the cursor
+New: Solid and Collision data, Yes or No, for a picked object and in the tooltip
+New: The Library and the Scene tab's objects can leave the window for a drawer; Collapse all in the Library
+New: Import's file picker; Bring V; minimize on every Selected panel; an eye and Delete on Scene tab rows
+New: A command line checks and bakes a scene with the game closed; JSON Schemas for the scene formats
+Changed: Drop at click shows the object's own outline where a click would put it; a right-button tap cancels
+Changed: The panels are named Selected Asset, Selected Object, Selected Scene and Selected Node
+Changed: The About tab is a one-page quickstart; the Bake tab's top line is a headline
+Fixed: F10 takes the green outline off selected objects while you play
+-->
+
 **New**
 
 - Previews: the eye beside the Assets tab's result count opens the results as small 3D pictures in a drawer to the left: meshes, and entities drawn from their meshes (NPCs by name for now). The mouse on a picture turns it. A click opens its details beside the pictures: the model in 3D, its size, looks and a Drop button that starts Drop at click. Settings, **A picture's details before Drop** (on by default): off, a click on a picture starts Drop at click at once. Pictures are kept, so a result's picture shows at once the next time.
@@ -26,10 +48,9 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - With the Explorer open, a search result shown in the Preview drawer is also found in the Explorer: its folders open down to it, its row is picked and scrolled to, and the Explorer's filter then looks in its folder.
 - Import: the folder button beside the path box on the Library tab opens a wide drawer to find a GLB on your disk: the Library, the project's `source\raw`, EDGEfab's Desk, Desktop, Documents, Downloads and every drive on the left; the folder's folders, GLB files (with size and date) and Desk props on the right, with Up, a typed path and a filter. **Use this file** or a double-click puts it in the box and picks it for Import. The last folder is remembered.
 - The Scene tab's object list has an **Objects** title and, at its right, the out-of-window icon: the list moves into the Objects drawer to the left (on the open scene), with an Objects button in its place. The drawer's own icon, or the tab's, brings it back. EDGEbuilder remembers the choice.
-- The Scene tab's list: one click on an object's row selects it and shows its preview to the left of the window (3D, its settings, Drop a copy); two quick clicks fly the camera to it and select it, as in the Objects drawer.
+- The Scene tab's list: two quick clicks on an object's row fly the camera to it and select it, as in the Objects drawer.
 - Every Selected panel (Selected Asset, Selected Object, Selected Scene and Selected Node) has a minimize button beside its pin: minimized, only its title row shows, at the bottom of the tab, and the list above it grows into the room. Remembered for each tab.
 - **Bring V** on the Scene tab, at the right end of the Save and Close row: with the editor camera, V stands on the floor under the camera, facing the way it looks, so you can try what you placed as V. Edit stays on; switch it off to play V there.
-- **Open in REDcode** (https://github.com/Edgemodders/EDGEbuilder/issues/11): the arrow at the top of the Sector drawer and the button in Selected Node open the sector in REDcode's 3D sector view in VS Code, with the picked entry picked. Shown when REDcode's REDnode package is in the game; needs REDcode 0.10.18 or later, and your OK once in REDnode's Mod Manager (EDGEbuilder, Calls, redcode.openSector).
 - The About tab is a one-page quickstart: the pills, a first scene in five steps, finding, dropping, the camera, positioning and arranging keys, scenes and the Library, Import, the game's own objects, baking and settings.
 - A command line that checks and bakes a scene file with the game closed: `node edgebuilder/cli.mjs check <scene>` and `bake <scene> --out <folder>` or `--project <path>`, with `--pack`, `--dry-run` and a `--json` report of what was left out, what is wrong and what was written. For scenes a program writes: https://edgemodders.github.io/EDGEbuilder/generated-scenes.html
 - A JSON Schema for each scene format, a rule for how the format may change, and a format changelog: https://edgemodders.github.io/EDGEbuilder/scene.html
@@ -55,7 +76,6 @@ With each change a player or modder would notice, add a line under **Unreleased*
 **Other**
 
 - Previews, the Explorer's preview and the outline are drawn with three.js (MIT), loaded only when first needed.
-- Tools, a first probe (T0, https://edgemodders.github.io/EDGEbuilder/tools.html): a REDnode package can add a tool that opens in a drawer of EDGEbuilder's. Settings lists installed tools, and only when there is one; the Tools tab follows.
 
 ## 0.13.2 (2026-11-23)
 

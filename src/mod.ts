@@ -52,7 +52,7 @@ import { isTextureLine, loadFab, type BridgeCall, type FabCore, type FabPrepared
 import { cleanFolderName, fileNameOf, folderIn, readLibraryRoot, refOf, scanShelf, slugOf, suggestedLibraryRoot, whereIs, writeLibraryRoot } from "./scenes";
 import { copyOf, duplicate as copySelection, makeGroup, pasteOf, standPoint, ungroup as openGroups, upright, type Clip } from "./arrange";
 import { add, basisFromMatrix, lookOf, mul, qLook, sub, type GameMatrix, type V3 } from "./math";
-import { AnyLook, type PreviewPart, type AssetEntry, type AssetFrom, type AssetInfo, type AssetKind, type BakeRecord, type LibraryBake, type PageMessage, type DropLike, type Place, type PlaceRoot, type SceneObject, type SceneTransform, type Snapshot, type DoorState, type SectorView, type WorldEdit, type WorldKind, type WorldNodeRef, type WorldPicked, type WorldThing } from "./protocol";
+import { AnyLook, Features, type PreviewPart, type AssetEntry, type AssetFrom, type AssetInfo, type AssetKind, type BakeRecord, type LibraryBake, type PageMessage, type DropLike, type Place, type PlaceRoot, type SceneObject, type SceneTransform, type Snapshot, type DoorState, type SectorView, type WorldEdit, type WorldKind, type WorldNodeRef, type WorldPicked, type WorldThing } from "./protocol";
 
 /** A base-game entity template that is a bare entity: no components, no appearances. The editor camera is this with a camera component attached. */
 const EmptyEntity = "base\\gameplay\\loot\\containers\\common_suitcases\\appearances\\suitcase_small_placeholder.ent";
@@ -353,6 +353,11 @@ async function refreshMods(): Promise<void> {
 const toolWatchers = new Map<string, fs.FSWatcher>();
 
 function scanTools(): void {
+  if (!Features.tools) {
+    // Switched off until T0's test passes: no tools listed, no folders watched.
+    state.tools = [];
+    return;
+  }
   let dirs: readonly string[] = [];
   try {
     dirs = pkg.appsDirs ?? [];
@@ -525,6 +530,7 @@ async function readRedcodeProjects(): Promise<void> {
  * answers within about 4 seconds; VS Code does not come to the front.
  */
 async function openInRedcode(sector: string, entry?: number): Promise<void> {
+  if (!Features.openInRedcode) return; // Switched off until its test passes (Features); the page shows no button.
   if (!sector) return say("This node's sector is not known yet: REDbridge names it once it has read the sector.", "warn");
   if (!redcode) await connectRedcode();
   if (!redcode) return say("REDcode is not there: its REDnode package comes with REDcode, in VS Code. Open in REDcode needs REDcode 0.10.18 or later.", "warn");

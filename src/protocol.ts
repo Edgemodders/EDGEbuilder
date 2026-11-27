@@ -4,6 +4,14 @@
 import type { ToolInfo } from "./tools";
 export type { ToolInfo };
 
+/**
+ * Built but not yet tested in the game, so switched off in a release (the owner, 2026-11-27: only tested features
+ * ship). Turn one on once its test in docs/testing.md has passed. Open in REDcode (#11) also needs
+ * `"calls": ["redcode.openSector"]` back in edgebuilder/rednode-app.json; its test waits on REDcode 0.10.18.
+ * Tools (T0) waits on its own 10 steps.
+ */
+export const Features = { openInRedcode: false, tools: false } as const;
+
 /** `npc`: a `Character` record from TweakDB (B3c); its `path` is the record, such as `Character.Judy`. */
 export type AssetKind = "mesh" | "entity" | "npc";
 
