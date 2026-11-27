@@ -31,6 +31,9 @@ With each change a player or modder would notice, add a line under **Unreleased*
 - **Bring V** on the Scene tab, at the right end of the Save and Close row: with the editor camera, V stands on the floor under the camera, facing the way it looks, so you can try what you placed as V. Edit stays on; switch it off to play V there.
 - **Open in REDcode** (https://github.com/Edgemodders/EDGEbuilder/issues/11): the arrow at the top of the Sector drawer and the button in Selected Node open the sector in REDcode's 3D sector view in VS Code, with the picked entry picked. Shown when REDcode's REDnode package is in the game; needs REDcode 0.10.18 or later, and your OK once in REDnode's Mod Manager (EDGEbuilder, Calls, redcode.openSector).
 - The About tab is a one-page quickstart: the pills, a first scene in five steps, finding, dropping, the camera, positioning and arranging keys, scenes and the Library, Import, the game's own objects, baking and settings.
+- A command line that checks and bakes a scene file with the game closed: `node edgebuilder/cli.mjs check <scene>` and `bake <scene> --out <folder>` or `--project <path>`, with `--pack`, `--dry-run` and a `--json` report of what was left out, what is wrong and what was written. For scenes a program writes: https://edgemodders.github.io/EDGEbuilder/generated-scenes.html
+- A JSON Schema for each scene format, a rule for how the format may change, and a format changelog: https://edgemodders.github.io/EDGEbuilder/scene.html
+- A scene file can say which program wrote it (`generator`) and carry the writer's own data on each object (`meta`). EDGEbuilder keeps both when it saves, copies `meta` to a duplicate, and never bakes them.
 
 **Changed**
 

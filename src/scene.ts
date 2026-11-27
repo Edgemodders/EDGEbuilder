@@ -13,6 +13,8 @@ export interface SceneFile {
   format: 1 | 2 | 3;
   name: string;
   game?: string;
+  /** The program that wrote the file (G1), kept as it came. */
+  generator?: { name: string; [more: string]: unknown };
   groups: SceneGroup[];
   objects: Omit<SceneObject, "entityId">[];
   /** Format 3: what the scene does to the game's own objects (D1: removals). */
@@ -48,6 +50,8 @@ export class Scene {
   name = "Working scene";
   /** The game version the file says it was made against; kept, not set (B3-2). */
   game: string | undefined;
+  /** The program that wrote the file, when one did (G1); kept, not set. */
+  generator: SceneFile["generator"];
   objects: SceneObject[] = [];
   groups: SceneGroup[] = [];
   /** D1: the game's own objects this scene removes. */
@@ -91,6 +95,7 @@ export class Scene {
     this.file = file;
     this.name = data.name || path.basename(file).replace(/\.scene\.json$/i, "");
     this.game = typeof data.game === "string" ? data.game : undefined;
+    this.generator = data.generator && typeof data.generator === "object" ? JSON.parse(JSON.stringify(data.generator)) : undefined;
     this.objects = data.objects.map((o) => ({ ...o }));
     this.groups = Array.isArray(data.groups) ? data.groups.map((g) => ({ id: g.id, name: g.name, parent: g.parent ?? null })) : [];
     // An object in a group the file does not have stands on its own.
@@ -104,6 +109,7 @@ export class Scene {
       format: this.worldEdits.length ? 3 : this.objects.some((o) => o.kind === "npc") ? 2 : 1,
       name: this.name,
       ...(this.game ? { game: this.game } : {}),
+      ...(this.generator ? { generator: this.generator } : {}),
       groups: this.groups,
       objects: this.objects.map(({ entityId: _live, ...rest }) => rest),
       ...(this.worldEdits.length ? { worldEdits: this.worldEdits } : {}),

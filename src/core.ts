@@ -39,3 +39,5 @@ export { isTextureLine } from "./fab";
 export * from "./math";
 export type * from "./protocol";
 export { SectorKinds, bridgeKinds, distanceToBox, distanceToMiddle, editsInSector, levelsOf, nodeMatches, nodeRows, placesEntity, sectorHash, sectorMatches, sectorName, sectorRows, shortKind } from "./sectors";
+export { checkFiles, checkSceneData, findOverlaps, groupBridgeWarnings, overlapFindings } from "./check";
+export { knownFields, sceneSchema, validate } from "./schema";

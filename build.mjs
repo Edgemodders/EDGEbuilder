@@ -73,6 +73,26 @@ const core = {
   legalComments: "none",
 };
 
+// G1: the command line, check and bake with the game closed, from the same REDnode-free parts.
+const cli = {
+  entryPoints: ["src/cli.ts"],
+  outfile: "edgebuilder/cli.mjs",
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node20",
+  define: { __VERSION__: JSON.stringify(version) },
+  legalComments: "none",
+  banner: { js: "// Built from src/ by build.mjs; edit the TypeScript, not this file." },
+};
+
+// G1: the scene schemas the docs site publishes are written from src/schema.ts, so they cannot drift.
+async function writeSchemas() {
+  const { sceneSchema } = await import(`./dist/core.mjs?${Date.now()}`);
+  fs.mkdirSync("docs/schema", { recursive: true });
+  for (const format of [1, 2, 3]) fs.writeFileSync(`docs/schema/scene-${format}.schema.json`, JSON.stringify(sceneSchema(format), null, 2) + "\n");
+}
+
 // B2d: EDGEfab's core, which the mod loads only at the first Import (edgebuilder/fab.cjs, beside
 // mod.mjs), so EDGEbuilder starts as fast as before. From npm (@edgemodders/edgefab-core, a
 // devDependency since 0.11.1); without node_modules, from an EDGEfab checkout next to this repo, for
@@ -100,10 +120,11 @@ const fab = {
 if (fabFrom && fs.existsSync(`${fabFrom}/dist/THIRD-PARTY-NOTICES.txt`)) fs.copyFileSync(`${fabFrom}/dist/THIRD-PARTY-NOTICES.txt`, "edgebuilder/fab-notices.txt");
 
 if (watch) {
-  const contexts = await Promise.all([esbuild.context(mod), esbuild.context(app), esbuild.context(previews), esbuild.context(core), esbuild.context(fab)]);
+  const contexts = await Promise.all([esbuild.context(mod), esbuild.context(app), esbuild.context(previews), esbuild.context(core), esbuild.context(fab), esbuild.context(cli)]);
   await Promise.all(contexts.map((c) => c.watch()));
   console.log("watching src/ ...");
 } else {
-  await Promise.all([esbuild.build(mod), esbuild.build(app), esbuild.build(previews), esbuild.build(core), esbuild.build(fab)]);
-  console.log(`built edgebuilder/mod.mjs, edgebuilder/app.js and edgebuilder/previews.js; edgebuilder/fab.cjs ${fabFrom ? `from ${fabFrom}` : "as a stand-in (no EDGEfab core)"}`);
+  await Promise.all([esbuild.build(mod), esbuild.build(app), esbuild.build(previews), esbuild.build(core), esbuild.build(fab), esbuild.build(cli)]);
+  await writeSchemas();
+  console.log(`built edgebuilder/mod.mjs, edgebuilder/app.js, edgebuilder/previews.js and edgebuilder/cli.mjs; docs/schema written; edgebuilder/fab.cjs ${fabFrom ? `from ${fabFrom}` : "as a stand-in (no EDGEfab core)"}`);
 }

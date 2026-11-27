@@ -129,6 +129,50 @@ Every command takes `--json` and then prints one JSON report: the scene's name a
 | Objects that overlap | Each object's box from its size and transform, tested against its neighbours; reported above a share of overlap the caller sets, since props on a table overlap the table's box on purpose | `check`, offline |
 | Objects that float or sink | Needs the world's collision, which only the running game has | Not offline. In the editor (G2): a raycast down from each object, listed in the Objects drawer |
 
+### G1 as built (2026-11-23, on the `cosmic` branch, not released)
+
+The first slice is built and checked outside the game: the schemas, `generator` and `meta`, `check`, and `bake` with `--out`, `--project`, `--pack`, `--dry-run` and `--json`. `diff` is G3. It runs from a checkout or from the installed package:
+
+```
+node edgebuilder/cli.mjs check my_arena.scene.json
+node edgebuilder/cli.mjs bake my_arena.scene.json --out build/arena --pack --json
+```
+
+| Option | Meaning |
+|---|---|
+| `--out <folder>` | Bake into a plain folder laid out like a project: `source/archive/edgebuilder/<name>/`, `source/resources/archive/pc/mod/<name>.archive.xl`, `source/raw/edgebuilder/<name>.bake.json` |
+| `--project <path>` | Bake into a REDcode or WolvenKit project (its folder or `.cpmodproj`), as the Bake tab does. The project's own loose files count as there |
+| `--pack` | With `--out`: pack the folder's bakes into `packed/archive/pc/mod/<name>.archive` with every `.xl` beside it. `packed` is then a mod folder as a mod manager wants it. A project is packed by REDcode or WolvenKit |
+| `--name <name>` | With `--pack`: the archive's name; the scene's when left out |
+| `--dry-run` | Everything up to writing; the report lists the files a bake would write |
+| `--json` | One JSON report and nothing else |
+| `--archive <file>`, `--root <folder>` | A mod's `.archive`, or a folder of loose files, to look in before the game's. One of each: REDbridge reads one at a time |
+| `--overlap <share>` | Report pairs of objects that fill nearly the same box: the share of the two boxes that both cover. 0.98 when left out, `off` for none |
+| `--offline` | `check` only: the file itself, without REDbridge or the game |
+| `--bridge <exe>`, `--game <folder>` | REDbridge and the game. Else `EDGEBUILDER_BRIDGE` and `EDGEBUILDER_GAME`, else the REDbridge EDGEdeck fetched, and the game in Steam's libraries or GOG's folders |
+
+**The report** (`--json`): `ok`, `scene` (`file`, `name`, `slug`, `format`, `hash`, `generator`), `counts` by kind, `errors` and `warnings`, `dropped` (`id`, `kind`, `why`), `needs` (files REDbridge did not find: the game needs the mod that has them), `written`, `nodes`, `removals`, `streamingBox`, `packed`, `redbridge`, `checked` (`file` or `files`), `ms`. The same finding on many objects is one entry with the objects' `ids`; a finding about one file has `file`, one about many has `files`. The exit code is 0, 1 for errors, 2 for a command that cannot be read.
+
+| Code | Error or warning | Means |
+|---|---|---|
+| `schema` | Error | The file does not match its format's schema |
+| `duplicate-id`, `duplicate-ref` | Error | Two objects share an id or a node reference |
+| `bad-number` | Error | A position, turn or scale is not a number |
+| `nothing-to-bake` | Error | No object or removal a bake can write |
+| `file-missing` | Error | A file that is not in the game's files nor the named mod, on an object without `bounds` |
+| `unreadable`, `no-redbridge`, `no-game`, `redbridge`, `redbridge-old` | Error | The file, REDbridge or the game could not be used |
+| `file-not-here` | Warning | A file that is not on this PC, on objects with `bounds`: baked, and the game needs the mod |
+| `appearance` | Warning | A mesh or entity has no appearance by that name |
+| `no-collision` | Warning | A solid mesh without collision data: baked to draw only |
+| `same-place` | Warning | The same file at the same place, turn and scale twice |
+| `overlap` | Warning | Two objects fill nearly the same box |
+| `unknown-field`, `unknown-group`, `rotation-length`, `solid-not-mesh` | Warning | A field EDGEbuilder does not read, a group that is not listed, a rotation that is not a unit quaternion, `solid` on something that is not a mesh |
+| `file-unread`, `removal-refused`, `not-checked`, `redbridge` | Warning | REDbridge could not read a file, did not write a removal, `--offline` skipped the file checks, or REDbridge said something else |
+
+**Checked on the team's club map** (3,501 objects, REDbridge 0.17.0 from its checkout): the file checks take 1.3 s after REDbridge's 3.2 s start, and `bake --pack` 9.2 s in all. Two warnings instead of 912: 910 objects on 311 files that are not on this PC, and two pairs of objects in nearly the same box (a door lintel placed twice among them). The overlap measure was first "share of the smaller box" and found 6,288 pairs, since everything in the hall lies inside its outer shell; it is now the share of the space both boxes cover.
+
+**Still to do in G1:** the Euler order on the format page, `npx`, a `dryRun` field on the service's tools that write, the Bake tab's own checks sharing these (the mod is untouched so far), and the look in the game of a scene baked this way (G0's look covers it).
+
 ## Size (G0, then G2)
 
 Nothing here is known. G0 is a probe that answers it before anything is designed: a scene of about 5,000 objects is baked, and the owner looks at it in the game. The team's own scene is that scene: with the bounds of the second sample (2026-11-23) all 4,965 objects bake, and the 3,774 on the game's files draw without the team's archives.

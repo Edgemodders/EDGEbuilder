@@ -88,6 +88,8 @@ export interface SceneObject {
   bounds?: { min: number[]; max: number[] };
   group?: string;
   props?: Record<string, unknown>;
+  /** The writer's own (G1): kept untouched, copied to a duplicate, never read, never baked. */
+  meta?: unknown;
   /** The preview entity's id hash while it is in the world; not saved. */
   entityId?: string;
 }

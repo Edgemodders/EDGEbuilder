@@ -38,6 +38,7 @@ Last updated 2026-10-30.
 | [Project picker](#project-picker-0130) | In the game | Project picker | 2026-11-23 (0.13.1) | Pass; 0.13.2 released |
 | [Previews, the Explorer, the Library drawer and Drop at click's outline](#previews-the-explorer-the-library-drawer-and-drop-at-clicks-outline-0140) | In the game | 0.14.0 | 2026-11-24 | Partly run: steps 1 to 35 passed on the morning's build; 36 to 59, and 6, 9, 11 and 33 again, to run on the newest (59 steps, P1 to P7) |
 | [T0 Tools probe](#t0-tools-probe) | In the game | T0 | 2026-11-24 | Not run (checked in REDnode's host; 10 steps) |
+| [G0 Generated scenes: the look](#g0-generated-scenes-the-look) | In the game | G0, G1 | 2026-11-23 | Partly run: steps 1 and 2 passed (a command-line bake loads and draws; G1's end is met); step 7 in part; 3, 4, 6 and 8 to run |
 
 ## Automated
 
@@ -1208,3 +1209,36 @@ Before: the game closed, EDGEbuilder's newest build and the probe deployed with 
 | 10 | **Close** (in the tool) | The drawer closes; Settings says **Open** again |
 
 Not in the game check: hot reload (a change to `tool.js` remounts the tool) and the failing mounts, which were checked in REDnode's host and need a file edited while the game runs.
+
+### G0 Generated scenes: the look
+
+For [Generated scenes](generated-scenes.md), questions G-2 to G-6, and G1's end ("a scene baked by the command line loads in the game"). Not run yet. The scene is the team's sample of 2026-11-23, never in this repo. Both bakes were made on 2026-11-23 with the command line on the `cosmic` branch (`bake --out --pack`, REDbridge 0.17.0 from its checkout) and are in the EDGEdeck library:
+
+| Mod in EDGEdeck | Holds | State |
+|---|---|---|
+| G0 club map (baked by EDGEbuilder's command line) | 3,501 objects, one sector, 111 KB | On |
+| G0 all three maps (baked by EDGEbuilder's command line) | 4,965 objects, one sector, 156 KB. It holds the club map too, so only one of the two is on at a time | Off |
+
+The club map's objects lie between x 2586 and 2638, y −1070 and −1011, z 110 and 124. Only the objects on the game's own files draw (2,591 of the club map's 3,501): the rest need the team's archives. The two scene files are in the Library, in `G0 generated scenes`.
+
+| # | Do | Expect | Answers |
+|---|---|---|---|
+| 1 | Game closed: deploy in EDGEdeck with the club map on. Start the game and load a save | The game starts as usual | G1's end, G-2 |
+| 2 | Go to x 2612, y −1041, z 118 (REDnode's teleport, or ask the session) | The club map is there: walls, props and lights from the game's files, with gaps where the team's meshes belong | G-2 |
+| 3 | Walk in and through it. Note a hitch as it comes in, and the frame rate inside against outside | No long hitch; a frame rate you would play at | G-2 |
+| 4 | Walk 200 m away and back; look along the hall from one end | Note what pops in and at what distance. Every mesh has 150 m | G-3 |
+| 5 | Walk into a wall | V walks through: the sample has no `solid`. A stretched wall draws at its stretched size | Stretched meshes |
+| 6 | In EDGEbuilder, Library tab, open `ra_hook_hall_r27` from `G0 generated scenes`. Time it; watch the frame rate and the busy bar. Stop is there if it does not end | Note the time, the frame rate, and whether the Objects drawer and the Scene tab still work. The previews stand on top of the baked objects, which is fine for this | G-4 |
+| 7 | Close the scene. With the game running, the session bakes the scene with one object moved and swaps the archive in (`archives.reload`) | Note whether the moved object shows without a restart | G-5 |
+| 8 | Game closed: turn the club map off and all three maps on, deploy, start, and repeat steps 2 to 4 | As steps 2 to 4, with two more maps beside the club | G-2: one sector of 4,965 nodes with a streaming box of 454 × 361 × 352 m |
+
+Not in this test: Mod Organizer 2 (G-6) needs an MO2 install, so it goes to the team; the team's own meshes wait on their archives.
+
+**Results so far (2026-11-23, partly run; EDGEbuilder 0.14.0, REDnode 0.69.0):**
+
+- Steps 1 and 2 passed: the club map baked by the command line loads and draws in the game (floor, walls, trusses, chains, sofas, crates, lights, clutter, with shadows). G1's end is met.
+- The map hangs about 50 m above the desert (the ground under it is at z 62.4, the objects at z 110 to 124), and nothing in the sample is solid, so V falls through and dies. The look is done with the editor camera, not on foot; a pin (REDnode's `world.pin`) at the map's middle shows the way. Steps 3 to 5 as written (walking) do not apply.
+- The hall still draws from a few hundred metres away (one picture; no distance measured yet).
+- A copy with `solid` on every mesh was baked (15.8 s): of 3,286 meshes, 1,476 game meshes carry collision data and can be solid, 907 game meshes carry none, 903 are the team's own. Three of the four floor pieces and many wall pieces carry none, so the map cannot be walked without the team's collision boxes (B5-4).
+- Step 7 in part: that copy was swapped in with `archives.reload` while the hall was streamed in (89 ms, no crash). Whether the game then uses the new sector is not known: the owner's drops on the floor and on a bench went through, and both are mostly pieces with no collision data (six of the seven benches). A check on a piece that is solid in the new copy (a `diner_sofa_01_e`, a cargo crate) is still to do; the owner asked the session on `main` for a tool that says whether what is under the crosshair is solid.
+- Steps 3 and 4 from the camera (hitch, frame rate, pop-in), step 6 and step 8 are still to run.

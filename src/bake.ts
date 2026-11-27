@@ -29,7 +29,8 @@ export function bakeInput(name: string, game: string | undefined, groups: SceneG
       name,
       ...(game ? { game } : {}),
       groups,
-      objects: kept.map(({ entityId: _entityId, ...o }) => o),
+      // A writer's own `meta` (G1) is never baked.
+      objects: kept.map(({ entityId: _entityId, meta: _meta, ...o }) => o),
     },
     skipped: objects.filter((o) => !Bakeable.has(o.kind)).map((o) => ({ id: o.id, kind: o.kind as string })),
   };
