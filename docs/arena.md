@@ -6,15 +6,15 @@ title: Arena maps
 
 For the team building generated arena maps: where each of your requests to EDGEbuilder stands, what the tests of your scene showed, what comes next, and what we need from you. This page is updated with every change in this line of work.
 
-Last updated 2026-11-27 (evening).
+Last updated 2026-11-27, after EDGEbuilder 0.14.0's release.
 
 ## At a glance
 
 | | |
 |---|---|
-| **Built and tested, not released yet** | The command line (`check`, `bake`, `--pack`, `--dry-run`, `--json`), a JSON Schema for each scene format, the rule for how the format may change, and `generator` and `meta` fields. **Its test passed on 2026-11-27**, all 11 steps ([the test](testing.md#g1-the-command-line-and-the-scene-contract-0140)): it checks and bakes with the game closed, a command-line bake loads in the game, and the editor keeps `generator` and `meta` and leaves them out of the bake. It ships with EDGEbuilder **0.14.0**, whose last check is under way |
+| **Released in 0.14.0** (2026-11-27) | The command line (`check`, `bake`, `--pack`, `--dry-run`, `--json`), a JSON Schema for each scene format, the rule for how the format may change, and `generator` and `meta` fields. [Its test](testing.md#g1-the-command-line-and-the-scene-contract-0140) passed, all 11 steps: it checks and bakes with the game closed, a command-line bake loads in the game, and the editor keeps `generator` and `meta` and leaves them out of the bake. Get it from [Nexus Mods](https://www.nexusmods.com/cyberpunk2077/mods/36627) or the [releases page](https://github.com/Edgemodders/EDGEbuilder/releases/tag/v0.14.0) |
 | **Running now** | The in-game look at your club map, baked by the command line. It loads and draws. Not all of it has been checked yet |
-| **Next** | Release 0.14.0, finish the in-game look, then **B4-4 Detail** (level of detail), then **B5-4 Colliders** (your boxes) |
+| **Next** | Finish the in-game look, then **B4-4 Detail** (level of detail), then **B5-4 Colliders** (your boxes) |
 | **Needed from you** | Your archives (asked on 2026-11-27). Later: a check under Mod Organizer 2. See [What we need from you](#what-we-need-from-you) |
 
 ## Your requests
@@ -23,16 +23,16 @@ The numbers are the ones on [Requests](requests.md), where each is explained.
 
 | # | Request | Status |
 |---|---|---|
-| E1 | A versioned scene format with a schema and a changelog | **Built and tested**, ships with 0.14.0. Schemas `scene-1`, `scene-2`, `scene-3`, the rule for change and the format changelog are on [Scene format](scene.md) |
-| E2 | Check and bake from a command line, game closed, with a report | **Built and tested**, ships with 0.14.0. See [The command line](#the-command-line). `npx` comes later |
+| E1 | A versioned scene format with a schema and a changelog | **Released** in 0.14.0. Schemas `scene-1`, `scene-2`, `scene-3`, the rule for change and the format changelog are on [Scene format](scene.md) |
+| E2 | Check and bake from a command line, game closed, with a report | **Released** in 0.14.0. See [The command line](#the-command-line). `npx` comes later |
 | E3 | Decals and particles in the bake | Planned: B5-2 decals, B5-3 particles and effects. After the Sector Tools and world-object phases. Whether decals come earlier is still open |
-| E4 | Forced LOD and a hide distance per object | **Hide distance works today** for meshes: Seen from, since 0.8.1. LOD is **B4-4 Detail**, which starts with a probe. It is next after 0.14.0 |
+| E4 | Forced LOD and a hide distance per object | **Hide distance works today** for meshes: Seen from, since 0.8.1. LOD is **B4-4 Detail**, which starts with a probe. It comes after the in-game look |
 | E5 | Collision from your boxes, or none | **None works today**: leave `solid` out. **Boxes are B5-4**. On 2026-11-27 it moved up to come right after B4-4 |
 | E6 | Hand edits back as a diff, by stable ids | Planned: G3, last. Ids are yours and stay stable today, and `meta` is kept on each object (built) |
-| E7 | Validation: missing appearance, overlaps, floating | **Built** for appearance pairs and overlaps (`check`). Floating needs the game's collision and comes in G2, in the editor |
+| E7 | Validation: missing appearance, overlaps, floating | **Released** (0.14.0) for appearance pairs and overlaps (`check`). Floating needs the game's collision and comes in G2, in the editor |
 | E8 | A fixed "booth" scene with three lights | After B5-1 lights and REDnode's shot list |
 | E9 | Decal preview: which faces, which way round | With B5-2 decals |
-| E10 | Dry run | **Built**: `check`, and `bake --dry-run`. A dry run on the service's tools comes as they are added |
+| E10 | Dry run | **Released** (0.14.0): `check`, and `bake --dry-run`. A dry run on the service's tools comes as they are added |
 | E11 | Stable, versioned interfaces | **Written**: the rule on [Scene format](scene.md) also covers the service's tool names |
 | E12 | Mod Organizer 2 | Half: `bake --out <folder> --pack` writes the `archive/pc/mod` layout MO2 wants, into any folder you name. What EDGEbuilder sees inside a game run by MO2 needs your check (G-6) |
 
@@ -72,7 +72,7 @@ Three of the four floor pieces and many wall pieces have no collision data. **Th
 
 ## The command line
 
-It ships with 0.14.0, in the package as `edgebuilder/cli.mjs`; [its test](testing.md#g1-the-command-line-and-the-scene-contract-0140) passed on 2026-11-27. It runs with Node. It needs REDbridge and the game's folder (it was tested with REDbridge 0.20.0). Until 0.14.0 is released, it can be built from the repository: `npm install`, `npm run build`.
+It is in EDGEbuilder 0.14.0 and later, in the package as `edgebuilder/cli.mjs` (installed, under `red4ext\plugins\REDnode\apps\edgebuilder\` in the game folder; or take it from the zip). It runs with Node. It needs REDbridge and the game's folder (it was tested with REDbridge 0.20.0).
 
 ```
 node edgebuilder/cli.mjs check my_arena.scene.json
@@ -100,20 +100,20 @@ In order:
 
 | # | Step | What it gives you |
 |---|---|---|
-| 1 | Release **0.14.0** (the command line and the scene contract passed their test on 2026-11-27) | The command line and the schemas, released |
-| 2 | Finish the in-game look (G-2 to G-5): the hitch and frame rate, pop-in distances, opening the scene in the editor, all three maps in one sector, and whether a swapped-in bake is used | Whether a big scene must be baked as several sectors, and whether big scenes are edited in the game or in REDcode's sector view (G2) |
-| 3 | **B4-4 Detail**: a probe of what a baked mesh node can hold (it has no forced LOD field, and `lodLevelScales` is untried), then a Detail setting per object | Props that keep their finest shape at a distance (E4) |
-| 4 | **B5-4 Colliders**: a probe of the nine fields where your `worldCollisionNode` differs from ours, then a `collider` kind in the scene and the bake | Your boxes baked by EDGEbuilder (E5), so the maps can be walked |
-| 5 | Sector Tools (the 3D view and previews), world objects, editing the world, quest places | EDGEbuilder's other planned work |
-| 6 | The rest of B5: lights, decals, particles and effects, sounds | E3, E8, E9 |
-| 7 | **G2** big scenes in the editor, **G3** the round trip | E6, E7's floating check |
+| ✓ | **0.14.0 released** on 2026-11-27 | The command line and the schemas |
+| 1 | Finish the in-game look (G-2 to G-5): the hitch and frame rate, pop-in distances, opening the scene in the editor, all three maps in one sector, and whether a swapped-in bake is used | Whether a big scene must be baked as several sectors, and whether big scenes are edited in the game or in REDcode's sector view (G2) |
+| 2 | **B4-4 Detail**: a probe of what a baked mesh node can hold (it has no forced LOD field, and `lodLevelScales` is untried), then a Detail setting per object | Props that keep their finest shape at a distance (E4) |
+| 3 | **B5-4 Colliders**: a probe of the nine fields where your `worldCollisionNode` differs from ours, then a `collider` kind in the scene and the bake | Your boxes baked by EDGEbuilder (E5), so the maps can be walked |
+| 4 | Sector Tools (the 3D view and previews), world objects, editing the world, quest places | EDGEbuilder's other planned work |
+| 5 | The rest of B5: lights, decals, particles and effects, sounds | E3, E8, E9 |
+| 6 | **G2** big scenes in the editor, **G3** the round trip | E6, E7's floating check |
 
 ## What we need from you
 
 | What | Why | State |
 |---|---|---|
 | **Your archives** for the meshes your scene uses | So the in-game look draws all 3,501 objects of the club map, not 2,591, and `check` can read your files | Asked on 2026-11-27 |
-| **A check under Mod Organizer 2** (G-6), after 0.14.0 | We have no MO2 setup. The question: inside a game run by MO2, does EDGEbuilder see your mods (Assets tab, Mods), and does the Bake tab see a bake installed through MO2 as in the game? | Steps will follow with 0.14.0 |
+| **A check under Mod Organizer 2** (G-6), with 0.14.0 | We have no MO2 setup. The question: inside a game run by MO2, does EDGEbuilder see your mods (Assets tab, Mods), and does the Bake tab see a bake installed through MO2 as in the game? | 0.14.0 is out; the steps for this check will be posted here |
 | Your view on decals before world objects | Decals (B5-2) moving ahead of world objects is still open. You said decals decide whether you can leave your current tool | Welcome any time |
 | Notes on the command line once you try it | Missing report fields, unclear codes, options you need | Welcome any time |
 
