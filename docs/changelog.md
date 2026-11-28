@@ -10,6 +10,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**Changed**
+
+- The window no longer keeps an empty line above the tabs before the first message, so the tabs sit right under the status pills at start.
+
 Built, switched off until their tests pass (`Features` in `src/protocol.ts`):
 
 - **Open in REDcode** (https://github.com/Edgemodders/EDGEbuilder/issues/11): the arrow at the top of the Sector drawer and the button in Selected Node open the sector in REDcode's 3D sector view in VS Code, with the picked entry picked. Shown when REDcode's REDnode package is in the game; needs REDcode 0.10.18 or later, and your OK once in REDnode's Mod Manager (EDGEbuilder, Calls, redcode.openSector).

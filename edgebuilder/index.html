@@ -217,6 +217,7 @@
   #mainTabs > rn-tab > * { flex-shrink: 0; }
   /* The window is a flex column of fixed height: a long message keeps its lines (up to four) and pushes the tabs down. */
   .message { font-family: var(--rn-body, sans-serif); font-size: 13px; padding: 2px 0 6px; min-height: 1.4em; max-height: 5.6em; overflow: auto; flex-shrink: 0; color: var(--rn-dim, #999); }
+  .message:empty { display: none; }
   .busy:not([hidden]) { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; } .busy rn-progress { flex: 1; }
   .message.ok { color: var(--rn-ok, #5dffa1); } .message.warn, .message.error { color: var(--rn-danger, #ff5e5e); }
   .phase { font-family: var(--rn-mono, monospace); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
