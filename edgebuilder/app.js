@@ -2522,6 +2522,10 @@ function renderLibraryFold(s) {
   b.title = allClosed ? "Expand all: every folder of the tree open" : "Collapse all: every folder of the tree closed, the places at the top";
   b.toggleAttribute("disabled", !keys.length);
 }
+$("messageClose").addEventListener("click", () => {
+  $("message").textContent = "";
+  $("message").className = "message";
+});
 $("libraryFold").addEventListener("click", () => {
   if (!state) return;
   const keys = folderKeys(state);

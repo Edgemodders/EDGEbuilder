@@ -1089,6 +1089,11 @@ function renderLibraryFold(s: Snapshot): void {
   b.title = allClosed ? "Expand all: every folder of the tree open" : "Collapse all: every folder of the tree closed, the places at the top";
   b.toggleAttribute("disabled", !keys.length);
 }
+// The message's ✕: the line goes until the next message (lastMessage keeps this one from coming back).
+$("messageClose").addEventListener("click", () => {
+  $("message").textContent = "";
+  $("message").className = "message";
+});
 $("libraryFold").addEventListener("click", () => {
   if (!state) return;
   const keys = folderKeys(state);
