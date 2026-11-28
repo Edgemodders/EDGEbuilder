@@ -17,6 +17,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 **Changed**
 
 - A file from your REDcode project that its packed archive has put in the game (an Import, or REDcode's Pack and Play) is one row in Assets, "project <name> · in game", not two (the project's and the packed mod's). Its tooltip says whether it is packed yet.
+- A model picked on the Library tab no longer repeats its name, place, kind, file and what Import does above the Import box: the tree row already shows them (its tooltip the file). Only "Open a REDcode project" shows, when none is open.
 - The message above the tabs has a small ✕ at its top right that closes it until the next message.
 - The window no longer keeps an empty line above the tabs before the first message, so the tabs sit right under the status pills at start.
 

@@ -217,7 +217,7 @@
   #mainTabs > rn-tab > * { flex-shrink: 0; }
   /* The window is a flex column of fixed height: a long message keeps its lines (up to four) and pushes the tabs down. */
   .message { font-family: var(--rn-body, sans-serif); font-size: 13px; padding: 2px 0 6px; min-height: 1.4em; max-height: 5.6em; overflow: auto; flex-shrink: 0; color: var(--rn-dim, #999); }
-  .message:empty { display: none; }
+  .message:empty, #pickedText:empty { display: none; }
   #messageRow { position: relative; flex-shrink: 0; } #messageRow:has(.message:empty) { display: none; }
   #messageRow .message { padding-right: 20px; }
   #messageClose { position: absolute; top: 0; right: -4px; } #messageClose svg { width: 9px; height: 9px; }

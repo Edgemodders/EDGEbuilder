@@ -812,10 +812,8 @@ function renderModel(s: Snapshot, file: string | undefined): void {
   $("importBox").hidden = !file;
   if (!file) return;
   const m = findModel(s, file);
-  const where = m ? (m.place === "library" ? whereLabel(s, "library", m.folder) : s.library.modelPlaces.find((x) => x.place === m.place)?.label ?? "") : "typed in";
-  const what = (m?.kind ?? (file.toLowerCase().endsWith(".glb") ? "glb" : "prop")) === "prop" ? "A prop on EDGEfab's Desk or in the Library, already prepared" : "A GLB: Import prepares it (size, facing, levels of detail, textures) with EDGEfab's core";
-  const into = s.bake.project ? `Import puts it into ${s.bake.project.name}, packs the project and swaps it into the game.` : "Open a REDcode project to import into (Refresh on the Bake tab asks again).";
-  $("pickedText").textContent = `${m?.name ?? file.slice(file.search(/[^\\/]*$/))}\n${where}${m?.bytes ? `, ${(m.bytes / 1e6).toFixed(1)} MB` : ""}\n${what}.\n${into}\n${file}`;
+  // The tree row already says the model's name, place, kind and size, and its tooltip the file: only what to do is said here.
+  $("pickedText").textContent = s.bake.project ? "" : "Open a REDcode project to import into (Refresh on the Bake tab asks again).";
   const name = $<Field>("importName");
   name.setAttribute("placeholder", propSlugOf(m?.name ?? file));
   $("importGo").toggleAttribute("disabled", !s.bake.project || !!s.busy);
