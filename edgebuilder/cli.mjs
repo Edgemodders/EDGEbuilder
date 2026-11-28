@@ -370,6 +370,11 @@ function sceneSchema(format) {
     properties: {
       format: { const: format },
       name: { type: "string", minLength: 1 },
+      id: {
+        type: "string",
+        minLength: 1,
+        description: "The scene's own id, made once when EDGEbuilder first saves it and never changed (Save as makes a new scene, with a new id). Lets other tools find a scene after a rename or a move. A writer may set its own."
+      },
       game: { type: "string", description: "The game version the scene was made against, for information." },
       generator: {
         type: "object",
@@ -698,7 +703,7 @@ async function run(o) {
   report.dropped.push(...first.dropped);
   if (data && typeof data === "object") {
     const objects2 = Array.isArray(data.objects) ? data.objects : [];
-    report.scene = { file, name: typeof data.name === "string" ? data.name : void 0, slug: typeof data.name === "string" ? slugOf(data.name) : void 0, format: data.format, ...data.generator ? { generator: data.generator } : {} };
+    report.scene = { file, name: typeof data.name === "string" ? data.name : void 0, slug: typeof data.name === "string" ? slugOf(data.name) : void 0, ...typeof data.id === "string" && data.id ? { id: data.id } : {}, format: data.format, ...data.generator ? { generator: data.generator } : {} };
     for (const obj of objects2) if (obj && typeof obj.kind === "string") report.counts[obj.kind] = (report.counts[obj.kind] ?? 0) + 1;
   }
   if (report.errors.length) return report;

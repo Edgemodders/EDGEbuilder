@@ -95,7 +95,7 @@ interface Report {
   edgebuilder: string;
   command: string;
   ok: boolean;
-  scene: { file: string; name?: string; slug?: string; format?: number; hash?: string; generator?: unknown };
+  scene: { file: string; name?: string; id?: string; slug?: string; format?: number; hash?: string; generator?: unknown };
   counts: Record<string, number>;
   errors: Finding[];
   warnings: Finding[];
@@ -143,7 +143,7 @@ async function run(o: Options): Promise<Report> {
   report.dropped.push(...first.dropped);
   if (data && typeof data === "object") {
     const objects = Array.isArray(data.objects) ? data.objects : [];
-    report.scene = { file, name: typeof data.name === "string" ? data.name : undefined, slug: typeof data.name === "string" ? slugOf(data.name) : undefined, format: data.format, ...(data.generator ? { generator: data.generator } : {}) };
+    report.scene = { file, name: typeof data.name === "string" ? data.name : undefined, slug: typeof data.name === "string" ? slugOf(data.name) : undefined, ...(typeof data.id === "string" && data.id ? { id: data.id } : {}), format: data.format, ...(data.generator ? { generator: data.generator } : {}) };
     for (const obj of objects) if (obj && typeof obj.kind === "string") report.counts[obj.kind] = (report.counts[obj.kind] ?? 0) + 1;
   }
   if (report.errors.length) return report;

@@ -981,6 +981,24 @@ assert.deepEqual(yawToQuaternion(0), [0, 0, 0, 1]);
   fresh.take({ format: 1, name: "Other", groups: [], objects: [] });
   assert.equal(fresh.data().generator, undefined, "a hand-made scene has no generator");
 
+  // The scene's own id: made at the first save, kept by later saves and a reload, valid in every format's schema.
+  assert.equal(typeof saved.id, "string", "a save gives a scene without one its id");
+  assert.match(saved.id, /^[0-9a-f]{16}$/);
+  for (const f of [1, 2, 3]) assert.deepEqual(validate(sceneSchema(f), { ...saved, format: f }), [], `id is valid in format ${f}`);
+  assert.deepEqual(checkSceneData(saved).warnings.filter((w) => w.code === "unknown-field"), [], "check knows id");
+  const again = new Scene(file);
+  again.load();
+  again.save();
+  assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).id, saved.id, "the id is kept");
+  assert.equal(new Scene(path.join(tmp, "gen", "none.scene.json")).data().id, undefined, "a scene not saved yet has no id");
+  const theirs = path.join(tmp, "gen", "theirs.scene.json");
+  fs.writeFileSync(theirs, JSON.stringify({ ...good, id: "arena-r27" }));
+  const kept = new Scene(theirs);
+  kept.load();
+  kept.save();
+  assert.equal(JSON.parse(fs.readFileSync(theirs, "utf8")).id, "arena-r27", "a writer's own id is kept");
+  assert.equal(scanShelf({ place: "library", dir: path.join(tmp, "gen"), label: "Gen" }).scenes.find((x) => x.file === theirs)?.id, "arena-r27", "the Library list has the id");
+
   // The command line, as far as it goes without REDbridge.
   const cli = path.join(here, "..", "edgebuilder", "cli.mjs");
   const run = (...args) => spawnSync(process.execPath, [cli, ...args], { encoding: "utf8" });

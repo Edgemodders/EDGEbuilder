@@ -101,7 +101,7 @@ One file per project, `source/library.json`, written by every tool that copies a
 | `by` | The tool that copied it, by its id |
 | `files` | The files copied, relative to the project folder, with `/`. Refresh replaces these; a tool removing an item from the project removes these |
 
-**Refresh from Library** reads the note, finds each item (by `id`, else `path`), and lists those whose `version` or `hash` changed since. A scene renamed or moved in the Library is lost to Refresh, since scenes have no id; Refresh says so and offers to forget it.
+**Refresh from Library** reads the note, finds each item (by `id`, else `path`), and lists those whose `version` or `hash` changed since. Scenes have an `id` too since EDGEbuilder 0.14.1 ([scene format](scene.md), `id`: made at a scene's first save, kept through a rename or a move, new for Save as), so a note for a scene records it and a renamed or moved scene is found again. A scene saved only by an older EDGEbuilder has none until its next save; one that cannot be found says so, and Refresh offers to forget it. A Library bake's `bake.json` records each scene's `id` the same way, so Bake again finds a scene moved or renamed inside the Library.
 
 ## Flows
 

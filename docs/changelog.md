@@ -10,6 +10,10 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 ## Unreleased
 
+**New**
+
+- A scene file has its own id (`id`, https://edgemodders.github.io/EDGEbuilder/scene.html), made the first time EDGEbuilder saves it and kept through a rename or a move; Save as makes a new one. Other tools (EDGEdir's sets) find a scene by it, EDGEbuilder's service gives it (`scenes()`, `scene-changed`, and `refs()` takes it), and a Library bake finds a scene moved or renamed inside the Library. Older scene files stay valid and get their id at their next save.
+
 **Changed**
 
 - The window no longer keeps an empty line above the tabs before the first message, so the tabs sit right under the status pills at start.

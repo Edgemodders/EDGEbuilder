@@ -92,6 +92,11 @@ export function sceneSchema(format: 1 | 2 | 3): Schema {
     properties: {
       format: { const: format },
       name: { type: "string", minLength: 1 },
+      id: {
+        type: "string",
+        minLength: 1,
+        description: "The scene's own id, made once when EDGEbuilder first saves it and never changed (Save as makes a new scene, with a new id). Lets other tools find a scene after a rename or a move. A writer may set its own.",
+      },
       game: { type: "string", description: "The game version the scene was made against, for information." },
       generator: {
         type: "object",

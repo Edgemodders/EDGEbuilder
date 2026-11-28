@@ -216,6 +216,8 @@ export interface SceneEntry {
   /** The folder under the place's root, with forward slashes; "" at the root. */
   folder: string;
   name: string;
+  /** The scene's own id (`id` in the file), once EDGEbuilder has saved it. */
+  id?: string;
   objects: number;
   /** D1: the game's own objects it removes (format 3's worldEdits). */
   removals?: number;

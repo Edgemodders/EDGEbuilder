@@ -116,17 +116,23 @@ function worldCounts(edits: unknown): { removals: number; doors: number } {
 }
 
 /** What a scene file says about itself, kept until the file changes. */
-const seen = new Map<string, { size: number; mtime: number; name: string; objects: number; removals: number; doors: number; error?: string }>();
+type Described = { name: string; id?: string; objects: number; removals: number; doors: number; error?: string };
+const seen = new Map<string, Described & { size: number; mtime: number }>();
 
-function describe(file: string, st: fs.Stats): { name: string; objects: number; removals: number; doors: number; error?: string } {
+function describe(file: string, st: fs.Stats): Described {
   const known = seen.get(file);
   if (known && known.size === st.size && known.mtime === st.mtimeMs) return known;
-  let out: { name: string; objects: number; removals: number; doors: number; error?: string };
+  let out: Described;
   const fallback = path.basename(file).slice(0, -SceneEnding.length);
   try {
-    const data = JSON.parse(fs.readFileSync(file, "utf8")) as { format?: unknown; name?: unknown; objects?: unknown; worldEdits?: unknown };
+    const data = JSON.parse(fs.readFileSync(file, "utf8")) as { format?: unknown; name?: unknown; id?: unknown; objects?: unknown; worldEdits?: unknown };
     if (typeof data.format !== "number" || !Array.isArray(data.objects)) throw new Error("not an EDGEbuilder scene");
-    out = { name: typeof data.name === "string" && data.name.trim() ? data.name : fallback, objects: data.objects.length, ...worldCounts(data.worldEdits) };
+    out = {
+      name: typeof data.name === "string" && data.name.trim() ? data.name : fallback,
+      ...(typeof data.id === "string" && data.id ? { id: data.id } : {}),
+      objects: data.objects.length,
+      ...worldCounts(data.worldEdits),
+    };
   } catch (err) {
     out = { name: fallback, objects: 0, removals: 0, doors: 0, error: (err as Error).message };
   }

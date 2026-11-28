@@ -1007,7 +1007,12 @@ function describe(file, st) {
   try {
     const data = JSON.parse(fs5.readFileSync(file, "utf8"));
     if (typeof data.format !== "number" || !Array.isArray(data.objects)) throw new Error("not an EDGEbuilder scene");
-    out = { name: typeof data.name === "string" && data.name.trim() ? data.name : fallback, objects: data.objects.length, ...worldCounts(data.worldEdits) };
+    out = {
+      name: typeof data.name === "string" && data.name.trim() ? data.name : fallback,
+      ...typeof data.id === "string" && data.id ? { id: data.id } : {},
+      objects: data.objects.length,
+      ...worldCounts(data.worldEdits)
+    };
   } catch (err) {
     out = { name: fallback, objects: 0, removals: 0, doors: 0, error: err.message };
   }
@@ -1349,6 +1354,7 @@ function forgetInNote(projectDir, slug) {
 }
 
 // src/scene.ts
+import { randomBytes } from "node:crypto";
 import * as fs7 from "node:fs";
 import * as path7 from "node:path";
 
@@ -1480,12 +1486,17 @@ function forReader(data) {
   const { worldEdits: _edits, ...rest } = data;
   return { ...rest, format: rest.objects.some((o) => o.kind === "npc") ? 2 : 1 };
 }
+function newSceneId() {
+  return randomBytes(8).toString("hex");
+}
 var Scene = class {
   /** The file the scene is saved to after every change; another scene opened (B3-2) changes it. */
   constructor(file) {
     this.file = file;
   }
   name = "Working scene";
+  /** Kept from the file, or made at the first save (`save`); Save as clears it for a new one. */
+  id;
   /** The game version the file says it was made against; kept, not set (B3-2). */
   game;
   /** The program that wrote the file, when one did (G1); kept, not set. */
@@ -1524,6 +1535,7 @@ var Scene = class {
   take(data, file = this.file) {
     this.file = file;
     this.name = data.name || path7.basename(file).replace(/\.scene\.json$/i, "");
+    this.id = typeof data.id === "string" && data.id ? data.id : void 0;
     this.game = typeof data.game === "string" ? data.game : void 0;
     this.generator = data.generator && typeof data.generator === "object" ? JSON.parse(JSON.stringify(data.generator)) : void 0;
     this.objects = data.objects.map((o) => ({ ...o }));
@@ -1536,6 +1548,7 @@ var Scene = class {
     return {
       format: this.worldEdits.length ? 3 : this.objects.some((o) => o.kind === "npc") ? 2 : 1,
       name: this.name,
+      ...this.id ? { id: this.id } : {},
       ...this.game ? { game: this.game } : {},
       ...this.generator ? { generator: this.generator } : {},
       groups: this.groups,
@@ -1548,6 +1561,7 @@ var Scene = class {
   /** No file: the scene was closed, and nothing is open. */
   save() {
     if (!this.file) return;
+    this.id ??= newSceneId();
     fs7.mkdirSync(path7.dirname(this.file), { recursive: true });
     fs7.writeFileSync(this.file, JSON.stringify(this.data(), null, 2));
     this.onSave?.();
@@ -4394,6 +4408,7 @@ function saveAs(name, place2, folder) {
   const was = scene.file;
   scene.file = t.file;
   scene.name = t.name;
+  scene.id = void 0;
   scene.save();
   writeSession();
   scanLibrary();
@@ -4515,6 +4530,7 @@ function listScenes() {
   return state.library.shelves.flatMap(
     (sh) => sh.scenes.filter((s) => !s.error).map((s) => ({
       name: s.name,
+      ...sameFile(s.file, scene.file) && scene.id ? { id: scene.id } : s.id ? { id: s.id } : {},
       file: s.file,
       place: s.place,
       folder: s.folder,
@@ -4529,10 +4545,10 @@ function sceneRefs(which) {
   let data;
   let file = scene.file;
   if (!which && !scene.file) throw new Error("No scene is open: name one, as scenes() gives them");
-  if (!which || sameFile(which, scene.file) || which.toLowerCase() === scene.name.toLowerCase()) data = scene.data();
+  if (!which || sameFile(which, scene.file) || which.toLowerCase() === scene.name.toLowerCase() || which === scene.id) data = scene.data();
   else {
     const all = listScenes();
-    const found = all.find((s) => path12.isAbsolute(which) && sameFile(s.file, which)) ?? all.find((s) => s.name.toLowerCase() === which.toLowerCase());
+    const found = all.find((s) => path12.isAbsolute(which) && sameFile(s.file, which)) ?? all.find((s) => s.id === which) ?? all.find((s) => s.name.toLowerCase() === which.toLowerCase());
     if (!found) throw new Error(`No scene "${which}": scenes() lists them`);
     file = found.file;
     data = readSceneFile(file);
@@ -4558,7 +4574,7 @@ scene.onSave = () => {
   bakeSoon();
   if (typeof service?.emit !== "function") return;
   clearTimeout(changedTimer);
-  changedTimer = setTimeout(() => service.emit("scene-changed", { name: scene.name, file: scene.file, objects: scene.objects.length }), 500);
+  changedTimer = setTimeout(() => service.emit("scene-changed", { name: scene.name, id: scene.file ? scene.id ?? "" : "", file: scene.file, objects: scene.objects.length }), 500);
 };
 function saveSettings(next) {
   settings = { ...settings, ...next };
@@ -4971,9 +4987,15 @@ async function noCollisionFor(b, objects) {
   return none;
 }
 function sceneToBake(file) {
-  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, game: scene.game, groups: scene.groups, objects: scene.objects, worldEdits: scene.worldEdits };
+  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, id: scene.id, game: scene.game, groups: scene.groups, objects: scene.objects, worldEdits: scene.worldEdits };
   const d = readSceneFile(file);
-  return { name: d.name, game: d.game, groups: d.groups ?? [], objects: d.objects, worldEdits: readableEdits(d.worldEdits) };
+  return { name: d.name, id: typeof d.id === "string" && d.id ? d.id : void 0, game: d.game, groups: d.groups ?? [], objects: d.objects, worldEdits: readableEdits(d.worldEdits) };
+}
+function bakeSceneFile(root, s) {
+  const at = fromLibraryPath(root, s.path);
+  if (fs10.existsSync(at)) return at;
+  if (!s.id) return void 0;
+  return state.library.shelves.filter((sh) => sh.place === "library").flatMap((sh) => sh.scenes).find((x) => x.id === s.id && fs10.existsSync(x.file))?.file;
 }
 async function bakeSceneInto(target, file, root) {
   const src = sceneToBake(file);
@@ -5098,7 +5120,7 @@ function lookAtLibraryBakes() {
       continue;
     }
     const scenes = meta.scenes.map((s) => {
-      const file = fromLibraryPath(root, s.path);
+      const file = bakeSceneFile(root, s) ?? fromLibraryPath(root, s.path);
       const now = sceneNow(file);
       return { name: s.name, slug: s.slug, file, ...now ? {} : { missing: true }, ...now && s.hash && now.hash !== s.hash ? { stale: true } : {} };
     });
@@ -5132,7 +5154,7 @@ async function changeLibraryBake(dir, meta, files, drop2 = []) {
   const plan = files.map((file) => ({ file, src: sceneToBake(file) }));
   for (const { file, src } of plan) {
     const slug = slugOf(src.name);
-    const other = meta.scenes.find((s) => s.slug === slug && !sameFile(fromLibraryPath(root, s.path), file)) ?? plan.find((p) => p.file !== file && slugOf(p.src.name) === slug);
+    const other = meta.scenes.find((s) => s.slug === slug && !(src.id && s.id === src.id) && !sameFile(fromLibraryPath(root, s.path), file)) ?? plan.find((p) => p.file !== file && slugOf(p.src.name) === slug);
     if (other) throw new Error(`Two scenes called ${src.name} can't be in one bake: a bake's files go by the scene's name. Rename one first.`);
     const stop = checkBake({ file, name: src.name, objects: src.objects, project: target, bridgeReady: true, needs: [], bridgeVersion: state.bridge.version, worldEdits: src.worldEdits }).find((c) => c.tone === "error");
     if (stop) throw new Error(`${src.name}: ${stop.text}`);
@@ -5140,7 +5162,7 @@ async function changeLibraryBake(dir, meta, files, drop2 = []) {
   const warnings = [];
   const isNew = !fs10.existsSync(dir);
   fs10.mkdirSync(dir, { recursive: true });
-  for (const { file } of plan) {
+  for (const { file, src } of plan) {
     let done;
     try {
       done = await bakeSceneInto(target, file, project?.archive);
@@ -5151,7 +5173,11 @@ async function changeLibraryBake(dir, meta, files, drop2 = []) {
     const { record, built } = done;
     warnings.push(...built.warnings);
     const at = libraryPath(root, file);
-    meta.scenes = [...meta.scenes.filter((s) => s.path !== at && s.slug !== record.slug), { name: record.name, slug: record.slug, path: at, hash: record.hash }];
+    for (const s of meta.scenes) if (src.id && s.id === src.id && s.slug !== record.slug) removeBake(target, s.slug);
+    meta.scenes = [
+      ...meta.scenes.filter((s) => s.path !== at && s.slug !== record.slug && !(src.id && s.id === src.id)),
+      { name: record.name, slug: record.slug, path: at, hash: record.hash, ...src.id ? { id: src.id } : {} }
+    ];
   }
   for (const slug of drop2) {
     removeBake(target, slug);
@@ -5194,8 +5220,8 @@ async function editLibraryBake(dir, what, arg) {
       await changeLibraryBake(dir, meta, [], [arg]);
       return say(`${gone2.name} is out of ${meta.name} (version ${meta.version}); the scene itself stays.${meta.scenes.length ? "" : " The bake is empty now: add a scene or delete it."}`, "ok");
     }
-    const here = meta.scenes.map((s) => fromLibraryPath(root, s.path)).filter((f) => fs10.existsSync(f));
-    const missing = meta.scenes.filter((s) => !fs10.existsSync(fromLibraryPath(root, s.path))).map((s) => s.name);
+    const here = meta.scenes.map((s) => bakeSceneFile(root, s)).filter((f) => !!f);
+    const missing = meta.scenes.filter((s) => !bakeSceneFile(root, s)).map((s) => s.name);
     if (!here.length) return say(`None of ${meta.name}'s scenes is where it was: ${missing.join(", ")}.`, "warn");
     const w = await changeLibraryBake(dir, meta, here);
     say(`Baked ${meta.name} again (version ${meta.version}).${missing.length ? ` Not found, so kept as baked before: ${missing.join(", ")}.` : ""}${warned(w)}`, missing.length ? "warn" : "ok");

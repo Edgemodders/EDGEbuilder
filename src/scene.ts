@@ -2,6 +2,7 @@
 // person, B3c; format 3 when it changes the game's own world, D1), saved after every change.
 // The preview entities in the game are not the truth; this file is. See docs/scene.md.
 
+import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { freshId, pruneGroups } from "./arrange";
@@ -12,6 +13,8 @@ export interface SceneFile {
   /** 3 when the scene changes the game's own world (`worldEdits`, D1); 2 when it holds a person (the `npc` kind, B3c); 1 otherwise, as before. */
   format: 1 | 2 | 3;
   name: string;
+  /** The scene's own id, made at its first save and never changed; Save as makes a new one. Optional: older files have none until saved. */
+  id?: string;
   game?: string;
   /** The program that wrote the file (G1), kept as it came. */
   generator?: { name: string; [more: string]: unknown };
@@ -46,8 +49,15 @@ export function forReader(data: SceneFile): SceneFile {
   return { ...rest, format: rest.objects.some((o) => o.kind === "npc") ? 2 : 1 };
 }
 
+/** A new scene id: 16 hex digits, as a Library bake's. */
+export function newSceneId(): string {
+  return randomBytes(8).toString("hex");
+}
+
 export class Scene {
   name = "Working scene";
+  /** Kept from the file, or made at the first save (`save`); Save as clears it for a new one. */
+  id: string | undefined;
   /** The game version the file says it was made against; kept, not set (B3-2). */
   game: string | undefined;
   /** The program that wrote the file, when one did (G1); kept, not set. */
@@ -94,6 +104,7 @@ export class Scene {
   take(data: SceneFile, file = this.file): void {
     this.file = file;
     this.name = data.name || path.basename(file).replace(/\.scene\.json$/i, "");
+    this.id = typeof data.id === "string" && data.id ? data.id : undefined;
     this.game = typeof data.game === "string" ? data.game : undefined;
     this.generator = data.generator && typeof data.generator === "object" ? JSON.parse(JSON.stringify(data.generator)) : undefined;
     this.objects = data.objects.map((o) => ({ ...o }));
@@ -108,6 +119,7 @@ export class Scene {
     return {
       format: this.worldEdits.length ? 3 : this.objects.some((o) => o.kind === "npc") ? 2 : 1,
       name: this.name,
+      ...(this.id ? { id: this.id } : {}),
       ...(this.game ? { game: this.game } : {}),
       ...(this.generator ? { generator: this.generator } : {}),
       groups: this.groups,
@@ -122,6 +134,7 @@ export class Scene {
   /** No file: the scene was closed, and nothing is open. */
   save(): void {
     if (!this.file) return;
+    this.id ??= newSceneId();
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     fs.writeFileSync(this.file, JSON.stringify(this.data(), null, 2));
     this.onSave?.();

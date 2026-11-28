@@ -1283,6 +1283,19 @@ C1 is answered yes.
 
 **G1's test passed on 2026-11-27, all 11 steps** (1 to 8 by script, 9 to 11 in game on test 22).
 
+### Scene id (0.14.1)
+
+[EDGEbuilder #6](https://github.com/Edgemodders/EDGEbuilder/issues/6), ask 2, agreed with the owner on 2026-11-28: a scene file has its own `id` ([scene format](scene.md)), made at its first save, kept through saves, a rename and a move, new for Save as. The service's `scenes()` and `scene-changed` give it, `refs()` takes it, and a Library bake's `bake.json` records it, so **Bake again** finds a scene moved or renamed inside the Library. The smoke test covers the file, the schemas, `check` and the Library list; these steps check the rest with the newest build. No game needed beyond a loaded save for steps 1 to 4.
+
+| # | Do | Expect |
+|---|---|---|
+| 1 | Library tab: make a new scene **Id test** in a Library folder, drop one crate. Open `Id test.scene.json` in a text editor | An `"id"` of 16 hex digits after `"name"` |
+| 2 | Rename it on the Library tab to **Id test 2**. Look at the new file | The same `id` |
+| 3 | **Save as** **Id test 3** | Its file has a different `id`; Id test 2's file keeps its own |
+| 4 | Ask the session to call `edgebuilder__scenes` and `edgebuilder__refs` with Id test 2's id | `scenes()` lists each scene with its `id` (older scenes not saved since have none); `refs(id)` gives Id test 2's crate |
+| 5 | Library tab: make a Library bake of **Id test 2** (REDbridge ready). Then, in Windows' Explorer, move `Id test 2.scene.json` into another folder of the Library, and on the Library tab press **Bake again** on the bake | The bake's row does not say the scene is missing; Bake again bakes it from its new place; `bake.json` has the new `path` and the same `id` |
+| 6 | Rename Id test 2 to **Id test 4** (open it first), then **Bake again** on the bake | The bake lists **Id test 4**; its folder has `edgebuilder\id_test_4\` and no longer `edgebuilder\id_test_2\` |
+
 ### G0 Generated scenes: the look
 
 For [Generated scenes](generated-scenes.md), questions G-2 to G-6, and G1's end ("a scene baked by the command line loads in the game"). Not run yet. The scene is the team's sample of 2026-11-23, never in this repo. Both bakes were made on 2026-11-23 with the command line on the `cosmic` branch (`bake --out --pack`, REDbridge 0.17.0 from its checkout) and are in the EDGEdeck library:

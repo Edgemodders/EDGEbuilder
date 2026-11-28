@@ -3101,6 +3101,7 @@ function saveAs(name: string, place: Place, folder?: string): void {
   const was = scene.file;
   scene.file = t.file;
   scene.name = t.name;
+  scene.id = undefined; // a new scene: save gives it its own id
   scene.save();
   writeSession();
   scanLibrary();
@@ -3237,6 +3238,8 @@ function newFolder(folder: string, name: string): void {
 /** A scene for other packages and assistants. */
 export interface ServiceScene {
   name: string;
+  /** The scene's own id, made at its first save; kept through a rename or a move. Absent on a scene EDGEbuilder has not saved yet. */
+  id?: string;
   file: string;
   place: Place;
   folder: string;
@@ -3254,6 +3257,7 @@ export function listScenes(): ServiceScene[] {
       .filter((s) => !s.error)
       .map((s) => ({
         name: s.name,
+        ...(sameFile(s.file, scene.file) && scene.id ? { id: scene.id } : s.id ? { id: s.id } : {}),
         file: s.file,
         place: s.place,
         folder: s.folder,
@@ -3284,10 +3288,11 @@ export function sceneRefs(which?: string): { scene: string; file: string; refs: 
   let data: SceneFile;
   let file = scene.file;
   if (!which && !scene.file) throw new Error("No scene is open: name one, as scenes() gives them");
-  if (!which || sameFile(which, scene.file) || which.toLowerCase() === scene.name.toLowerCase()) data = scene.data();
+  if (!which || sameFile(which, scene.file) || which.toLowerCase() === scene.name.toLowerCase() || which === scene.id) data = scene.data();
   else {
     const all = listScenes();
-    const found = all.find((s) => path.isAbsolute(which) && sameFile(s.file, which)) ?? all.find((s) => s.name.toLowerCase() === which.toLowerCase());
+    const found =
+      all.find((s) => path.isAbsolute(which) && sameFile(s.file, which)) ?? all.find((s) => s.id === which) ?? all.find((s) => s.name.toLowerCase() === which.toLowerCase());
     if (!found) throw new Error(`No scene "${which}": scenes() lists them`);
     file = found.file;
     data = readSceneFile(file);
@@ -3315,7 +3320,7 @@ scene.onSave = () => {
   bakeSoon();
   if (typeof service?.emit !== "function") return;
   clearTimeout(changedTimer);
-  changedTimer = setTimeout(() => service.emit("scene-changed", { name: scene.name, file: scene.file, objects: scene.objects.length }), 500);
+  changedTimer = setTimeout(() => service.emit("scene-changed", { name: scene.name, id: scene.file ? (scene.id ?? "") : "", file: scene.file, objects: scene.objects.length }), 500);
 };
 
 function saveSettings(next: Settings): void {
@@ -3760,10 +3765,21 @@ async function noCollisionFor(b: Bridge, objects: Omit<SceneObject, "entityId">[
 }
 
 /** A scene to bake: the open one as it is now, any other from its file. */
-function sceneToBake(file: string): { name: string; game?: string; groups: SceneFile["groups"]; objects: SceneObject[]; worldEdits: WorldEdit[] } {
-  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, game: scene.game, groups: scene.groups, objects: scene.objects, worldEdits: scene.worldEdits };
+function sceneToBake(file: string): { name: string; id?: string; game?: string; groups: SceneFile["groups"]; objects: SceneObject[]; worldEdits: WorldEdit[] } {
+  if (scene.file && sameFile(file, scene.file)) return { name: scene.name, id: scene.id, game: scene.game, groups: scene.groups, objects: scene.objects, worldEdits: scene.worldEdits };
   const d = readSceneFile(file);
-  return { name: d.name, game: d.game, groups: d.groups ?? [], objects: d.objects as SceneObject[], worldEdits: readableEdits(d.worldEdits) };
+  return { name: d.name, id: typeof d.id === "string" && d.id ? d.id : undefined, game: d.game, groups: d.groups ?? [], objects: d.objects as SceneObject[], worldEdits: readableEdits(d.worldEdits) };
+}
+
+/**
+ * Where a Library bake's scene is now: where it was baked from, else (moved or renamed inside the Library)
+ * the Library scene with its id. Undefined when neither is there.
+ */
+function bakeSceneFile(root: string, s: { path: string; id?: string }): string | undefined {
+  const at = fromLibraryPath(root, s.path);
+  if (fs.existsSync(at)) return at;
+  if (!s.id) return undefined;
+  return state.library.shelves.filter((sh) => sh.place === "library").flatMap((sh) => sh.scenes).find((x) => x.id === s.id && fs.existsSync(x.file))?.file;
 }
 
 /**
@@ -3912,7 +3928,7 @@ function lookAtLibraryBakes(): void {
       continue;
     }
     const scenes = meta.scenes.map((s) => {
-      const file = fromLibraryPath(root, s.path);
+      const file = bakeSceneFile(root, s) ?? fromLibraryPath(root, s.path);
       const now = sceneNow(file);
       return { name: s.name, slug: s.slug, file, ...(now ? {} : { missing: true }), ...(now && s.hash && now.hash !== s.hash ? { stale: true } : {}) };
     });
@@ -3954,7 +3970,9 @@ async function changeLibraryBake(dir: string, meta: BakeMeta, files: string[], d
   const plan = files.map((file) => ({ file, src: sceneToBake(file) }));
   for (const { file, src } of plan) {
     const slug = slugOf(src.name);
-    const other = meta.scenes.find((s) => s.slug === slug && !sameFile(fromLibraryPath(root, s.path), file)) ?? plan.find((p) => p.file !== file && slugOf(p.src.name) === slug);
+    // The same scene moved or renamed (its id) is not another scene.
+    const other =
+      meta.scenes.find((s) => s.slug === slug && !(src.id && s.id === src.id) && !sameFile(fromLibraryPath(root, s.path), file)) ?? plan.find((p) => p.file !== file && slugOf(p.src.name) === slug);
     if (other) throw new Error(`Two scenes called ${src.name} can't be in one bake: a bake's files go by the scene's name. Rename one first.`);
     const stop = checkBake({ file, name: src.name, objects: src.objects, project: target, bridgeReady: true, needs: [], bridgeVersion: state.bridge.version, worldEdits: src.worldEdits }).find((c) => c.tone === "error");
     if (stop) throw new Error(`${src.name}: ${stop.text}`);
@@ -3963,7 +3981,7 @@ async function changeLibraryBake(dir: string, meta: BakeMeta, files: string[], d
   const isNew = !fs.existsSync(dir);
   // sector.build wants the folder to be there; a new bake that fails leaves nothing behind.
   fs.mkdirSync(dir, { recursive: true });
-  for (const { file } of plan) {
+  for (const { file, src } of plan) {
     let done: Awaited<ReturnType<typeof bakeSceneInto>>;
     try {
       done = await bakeSceneInto(target, file, project?.archive);
@@ -3974,7 +3992,12 @@ async function changeLibraryBake(dir: string, meta: BakeMeta, files: string[], d
     const { record, built } = done;
     warnings.push(...built.warnings);
     const at = libraryPath(root, file);
-    meta.scenes = [...meta.scenes.filter((s) => s.path !== at && s.slug !== record.slug), { name: record.name, slug: record.slug, path: at, hash: record.hash }];
+    // A scene renamed since its last bake here: its files under the old name go.
+    for (const s of meta.scenes) if (src.id && s.id === src.id && s.slug !== record.slug) removeBakeFiles(target, s.slug);
+    meta.scenes = [
+      ...meta.scenes.filter((s) => s.path !== at && s.slug !== record.slug && !(src.id && s.id === src.id)),
+      { name: record.name, slug: record.slug, path: at, hash: record.hash, ...(src.id ? { id: src.id } : {}) },
+    ];
   }
   for (const slug of drop) {
     removeBakeFiles(target, slug);
@@ -4020,8 +4043,8 @@ async function editLibraryBake(dir: string, what: "add" | "drop" | "rebake", arg
       await changeLibraryBake(dir, meta, [], [arg!]);
       return say(`${gone.name} is out of ${meta.name} (version ${meta.version}); the scene itself stays.${meta.scenes.length ? "" : " The bake is empty now: add a scene or delete it."}`, "ok");
     }
-    const here = meta.scenes.map((s) => fromLibraryPath(root, s.path)).filter((f) => fs.existsSync(f));
-    const missing = meta.scenes.filter((s) => !fs.existsSync(fromLibraryPath(root, s.path))).map((s) => s.name);
+    const here = meta.scenes.map((s) => bakeSceneFile(root, s)).filter((f): f is string => !!f);
+    const missing = meta.scenes.filter((s) => !bakeSceneFile(root, s)).map((s) => s.name);
     if (!here.length) return say(`None of ${meta.name}'s scenes is where it was: ${missing.join(", ")}.`, "warn");
     const w = await changeLibraryBake(dir, meta, here);
     say(`Baked ${meta.name} again (version ${meta.version}).${missing.length ? ` Not found, so kept as baked before: ${missing.join(", ")}.` : ""}${warned(w)}`, missing.length ? "warn" : "ok");

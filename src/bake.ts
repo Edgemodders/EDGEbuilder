@@ -265,8 +265,8 @@ export interface BakeMeta {
   date?: string;
   game?: string;
   bridge?: string;
-  /** Each scene: its name and slug when baked, where it is under the Library root (with `/`), and `bakeHash` then. */
-  scenes: { name: string; slug: string; path: string; hash?: string }[];
+  /** Each scene: its name and slug when baked, where it is under the Library root (with `/`), `bakeHash` then, and its own id (scene files saved by 0.14.1 and later), which finds it after a move or a rename. */
+  scenes: { name: string; slug: string; path: string; hash?: string; id?: string }[];
 }
 
 /** The folders of a Library bake, in a project's shape, so a project bake's code bakes into it as it is. */

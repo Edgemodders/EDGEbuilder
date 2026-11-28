@@ -41,6 +41,7 @@ A scene is the contract between EDGEbuilder's two halves and the input to REDbri
 |---|---|
 | `format` | Always 1 for this page |
 | `name` | The scene's name. The bake lowercases it and keeps letters, digits and `_` for file names |
+| `id` | Optional: the scene's own id, so other tools (EDGEdir's sets, a Library bake) find it after a rename or a move. EDGEbuilder makes it (16 hex digits) the first time it saves a scene without one, keeps it through every later save, a rename and a move, and makes a new one for **Save as**, which is a new scene. A program writing scenes may set its own; EDGEbuilder keeps it. A copy made outside EDGEbuilder keeps the id too, so a tool that finds two files with one id should prefer the path it knew |
 | `game` | The game version the scene was made against, for information |
 | `groups` | The scene tree: id, name and parent id. Groups organise the editor; the bake flattens them into one sector |
 | `objects[].id` | Unique in the scene. Letters, digits, `_` and `-` |
@@ -90,7 +91,8 @@ The same rule binds the names of the tools EDGEbuilder's service offers (`scenes
 | 2026-11-12 | 2 | Pinned: the `npc` kind with `record` or `resource` | 0.10.9 | Never baked |
 | 2026-11-19 | 3 (draft) | `worldEdits` with `remove` | 0.12.0 | 0.16.0 |
 | 2026-11-23 | 3 (draft) | `worldEdits` with `door` | 0.13.0 | Never baked |
-| Not released | 1, 2, 3 | `generator` and `objects[].meta`, kept and never baked | After 0.13.2 | Any |
+| 2026-11-27 | 1, 2, 3 | `generator` and `objects[].meta`, kept and never baked | 0.14.0 | Any |
+| Not released | 1, 2, 3 | `id`, the scene's own id ([EDGEbuilder #6](https://github.com/Edgemodders/EDGEbuilder/issues/6)), never baked | After 0.14.0 | Any |
 
 ## What the bake makes of it
 

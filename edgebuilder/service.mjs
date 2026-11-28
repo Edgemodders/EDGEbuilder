@@ -8,14 +8,14 @@
 import { listScenes, sceneRefs, serviceFocus, serviceScenesEditing, serviceSelect } from './mod.mjs';
 
 /**
- * @event scene-changed {{ name: string, file: string, objects: number }} The open scene changed: an edit was saved, or another scene was opened, made, renamed or closed (then name and file are empty). Sent half a second after the last save.
+ * @event scene-changed {{ name: string, id: string, file: string, objects: number }} The open scene changed: an edit was saved, or another scene was opened, made, renamed or closed (then name, id and file are empty). id is the scene's own id, kept through a rename or a move. Sent half a second after the last save.
  */
 
 /**
- * Every scene EDGEbuilder can open: in the Library's folders, the open REDcode project's source/scenes, and EDGEbuilder's data folder ("This PC"). For each, its name, file, place ("library", "project" or "data"), folder under that place, object count, when it last changed, whether it is the open scene, and whether it is shown in the world (on).
+ * Every scene EDGEbuilder can open: in the Library's folders, the open REDcode project's source/scenes, and EDGEbuilder's data folder ("This PC"). For each, its name, its id (made when EDGEbuilder first saves it and kept through a rename or a move, so a link to a scene can find it again; absent on a scene not saved since), file, place ("library", "project" or "data"), folder under that place, object count, when it last changed, whether it is the open scene, and whether it is shown in the world (on).
  * @tool
  * @readonly
- * @returns {{ name: string, file: string, place: string, folder: string, objects: number, changed: string, open: boolean, on: boolean }[]} The scenes.
+ * @returns {{ name: string, id?: string, file: string, place: string, folder: string, objects: number, changed: string, open: boolean, on: boolean }[]} The scenes.
  */
 export function scenes() {
   return listScenes();
@@ -25,7 +25,7 @@ export function scenes() {
  * A scene's objects with their node references, for placing quest steps against them: the id, the ref the bake gives the node (edgebuilder/<scene>/<id> when the object has none of its own), kind (mesh, entity, light or npc), resource, a person's Character record, appearance, group, world position [x, y, z] in metres and rotation as a quaternion [x, y, z, w].
  * @tool
  * @readonly
- * @param {string} [scene] The scene's name or full file path, as scenes() gives them. Leave it out for the scene open in EDGEbuilder (none may be open).
+ * @param {string} [scene] The scene's name, id or full file path, as scenes() gives them. Leave it out for the scene open in EDGEbuilder (none may be open).
  * @returns {{ scene: string, file: string, refs: { id: string, ref: string, kind: string, resource: string, record: string, appearance: string, group: string, position: number[], rotation: number[] }[] }} The scene's name, its file and its objects.
  */
 export function refs(scene) {
