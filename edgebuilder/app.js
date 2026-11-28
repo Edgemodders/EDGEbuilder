@@ -1824,15 +1824,16 @@ function foundText(s) {
 }
 function rowTag(r) {
   if (r.kind === "npc") return `${r.path} NPC`;
-  const where = r.source ? r.source.kind === "project" ? `project ${r.source.name}` : r.source.name : r.path.toLowerCase().startsWith("ep1\\") ? "PL" : "";
+  const where = r.source ? r.source.kind === "project" ? `project ${r.source.name}${r.source.inGame ? " \xB7 in game" : ""}` : r.source.name : r.path.toLowerCase().startsWith("ep1\\") ? "PL" : "";
   return [where, r.replaces ? "changes a game file" : "", r.kind].filter(Boolean).join(" ");
 }
 function rowTitle(r) {
   if (r.kind === "npc") return `${r.name ? `${r.name}
 ` : ""}${r.path}
 ${r.template ?? ""}`;
+  const packed = r.source?.kind === "project" ? r.source.inGame ? "\nPacked: the project's archive in the game's mods has it" : "\nNot packed yet: the game has it once the project is packed" : "";
   return r.source ? `${r.path}
-${r.source.file}` : r.path;
+${r.source.file}${packed}` : r.path;
 }
 function sceneRows(s) {
   const { objects, groups } = s.scene;

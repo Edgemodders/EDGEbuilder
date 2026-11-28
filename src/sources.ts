@@ -81,11 +81,26 @@ export class ModSources {
     return Object.keys(this.archives).length;
   }
 
-  /** Every mod entry, then the project's. */
+  /** The open project's names (its own and its mod name), lowercased: its packed archive is named by one. */
+  private projectNames = new Set<string>();
+
+  /**
+   * Every mod entry, then the project's. A file the project holds and its own packed archive (Import's
+   * pack, REDcode's Pack and Play) also holds is one row: the project's, marked `inGame`.
+   */
   entries(): AssetEntry[] {
     const out: AssetEntry[] = [];
-    for (const a of Object.values(this.archives)) out.push(...a.entries);
-    out.push(...this.project);
+    const key = (p: string) => p.replace(/\//g, "\\").toLowerCase();
+    const inProject = new Set(this.project.map((e) => key(e.path)));
+    const packed = new Set<string>();
+    for (const [file, a] of Object.entries(this.archives)) {
+      const own = this.projectNames.has(a.mod.toLowerCase()) || this.projectNames.has(path.basename(file).replace(/\.archive$/i, "").toLowerCase());
+      for (const e of a.entries) {
+        if (own && inProject.has(key(e.path))) packed.add(key(e.path));
+        else out.push(e);
+      }
+    }
+    for (const e of this.project) out.push(packed.has(key(e.path)) ? { ...e, source: { ...e.source!, inGame: true } } : e);
     return out;
   }
 
@@ -143,10 +158,11 @@ export class ModSources {
   }
 
   /** Reads the meshes and entities among the project's loose files, as the game paths they will have once packed. */
-  scanProject(project: { name: string; archive: string } | null, isGamePath: (p: string) => boolean): void {
+  scanProject(project: { name: string; modName?: string; archive: string } | null, isGamePath: (p: string) => boolean): void {
     this.project = [];
     if (project?.archive !== this.projectRoot) this.projectInfo.clear();
     this.projectRoot = project?.archive;
+    this.projectNames = new Set([project?.name, project?.modName].filter((n): n is string => !!n).map((n) => n.toLowerCase()));
     if (!project) return;
     const walk = (dir: string, rel: string) => {
       let names: fs.Dirent[];

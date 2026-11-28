@@ -259,13 +259,14 @@ function foundText(s: Snapshot): string {
 /** The tag at a result's end: the mod or project it comes from, and its kind; for a person, its record. */
 function rowTag(r: AssetEntry): string {
   if (r.kind === "npc") return `${r.path} NPC`;
-  const where = r.source ? (r.source.kind === "project" ? `project ${r.source.name}` : r.source.name) : r.path.toLowerCase().startsWith("ep1\\") ? "PL" : "";
+  const where = r.source ? (r.source.kind === "project" ? `project ${r.source.name}${r.source.inGame ? " · in game" : ""}` : r.source.name) : r.path.toLowerCase().startsWith("ep1\\") ? "PL" : "";
   return [where, r.replaces ? "changes a game file" : "", r.kind].filter(Boolean).join(" ");
 }
 
 function rowTitle(r: AssetEntry): string {
   if (r.kind === "npc") return `${r.name ? `${r.name}\n` : ""}${r.path}\n${r.template ?? ""}`;
-  return r.source ? `${r.path}\n${r.source.file}` : r.path;
+  const packed = r.source?.kind === "project" ? (r.source.inGame ? "\nPacked: the project's archive in the game's mods has it" : "\nNot packed yet: the game has it once the project is packed") : "";
+  return r.source ? `${r.path}\n${r.source.file}${packed}` : r.path;
 }
 
 /** The Scene list as a tree: each group (with an arrow to open or close it), then its objects, indented. */

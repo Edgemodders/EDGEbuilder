@@ -25,6 +25,8 @@ export interface AssetSource {
   name: string;
   /** The .archive, or the loose file in the project's sourcerchive. */
   file: string;
+  /** A project file its own packed archive in the game's mods also holds: the game has it (one row for both). */
+  inGame?: boolean;
 }
 
 /** One row of the asset index: a file an object can be made from. */

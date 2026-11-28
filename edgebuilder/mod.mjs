@@ -533,11 +533,25 @@ var ModSources = class {
   get archiveCount() {
     return Object.keys(this.archives).length;
   }
-  /** Every mod entry, then the project's. */
+  /** The open project's names (its own and its mod name), lowercased: its packed archive is named by one. */
+  projectNames = /* @__PURE__ */ new Set();
+  /**
+   * Every mod entry, then the project's. A file the project holds and its own packed archive (Import's
+   * pack, REDcode's Pack and Play) also holds is one row: the project's, marked `inGame`.
+   */
   entries() {
     const out = [];
-    for (const a of Object.values(this.archives)) out.push(...a.entries);
-    out.push(...this.project);
+    const key = (p) => p.replace(/\//g, "\\").toLowerCase();
+    const inProject = new Set(this.project.map((e) => key(e.path)));
+    const packed = /* @__PURE__ */ new Set();
+    for (const [file, a] of Object.entries(this.archives)) {
+      const own = this.projectNames.has(a.mod.toLowerCase()) || this.projectNames.has(path4.basename(file).replace(/\.archive$/i, "").toLowerCase());
+      for (const e of a.entries) {
+        if (own && inProject.has(key(e.path))) packed.add(key(e.path));
+        else out.push(e);
+      }
+    }
+    for (const e of this.project) out.push(packed.has(key(e.path)) ? { ...e, source: { ...e.source, inGame: true } } : e);
     return out;
   }
   get modAssets() {
@@ -596,6 +610,7 @@ var ModSources = class {
     this.project = [];
     if (project2?.archive !== this.projectRoot) this.projectInfo.clear();
     this.projectRoot = project2?.archive;
+    this.projectNames = new Set([project2?.name, project2?.modName].filter((n) => !!n).map((n) => n.toLowerCase()));
     if (!project2) return;
     const walk = (dir, rel) => {
       let names;
@@ -4087,7 +4102,7 @@ async function drop(assetPath, appearance, at, like) {
     step(before);
     await select([o.id]);
     const from = sourceOf(assetPath)?.source;
-    const note = from?.kind === "project" ? await inGameArchives(assetPath) ? ` From the REDcode project ${from.name}, at a game file's path: the game shows its own version until the project is packed and loaded (REDcode's Pack and Play).` : ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).` : from?.kind === "mod" ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}` : "";
+    const note = from?.kind === "project" && from.inGame ? ` From the REDcode project ${from.name}, packed and in the game.` : from?.kind === "project" ? await inGameArchives(assetPath) ? ` From the REDcode project ${from.name}, at a game file's path: the game shows its own version until the project is packed and loaded (REDcode's Pack and Play).` : ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).` : from?.kind === "mod" ? ` From ${from.name}.${sized ? "" : " Its size is not known, so the gizmo uses a 1 m box."}` : "";
     const what = person ? `${person.name ?? person.path}${o.appearance ? ` (${o.appearance})` : ""}` : path12.basename(assetPath);
     say(`Dropped ${what} in ${Date.now() - started} ms.${note}`, "ok");
   } catch (err) {

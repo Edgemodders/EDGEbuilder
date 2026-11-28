@@ -835,6 +835,24 @@ assert.deepEqual(yawToQuaternion(0), [0, 0, 0, 1]);
   assert.deepEqual(again.project.map((e) => e.path), ["edgefab\\chair\\chair.ent", "edgefab\\chair\\chair.mesh"]);
   assert.equal(again.project[0].source.kind, "project");
 
+  // The project's own packed archive in the game's mods: one row per file, the project's, marked in game.
+  const ownDir = path.join(tmp, "own-mods");
+  fs.mkdirSync(ownDir, { recursive: true });
+  const ownFile = path.join(ownDir, "FabChairMod.archive");
+  fs.writeFileSync(ownFile, "a");
+  const ownFake = { openMod: async (file) => ({ path: file, name: path.basename(file), count: 2, items: [{ hash: "5", name: "edgefab\\chair\\chair.ent", size: 1 }, { hash: "6", name: "edgefab\\old\\old.ent", size: 1 }] }) };
+  const own = new ModSources(path.join(tmp, "sources-own", "mods.json"));
+  await own.refreshMods(ownFake, [{ file: ownFile, mod: "FabChairMod" }], isGame);
+  own.scanProject({ name: "FabChair", modName: "FabChairMod", archive }, isGame);
+  const ownRows = own.entries().filter((e) => e.path.endsWith("chair.ent"));
+  assert.equal(ownRows.length, 1, "a packed project file is one row");
+  assert.equal(ownRows[0].source.kind, "project");
+  assert.equal(ownRows[0].source.inGame, true);
+  assert.equal(own.entries().find((e) => e.path.endsWith("chair.mesh")).source.inGame, undefined, "not packed yet: no mark");
+  assert.equal(own.entries().find((e) => e.path.endsWith("old.ent")).source.kind, "mod", "a packed file no longer in the project stays the mod's");
+  own.scanProject({ name: "Other", archive }, isGame);
+  assert.equal(own.entries().filter((e) => e.path.endsWith("chair.ent")).length, 2, "another project's files are not merged with this mod");
+
   // Search: mods and the project beside the game, by source, and by the mod's name.
   const index = new AssetIndex(path.join(tmp, "index-b2c"));
   index.entries = [

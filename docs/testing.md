@@ -1296,6 +1296,16 @@ C1 is answered yes.
 | 5 | Library tab: make a Library bake of **Id test 2** (REDbridge ready). Then, in Windows' Explorer, move `Id test 2.scene.json` into another folder of the Library, and on the Library tab press **Bake again** on the bake | The bake's row does not say the scene is missing; Bake again bakes it from its new place; `bake.json` has the new `path` and the same `id` |
 | 6 | Rename Id test 2 to **Id test 4** (open it first), then **Bake again** on the bake | The bake lists **Id test 4**; its folder has `edgebuilder\id_test_4\` and no longer `edgebuilder\id_test_2\` |
 
+### One row for a packed project file (0.14.1)
+
+Asked by the owner on 2026-11-28: a prop imported from EDGEfab's Desk showed twice in Assets, once from the project's loose files and once from the project's packed archive in the game's mods. Now one row, the project's, marked "· in game". The smoke test covers the merge.
+
+| # | Do | Expect |
+|---|---|---|
+| 1 | Assets, search for a prop imported before (`vending_small`) | One `vending_small.ent` row, "project EDGEbuilder_Images · in game entity", and one `.mesh` row the same; hovering the row says "Packed" |
+| 2 | Drop it | Drops as before; the message says "From the REDcode project EDGEbuilder_Images, packed and in the game." |
+| 3 | Assets, **Mods** | The project's packed files are not listed there (they are under **Project**) |
+
 ### G0 Generated scenes: the look
 
 For [Generated scenes](generated-scenes.md), questions G-2 to G-6, and G1's end ("a scene baked by the command line loads in the game"). Not run yet. The scene is the team's sample of 2026-11-23, never in this repo. Both bakes were made on 2026-11-23 with the command line on the `cosmic` branch (`bake --out --pack`, REDbridge 0.17.0 from its checkout) and are in the EDGEdeck library:

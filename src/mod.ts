@@ -2694,7 +2694,9 @@ async function drop(assetPath: string, appearance?: string, at?: { origin: V3; d
     await select([o.id]);
     const from = sourceOf(assetPath)?.source;
     const note =
-      from?.kind === "project"
+      from?.kind === "project" && from.inGame
+        ? ` From the REDcode project ${from.name}, packed and in the game.`
+        : from?.kind === "project"
         ? (await inGameArchives(assetPath))
           ? ` From the REDcode project ${from.name}, at a game file's path: the game shows its own version until the project is packed and loaded (REDcode's Pack and Play).`
           : ` From the REDcode project ${from.name}: the game shows it once the project is packed and loaded (REDcode's Pack and Play).`

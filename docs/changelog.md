@@ -16,6 +16,7 @@ With each change a player or modder would notice, add a line under **Unreleased*
 
 **Changed**
 
+- A file from your REDcode project that its packed archive has put in the game (an Import, or REDcode's Pack and Play) is one row in Assets, "project <name> · in game", not two (the project's and the packed mod's). Its tooltip says whether it is packed yet.
 - The window no longer keeps an empty line above the tabs before the first message, so the tabs sit right under the status pills at start.
 
 Built, switched off until their tests pass (`Features` in `src/protocol.ts`):
