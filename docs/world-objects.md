@@ -151,10 +151,23 @@ REDcode's request ([EDGEbuilder #9](https://github.com/Edgemodders/EDGEbuilder/i
 | Stage | Delivers | State |
 |---|---|---|
 | **S1 Sectors** | The above | Built on 2026-11-20 in 0.13.0; checked against REDbridge 0.15.0 outside the game (V's sector found by its grid cell, its 853 entries, its hash `0x3c9117867951bc5a` as the registry writes it) and in REDnode's host. Test steps in [Tests](testing.md#s1-sectors-0130) |
-| **S2 The 3D view** | REDcode's drawing package (`world-view`) at the top of the drawer | After S1, when the package is on npm |
+| **S2 The 3D view** | REDcode's drawing package (`@edgemodders/world-view`, on npm since 2026-11-25) at the top of the drawer | After B4-4, B5-4 and B3d in the order of work |
 | **S3 Previews** | `preview` and `clearPreviews` for REDcode's edits | After S1 |
 
-Not in S1: **Open in REDcode**. REDcode's extension has `openSector(path, { select })`, but its REDnode service did not offer it then. Asked in [EDGEbuilder #11](https://github.com/Edgemodders/EDGEbuilder/issues/11); REDcode's `redcode` package 0.4.0 (REDcode 0.10.18) has `openSector({ sector, entry })`, and **0.14.0 adds the buttons** (built 2026-11-25): an arrow in the Sector drawer's title row (the sector, with the picked entry) and **Open in REDcode** in Selected Node, shown when REDcode's service is there. EDGEbuilder's manifest lists `redcode.openSector` in `"calls"` (REDnode 0.66.0 and later ask the player once). [Test steps](testing.md#open-in-redcode-0140).
+Not in S1: **Open in REDcode**. REDcode's extension has `openSector(path, { select })`, but its REDnode service did not offer it then. Asked in [EDGEbuilder #11](https://github.com/Edgemodders/EDGEbuilder/issues/11); REDcode's `redcode` package 0.4.0 (REDcode 0.10.18) has `openSector({ sector, entry })`, and **0.14.0 adds the buttons** (built 2026-11-25): an arrow in the Sector drawer's title row (the sector, with the picked entry) and **Open in REDcode** in Selected Node, shown when REDcode's service is there. EDGEbuilder's manifest lists `redcode.openSector` in `"calls"` (REDnode 0.66.0 and later ask the player once). **Switched off in the 0.14.0 release** (the owner, 2026-11-27: `Features` in `src/protocol.ts`, the `"calls"` taken out) until its [test](testing.md#open-in-redcode-0140) passes, which waits on REDcode 0.10.18's release.
+
+## Assemblies
+
+REDcode's request for its sector layers ([EDGEbuilder #11](https://github.com/Edgemodders/EDGEbuilder/issues/11) part 2, from a modder's world editor request): **taken by EDGEbuilder, agreed with the owner on 2026-11-28.** EDGEbuilder captures, places and replaces; REDcode opens a saved assembly, draws it in its sector view and edits its values.
+
+| What the modder does | Where it lands |
+|---|---|
+| Select an installation in the game (vents, ducts, supports), across sectors | B3b's picking: several nodes at once, by cursor and from the Sector drawer |
+| Save it as a reusable group that keeps each placement's native data, its source sector and entry | A file of its own, designed with B3b, here; likely a Library item under the [Shared rules](library.md), so it flows into projects like other items |
+| Copy or move it | Placed into a scene as one group; moved with the gizmo like any group |
+| Replace the originals with a custom sector and exact ArchiveXL removals, previewed before export | B4b: the removals D1 already bakes, and the copies baked as the scene's own nodes |
+
+It is the same step as the [new interiors](design.md#the-long-term-goal-new-interiors) goal's tiles: a tile is an assembly cut from an interior. The file's shape is designed when B3b is planned, and posted on #11 for REDcode.
 
 ## Not in this plan
 
